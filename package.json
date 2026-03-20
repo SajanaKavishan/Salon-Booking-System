@@ -1,0 +1,29 @@
+{
+  "name": "salon-booking-system",
+  "version": "1.0.0",
+  "description": "A professional, full-stack mobile application designed to manage salon operations smoothly. Built with the modern MERN stack and React Native.",
+  "main": "backend/server.js",
+  "scripts": {
+    "start": "node backend/server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SajanaKavishan/Salon-Booking-System.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/SajanaKavishan/Salon-Booking-System/issues"
+  },
+  "homepage": "https://github.com/SajanaKavishan/Salon-Booking-System#readme",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.3.1"
+  }
+}
