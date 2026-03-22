@@ -10,6 +10,9 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
+// Routes
+app.use('/api/users', require('./routes/userRoutes'));
+app.use('/api/appointments', require('./routes/appointmentRoutes'));
 
 async function connectMongo() {
     try {
