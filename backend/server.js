@@ -3,6 +3,9 @@ const mongoose = require('mongoose');
 const dns = require('dns');
 const dotenv = require('dotenv');
 const cors = require('cors');
+const User = require('./models/userModel');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
 dotenv.config();
 
@@ -13,6 +16,42 @@ app.use(express.json());
 // Routes
 app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/appointments', require('./routes/appointmentRoutes'));
+app.post('/api/login', async (req, res) => {
+    try {
+        // Capture email and password from the request body
+        const { email, password } = req.body; 
+
+        // Search for a user with the provided email in the database
+        const user = await User.findOne({ email: email });
+
+        // No user found with that email
+        if (!user) {
+            return res.status(404).json({ message: "No user found with this email." });
+        }
+       
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (isMatch) {
+            // When all are correct, we can send back a success response with user info (except password)
+            const token = jwt.sign(
+                {id: user._id, email: user.email },
+                process.env.JWT_SECRET,
+                { expiresIn: '1d' }
+            );
+
+            res.status(200).json({ 
+                message: "Login successful!", 
+                token: token,
+                user: { id: user._id, email: user.email, name: user.name} 
+            });
+        } else {
+            res.status(401).json({ message: "Invalid password!" });
+        }
+
+    } catch (error) {
+        console.error("Login Error:", error);
+        res.status(500).json({ message: "Server Error!" });
+    }
+});
 
 async function connectMongo() {
     try {
