@@ -61,8 +61,106 @@ const getAllAppointments = async (req, res) => {
     }
 };
 
+// @desc    Delete an appointment
+// @route   DELETE /api/appointments/:id
+// @access  Private
+const deleteAppointment = async (req, res) => {
+    try {
+        const appointment = await Appointment.findById(req.params.id);
+
+        if (!appointment) {
+            return res.status(404).json({ message: "Appointment not found." });
+        }
+
+        // Check if the user is the owner of the appointment or an admin
+        if (appointment.user.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+            return res.status(401).json({ message: "You are not authorized to delete this appointment." });
+        }
+
+        await appointment.deleteOne();
+
+        res.status(200).json({ 
+            id: req.params.id, 
+            message: "Appointment deleted successfully!" 
+        });
+
+    } catch (error) {
+        console.error("Delete Appointment Error:", error);
+        res.status(500).json({ message: "Server Error: Could not delete appointment." });
+    }
+};
+
+// @desc    Update appointment status (Admin Only)
+// @route   PUT /api/appointments/:id/status
+// @access  Private/Admin
+const updateAppointmentStatus = async (req, res) => {
+    try {
+        const { status } = req.body; 
+        
+        const appointment = await Appointment.findById(req.params.id).populate('user', 'name email'); // Populate user details for better readability
+
+        if (!appointment) {
+            return res.status(404).json({ message: "Appointment not found." });
+        }
+
+        appointment.status = status;
+        const updatedAppointment = await appointment.save();
+
+        // Part of the code to send an email notification to the user about the status update of their appointment. The email includes the appointment details and a message indicating the new status of the appointment. This enhances the user experience by keeping them informed about the status of their appointments in a timely manner.
+        if (appointment.user && appointment.user.email) {
+            const emailSubject = `Appointment ${status} - Salon Booking System`;
+            
+            // Crafting a visually appealing HTML email message to notify the user about the status update of their appointment. The email includes the appointment details such as service, date, and time, and uses color coding to indicate the status of the appointment (green for Approved, red for Rejected, etc.). This enhances the user experience by providing clear and concise information about their appointment status in a visually engaging format.
+            const emailMessage = `
+                <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px; max-width: 500px; margin: 0 auto;">
+                    <h2 style="color: ${status === 'Approved' ? 'green' : status === 'Rejected' ? 'red' : '#333'}; text-align: center;">
+                        Appointment Status: ${status}
+                    </h2>
+                    <p>Welcome! <strong>${appointment.user.name}</strong>,</p>
+                    <p>Your appointment status has been updated to: ${status}</p>
+                    <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+                        <tr>
+                            <td style="padding: 8px; border: 1px solid #eee;"><strong>Service:</strong></td>
+                            <td style="padding: 8px; border: 1px solid #eee;">${appointment.service}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px; border: 1px solid #eee;"><strong>Date:</strong></td>
+                            <td style="padding: 8px; border: 1px solid #eee;">${appointment.date}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px; border: 1px solid #eee;"><strong>Time:</strong></td>
+                            <td style="padding: 8px; border: 1px solid #eee;">${appointment.time}</td>
+                        </tr>
+                    </table>
+                    <p style="margin-top: 20px; font-size: 14px; color: #666; text-align: center;">
+                        Thank you!<br/>Dee's Salon
+                    </p>
+                </div>
+            `;
+
+            // Send data to sendEmail utility function to send the email notification to the user about the status update of their appointment. The email includes the appointment details and a message indicating the new status of the appointment.
+            await sendEmail({
+                email: appointment.user.email,
+                subject: emailSubject,
+                message: emailMessage
+            });
+        }
+
+        res.status(200).json({ 
+            message: "Status updated successfully! ", 
+            appointment: updatedAppointment 
+        });
+
+    } catch (error) {
+        console.error("Update Status Error:", error);
+        res.status(500).json({ message: "Server Error: Could not update appointment status." });
+    }
+};
+
 module.exports = {
     createAppointment,
     getMyAppointments,
-    getAllAppointments
+    getAllAppointments,
+    deleteAppointment,
+    updateAppointmentStatus
 };
