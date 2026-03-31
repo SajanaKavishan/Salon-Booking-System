@@ -1,4 +1,5 @@
 const Appointment = require('../models/appointmentModel');
+const sendEmail = require('../utils/sendEmail'); // Import the sendEmail utility function to send email notifications to users about their appointment status updates
 
 // @desc    Create new appointment
 // @route   POST /api/appointments
