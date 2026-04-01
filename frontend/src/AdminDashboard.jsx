@@ -30,12 +30,6 @@ function AdminDashboard() {
     fetchAllAppointments();
   }, [navigate]);
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    navigate('/');
-  };
-
   const handleStatusChange = async (id, newStatus) => {
     try {
       const token = localStorage.getItem('token');
