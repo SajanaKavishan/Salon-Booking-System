@@ -61,13 +61,13 @@ function Profile() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-900 py-12 px-4 sm:px-6 lg:px-8 transition-colors duration-300">
       <div className="max-w-3xl mx-auto">
-        <div className="bg-white rounded-2xl shadow-xl overflow-hidden border-t-4 border-blue-500">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden border-t-4 border-blue-500 dark:border-blue-400 transition-colors duration-300">
           
-          <div className="bg-gradient-to-r from-blue-200 to-blue-100 h-32 relative">
+          <div className="bg-gradient-to-r from-blue-200 to-blue-100 dark:from-gray-800 dark:to-gray-700 h-32 relative transition-colors duration-300">
             <div className="absolute -bottom-12 left-1/2 transform -translate-x-1/2">
-              <div className="w-24 h-24 bg-blue-500 rounded-full border-4 border-white flex items-center justify-center text-white text-4xl font-bold shadow-md">
+              <div className="w-24 h-24 bg-blue-500 rounded-full border-4 border-white dark:border-slate-900 flex items-center justify-center text-white text-4xl font-bold shadow-md transition-colors duration-300">
                 {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
               </div>
             </div>
@@ -75,8 +75,8 @@ function Profile() {
 
           <div className="pt-16 pb-8 px-8">
             <div className="text-center mb-8">
-              <h2 className="text-3xl font-extrabold text-gray-900">{user.name}</h2>
-              <p className="text-sm text-gray-500 capitalize mt-1 border inline-block px-3 py-1 rounded-full bg-gray-100">
+              <h2 className="text-3xl font-extrabold text-gray-900 dark:text-gray-100">{user.name}</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-300 capitalize mt-1 border border-gray-200 dark:border-slate-700 inline-block px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-700">
                 {user.role} Account
               </p>
             </div>
@@ -84,37 +84,37 @@ function Profile() {
             <form onSubmit={handleUpdate} className="space-y-6 max-w-lg mx-auto">
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Full Name</label>
                 <input 
                   type="text" 
                   name="name"
                   value={user.name || ''} 
                   onChange={onChange}
                   required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Email Address</label>
                 <input 
                   type="email" 
                   name="email"
                   value={user.email || ''} 
                   onChange={onChange}
                   required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">New Password (Optional)</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">New Password (Optional)</label>
                 <input 
                   type="password" 
                   value={password} 
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Leave blank to keep current password"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
                 />
               </div>
 
@@ -139,3 +139,4 @@ function Profile() {
 }
 
 export default Profile;
+

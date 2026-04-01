@@ -51,23 +51,23 @@ function BookAppointment() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-10">
-      <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md border-t-4 border-blue-600">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-slate-900 px-4 py-10 transition-colors duration-300">
+      <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-2xl w-full max-w-md border-t-4 border-blue-600 dark:border-blue-500 transition-colors duration-300">
         
         {/* Back to Dashboard Link */}
         <button 
           onClick={() => navigate('/dashboard')}
-          className="text-sm text-gray-500 hover:text-blue-600 mb-6 flex items-center transition-colors font-medium"
+          className="text-sm text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 mb-6 flex items-center transition-colors font-medium"
         >
           <span>← Back to Dashboard</span>
         </button>
 
         {/* Title Section */}
         <div className="text-center mb-8">
-          <h2 className="text-3xl font-extrabold text-gray-900">
+          <h2 className="text-3xl font-extrabold text-gray-900 dark:text-gray-100">
             Book an <span className="text-blue-600">Appointment</span>
           </h2>
-          <p className="text-gray-500 mt-2 text-sm">
+          <p className="text-gray-500 dark:text-gray-400 mt-2 text-sm">
             Choose your preferred service, date, and time.
           </p>
         </div>
@@ -77,7 +77,7 @@ function BookAppointment() {
           
           {/* Date Picker */}
           <div>
-            <label className="block text-gray-700 text-sm font-bold mb-2">
+            <label className="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2">
               Select Date:
             </label>
             <input 
@@ -85,13 +85,13 @@ function BookAppointment() {
               value={date} 
               onChange={(e) => setDate(e.target.value)} 
               required 
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-gray-50 text-gray-700"
+              className="w-full px-4 py-3 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-100"
             />
           </div>
 
           {/* Time Picker */}
           <div>
-            <label className="block text-gray-700 text-sm font-bold mb-2">
+            <label className="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2">
               Select Time:
             </label>
             <input 
@@ -99,13 +99,13 @@ function BookAppointment() {
               value={time} 
               onChange={(e) => setTime(e.target.value)} 
               required 
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-gray-50 text-gray-700"
+              className="w-full px-4 py-3 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-100"
             />
           </div>
 
           {/* Service Dropdown */}
           <div>
-            <label className="block text-gray-700 text-sm font-bold mb-2">
+            <label className="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2">
               Select Service:
             </label>
             <div className="relative">
@@ -113,7 +113,7 @@ function BookAppointment() {
                 value={service} 
                 onChange={(e) => setService(e.target.value)} 
                 required
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-gray-50 text-gray-700 appearance-none"
+                className="w-full px-4 py-3 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-100 appearance-none"
               >
                 <option value="" disabled>Choose a service...</option>
                 <option value="Haircut">Haircut (කොණ්ඩය කැපීම)</option>
@@ -122,7 +122,7 @@ function BookAppointment() {
                 <option value="Bridal Makeup">Bridal Makeup</option>
               </select>
               {/* Custom Arrow for Dropdown */}
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-700">
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-700 dark:text-gray-200">
                 <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
                   <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
                 </svg>
@@ -146,3 +146,4 @@ function BookAppointment() {
 }
 
 export default BookAppointment;
+

@@ -61,16 +61,16 @@ function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 py-10 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-slate-900 py-10 px-4 sm:px-6 lg:px-8 transition-colors duration-300">
       <div className="max-w-4xl mx-auto">
         
         {/* Welcome Header Card */}
-        <div className="bg-white rounded-2xl shadow-lg p-8 mb-8 flex flex-col sm:flex-row items-center justify-between border-l-4 border-blue-600">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-8 mb-8 flex flex-col sm:flex-row items-center justify-between border-l-4 border-blue-600 dark:border-blue-500 transition-colors duration-300">
           <div>
-            <h2 className="text-3xl font-extrabold text-gray-900">
+            <h2 className="text-3xl font-extrabold text-gray-900 dark:text-gray-100">
               Welcome back, <span className="text-blue-600">{user ? user.name || user.email : 'Guest'}</span>! 
             </h2>
-            <p className="mt-2 text-sm text-gray-500">Manage your salon appointments with ease.</p>
+            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Manage your salon appointments with ease.</p>
           </div>
           
           <div className="mt-6 sm:mt-0 flex gap-4">
@@ -84,14 +84,14 @@ function Dashboard() {
         </div>
 
         {/* Appointments Section */}
-        <div className="bg-white rounded-2xl shadow-lg p-8">
-          <h3 className="text-2xl font-bold text-gray-800 mb-6 border-b pb-4 border-gray-200">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-8 transition-colors duration-300">
+          <h3 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6 border-b pb-4 border-gray-200 dark:border-slate-700">
             My Appointments
           </h3>
 
           {appointments.length === 0 ? (
             <div className="text-center py-10">
-              <p className="text-gray-500 text-lg">You have no upcoming appointments. </p>
+              <p className="text-gray-500 dark:text-gray-400 text-lg">You have no upcoming appointments. </p>
               <button 
                 onClick={() => navigate('/book')}
                 className="mt-4 text-blue-600 font-semibold hover:underline"
@@ -107,7 +107,7 @@ function Dashboard() {
                 return (
                   <div 
                     key={appt._id} 
-                    className="bg-gray-50 border border-gray-200 rounded-xl p-6 hover:shadow-md transition duration-300 relative overflow-hidden"
+                    className="bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-slate-700 rounded-xl p-6 hover:shadow-md transition duration-300 relative overflow-hidden"
                   >
                     {/* Status Badge */}
                     <div className="absolute top-4 right-4">
@@ -122,22 +122,22 @@ function Dashboard() {
 
                     {/* Appointment Details */}
                     <div className="space-y-3 mb-6 mt-2">
-                      <div className="flex items-center text-gray-700">
+                      <div className="flex items-center text-gray-700 dark:text-gray-300">
                         <span className="font-semibold w-20">Service:</span>
-                        <span className="text-gray-900 font-medium">{appt.service}</span>
+                        <span className="text-gray-900 dark:text-gray-100 font-medium">{appt.service}</span>
                       </div>
-                      <div className="flex items-center text-gray-700">
+                      <div className="flex items-center text-gray-700 dark:text-gray-300">
                         <span className="font-semibold w-20">Date:</span>
                         <span>{new Date(appt.date).toLocaleDateString()}</span>
                       </div>
-                      <div className="flex items-center text-gray-700">
+                      <div className="flex items-center text-gray-700 dark:text-gray-300">
                         <span className="font-semibold w-20">Time:</span>
                         <span>{appt.time}</span>
                       </div>
                     </div>
 
                     {/* Action Button Area */}
-                    <div className="border-t border-gray-200 pt-4 mt-4">
+                    <div className="border-t border-gray-200 dark:border-slate-700 pt-4 mt-4">
                       {canCancel ? (
                         <button 
                           onClick={() => handleCancel(appt._id)}
@@ -149,7 +149,7 @@ function Dashboard() {
                         <div className="text-center">
                           <button 
                             disabled
-                            className="w-full bg-gray-200 text-gray-500 font-semibold py-2 px-4 rounded-lg cursor-not-allowed"
+                            className="w-full bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 font-semibold py-2 px-4 rounded-lg cursor-not-allowed"
                           >
                             Cannot Cancel
                           </button>
@@ -172,3 +172,4 @@ function Dashboard() {
 }
 
 export default Dashboard;
+

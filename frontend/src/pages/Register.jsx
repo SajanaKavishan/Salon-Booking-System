@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import Spinner from '../components/Spinner';
+import ThemeToggle from '../components/ThemeToggle';
 
 function Register() {
   const navigate = useNavigate();
@@ -56,15 +57,19 @@ function Register() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
-      <div className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md border-t-4 border-blue-600">
+    <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-slate-900 px-4 transition-colors duration-300 relative">
+      <div className="absolute top-5 right-5 z-10">
+        <ThemeToggle />
+      </div>
+
+      <div className="bg-white dark:bg-slate-800 p-8 rounded-xl shadow-2xl w-full max-w-md border-t-4 border-blue-600 dark:border-blue-500 transition-colors duration-300">
         
         {/* Title Section */}
         <div className="text-center mb-8">
-          <h2 className="text-3xl font-extrabold text-gray-800">
+          <h2 className="text-3xl font-extrabold text-gray-800 dark:text-gray-100">
             Create an Account
           </h2>
-          <p className="text-gray-500 mt-2 text-sm">
+          <p className="text-gray-500 dark:text-gray-400 mt-2 text-sm">
             Join our Salon Booking System today!
           </p>
         </div>
@@ -74,7 +79,7 @@ function Register() {
           
           {/* Name Input */}
           <div>
-            <label className="block text-gray-700 text-sm font-bold mb-2">
+            <label className="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2">
               Full Name
             </label>
             <input
@@ -84,13 +89,13 @@ function Register() {
               onChange={onChange}
               placeholder="Enter your full name"
               required 
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-gray-50"
+              className="w-full px-4 py-3 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             />
           </div>
 
           {/* Email Input */}
           <div>
-            <label className="block text-gray-700 text-sm font-bold mb-2">
+            <label className="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2">
               Email Address
             </label>
             <input
@@ -100,13 +105,13 @@ function Register() {
               onChange={onChange}
               placeholder="Enter your email"
               required 
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-gray-50"
+              className="w-full px-4 py-3 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             />
           </div>
 
           {/* Password Input */}
           <div>
-            <label className="block text-gray-700 text-sm font-bold mb-2">
+            <label className="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2">
               Password
             </label>
             <input
@@ -116,7 +121,7 @@ function Register() {
               onChange={onChange}
               placeholder="Create a password"
               required 
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-gray-50"
+              className="w-full px-4 py-3 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             />
           </div>
 
@@ -135,7 +140,7 @@ function Register() {
 
         {/* Login Link */}
         <div className="mt-6 text-center">
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-gray-600 dark:text-gray-300">
             Already have an account?{' '}
             <span 
               onClick={() => navigate('/login')} 
@@ -152,3 +157,4 @@ function Register() {
 }
 
 export default Register;
+
