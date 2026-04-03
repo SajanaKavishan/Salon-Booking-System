@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'react-toastify'; // For better notifications
+import ServiceManager from './components/ServiceManager';
+import StaffManager from './components/StaffManager';
 
 function AdminDashboard() {
   const navigate = useNavigate();
@@ -143,6 +145,21 @@ function AdminDashboard() {
           )}
         </div>
 
+        {/* Service Management Section */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg mt-8 transition-colors duration-300">
+          <div className="p-6 border-b border-gray-200 dark:border-slate-700">
+            <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">Manage Services</h3>
+          </div>
+          <ServiceManager />
+        </div>
+        
+        {/* Staff Management Section */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg mt-8 transition-colors duration-300">
+          <div className="p-6 border-b border-gray-200 dark:border-slate-700">
+            <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">Manage Staff</h3>
+          </div>
+          <StaffManager />
+        </div>
       </div>
     </div>
   );
