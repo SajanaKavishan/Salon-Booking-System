@@ -16,6 +16,8 @@ app.use(express.json());
 // Routes
 app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/appointments', require('./routes/appointmentRoutes'));
+app.use('/api/services', require('./routes/serviceRoutes'));
+app.use('/api/staff', require('./routes/staffRoutes'));
 app.post('/api/login', async (req, res) => {
     try {
         // Capture email and password from the request body
