@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom'; // Go back to dashboard after booking
 import { toast } from 'react-toastify'; // For better notifications
@@ -8,8 +8,29 @@ function BookAppointment() {
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [service, setService] = useState('');
+  const [stylist, setStylist] = useState('');
+  const [servicesList, setServicesList] = useState([]);
+  const [stylistsList, setStylistsList] = useState([]);
+
   const navigate = useNavigate(); 
   const [isLoading, setIsLoading] = useState(false); // Loading state for booking process
+
+  useEffect(() => {
+    const fetchOptions = async () => {
+      try {
+        const [servicesRes, staffRes] = await Promise.all([
+          axios.get('http://localhost:5000/api/services'),
+          axios.get('http://localhost:5000/api/staff')
+        ]);
+        setServicesList(servicesRes.data);
+        setStylistsList(staffRes.data);
+      } catch (error) {
+        console.error("Error fetching data:", error);
+        toast.error("Failed to load services and staff.");
+      }
+    };
+    fetchOptions();
+  }, []);
 
   const handleBooking = async (e) => {
     e.preventDefault(); 
@@ -20,7 +41,9 @@ function BookAppointment() {
       const bookingData = {
         date: date,
         time: time,
-        service: service
+        service: service,
+        stylist: stylist
+
       };
 
       await axios.post(
@@ -38,7 +61,7 @@ function BookAppointment() {
       setDate('');
       setTime('');
       setService('');
-      
+      setStylist('');
       // After booking the appointment, we navigate the user back to the dashboard where they can see their upcoming appointments and manage them. This provides a seamless experience, allowing users to easily return to the main area of the app after completing their booking.
       // navigate('/dashboard'); 
 
@@ -116,10 +139,40 @@ function BookAppointment() {
                 className="w-full px-4 py-3 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-100 appearance-none"
               >
                 <option value="" disabled>Choose a service...</option>
-                <option value="Haircut">Haircut (කොණ්ඩය කැපීම)</option>
-                <option value="Hair Coloring">Hair Coloring (වර්ණ ගැන්වීම)</option>
-                <option value="Facial">Facial</option>
-                <option value="Bridal Makeup">Bridal Makeup</option>
+                {servicesList.map((serviceItem) => (
+                  <option key={serviceItem._id} value={serviceItem.name}>
+                    {serviceItem.name}
+                  </option>
+                ))}
+              </select>
+              {/* Custom Arrow for Dropdown */}
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-700 dark:text-gray-200">
+                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                  <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          {/* Stylist Dropdown */}
+          <div>
+            <label className="block text-gray-700 dark:text-gray-300 text-sm font-bold mb-2">
+              Select Stylist:
+            </label>
+            <div className="relative">
+              <select 
+                value={stylist} 
+                onChange={(e) => setStylist(e.target.value)} 
+                required
+                className="w-full px-4 py-3 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-100 appearance-none"
+              >
+                <option value="" disabled>Choose a stylist...</option>
+                <option value="Any Available Stylist">Any Available Stylist</option>
+                {stylistsList.map((stylistItem) => (
+                  <option key={stylistItem._id} value={stylistItem._id}>
+                    {stylistItem.name}
+                  </option>
+                ))}
               </select>
               {/* Custom Arrow for Dropdown */}
               <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-gray-700 dark:text-gray-200">
