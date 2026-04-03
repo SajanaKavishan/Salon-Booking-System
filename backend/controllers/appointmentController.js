@@ -6,10 +6,10 @@ const sendEmail = require('../utils/sendEmail'); // Import the sendEmail utility
 // @access  Private
 const createAppointment = async (req, res) => {
     try {
-        const { date, time, service } = req.body;
+        const { stylist, date, time, service } = req.body;
 
         // Check if all required fields are provided
-        if (!date || !time || !service) {
+        if (!stylist || !date || !time || !service) {
             return res.status(400).json({ message: "Please fill in all required fields." });
         }
 
@@ -19,7 +19,8 @@ const createAppointment = async (req, res) => {
             user: req.user._id, 
             service: service,
             date: date,
-            time: time
+            time: time,
+            stylist: stylist
         });
 
         res.status(201).json({

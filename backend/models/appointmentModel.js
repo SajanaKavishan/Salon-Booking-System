@@ -10,6 +10,11 @@ const appointmentSchema = new mongoose.Schema({
         type: String,
         required: [true, 'Please enter the service name'],
     },
+    stylist: {
+        type: String,
+        required: [true, 'Please enter the stylist name'],
+        default: 'Any Available Stylist', // Default to "Any Available Stylist" if not specified
+    },
     date: {
         type: String,
         required: [true, 'Please enter the date'],
