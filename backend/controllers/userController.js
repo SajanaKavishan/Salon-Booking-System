@@ -1,36 +1,37 @@
 const User = require('../models/userModel');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const axios = require('axios'); 
 
-const generateToken = (id) => {
-    return jwt.sign({ id }, process.env.JWT_SECRET, {
+const generateToken = (id) => { // Generate a JWT token with the user's ID as payload
+    return jwt.sign({ id }, process.env.JWT_SECRET, { // Token expires in 30 days
         expiresIn: '30d', 
     });
 };
 
-const registerUser = async (req, res) => {
+const registerUser = async (req, res) => { // Register a new user
     try {
         const { name, email, password } = req.body;
 
-        if (!name || !email || !password) {
+        if (!name || !email || !password) { // Check if all required fields are provided
             return res.status(400).json({ message: 'Please enter all details' });
         }
 
         const userExists = await User.findOne({ email });
-        if (userExists) {
+        if (userExists) { // If a user with the same email already exists, return an error
             return res.status(400).json({ message: 'User with this email already exists' });
         }
 
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        const user = await User.create({
+        const user = await User.create({ // Create a new user in the database with the provided details and hashed password
             name,
             email,
             password: hashedPassword,
         });
 
-        if (user) {
+        if (user) { // If user creation is successful, return the user's details along with a generated token
             res.status(201).json({
                 _id: user.id,
                 name: user.name,
@@ -40,18 +41,19 @@ const registerUser = async (req, res) => {
         } else {
             res.status(400).json({ message: 'Failed to create user' });
         }
-    } catch (error) {
+    } catch (error) { 
         res.status(500).json({ message: error.message });
     }
 };
+
 // Login function
-const loginUser = async (req, res) => {
+const loginUser = async (req, res) => { // Authenticate a user and return their details along with a token if successful
     try {
         const { email, password } = req.body;
 
         const user = await User.findOne({ email });
 
-        if (user && (await bcrypt.compare(password, user.password))) {
+        if (user && (await bcrypt.compare(password, user.password))) { // If the user exists and the provided password matches the hashed password in the database, return the user's details and a token
             res.json({
                 _id: user.id,
                 name: user.name,
@@ -59,36 +61,89 @@ const loginUser = async (req, res) => {
                 role: user.role,
                 token: generateToken(user._id), //Create a token for the user
             });
-        } else {
+        } else { 
             res.status(401).json({ message: 'Invalid email or password' });
         }
-    } catch (error) {
+    } catch (error) { 
         res.status(500).json({ message: error.message });
     }
 };
+
+// @desc    Google Login
+// @route   POST /api/users/google-login
+// @access  Public
+const googleLogin = async (req, res) => {
+    const { token } = req.body; 
+  
+    try {
+      // Use the token to get user info from Google
+      const googleRes = await axios.get(
+        'https://www.googleapis.com/oauth2/v3/userinfo',
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+  
+      const { email, name } = googleRes.data;
+  
+      // Check if user already exists in our database
+      let user = await User.findOne({ email });
+  
+      if (user) {
+        // If user exists, just return their info and a new token
+        res.json({
+          _id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          token: generateToken(user._id),
+        });
+      } else {
+        // If user doesn't exist, create a new one with a random password (since they won't use it)
+        const randomPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8);
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(randomPassword, salt);
+  
+        user = await User.create({ // Create a new user in the database with the Google info and a hashed random password
+          name,
+          email,
+          password: hashedPassword, 
+          role: 'customer', 
+        });
+  
+        if (user) { // If user creation is successful, return the user's details along with a generated token
+          res.status(201).json({
+            _id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            token: generateToken(user._id),
+          });
+        } else {
+          res.status(400).json({ message: 'Invalid user data' });
+        }
+      }
+    } catch (error) {
+      console.error('Google login error:', error);
+      res.status(401).json({ message: 'Google authentication failed' });
+    }
+};
+
 // Get user profile function
-// This function will be used to get the profile of the logged-in user. It uses the req.user object that is set by the authMiddleware when the user is authenticated.
-// The protect middleware will ensure that only authenticated users can access this route, and it will attach the user information to the req.user object. The getMe function then simply returns this user information in the response.
 const getMe = async (req, res) => {
-    // Since the protect middleware attaches the user information to req.user, we can simply return that information here.  
     res.status(200).json(req.user);
 };
 
-// @desc    Update user profile
-// @route   PUT /api/users/profile
-// @access  Private
+// Update user profile
 const updateUserProfile = async (req, res) => {
   try {
-    // req.user._id tells us which user is making the request, so we can find that user in the database and update their information.
     const user = await User.findById(req.user._id);
 
-    if (user) {
+    if (user) { // If the user is found, update their details with the provided data (if any)
       user.name = req.body.name || user.name;
       user.email = req.body.email || user.email;
 
-      // If a new password is provided, hash it and update the user's password
       if (req.body.password) {
-        // Make sure to require 'bcryptjs' at the top of the file
         const salt = await bcrypt.genSalt(10);
         user.password = await bcrypt.hash(req.body.password, salt);
       }
@@ -100,7 +155,7 @@ const updateUserProfile = async (req, res) => {
         name: updatedUser.name,
         email: updatedUser.email,
         role: updatedUser.role,
-        token: req.headers.authorization.split(' ')[1], // Return the updated token
+        token: req.headers.authorization.split(' ')[1], 
       });
     } else {
       res.status(404).json({ message: 'User not found' });
@@ -110,9 +165,10 @@ const updateUserProfile = async (req, res) => {
   }
 };
 
-module.exports = {
+module.exports = { // Export all the controller functions to be used in the routes
     registerUser,
     loginUser,
+    googleLogin, 
     getMe,
     updateUserProfile
 };
