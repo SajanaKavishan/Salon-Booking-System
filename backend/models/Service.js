@@ -14,10 +14,14 @@ const serviceSchema = new mongoose.Schema(
       type: Number, 
       required: [true, 'Please add estimated duration in minutes'],
     },
+    image: {
+    type: String,
+    default: "https://via.placeholder.com/400x300?text=Salon+Service"
+    }
   },
   {
     timestamps: true,
-  }
+  },
 );
 
 module.exports = mongoose.model('Service', serviceSchema);
