@@ -14,28 +14,28 @@ const app = express();
 
 mongoose.set('bufferCommands', false);
 
-const mongoOptions = {
+const mongoOptions = { 
     family: 4,
     serverSelectionTimeoutMS: 30000,
     socketTimeoutMS: 45000,
 };
 
-mongoose.connection.on('connected', () => {
+mongoose.connection.on('connected', () => { // This event is emitted when Mongoose successfully connects to the MongoDB server
     console.log('Mongoose connection established.');
 });
 
-mongoose.connection.on('error', (error) => {
+mongoose.connection.on('error', (error) => { // This event is emitted when there's an error in the Mongoose connection
     console.log('Mongoose connection error:', error.message);
 });
 
-mongoose.connection.on('disconnected', () => {
+mongoose.connection.on('disconnected', () => { // This event is emitted when Mongoose disconnects from the MongoDB server
     console.log('Mongoose disconnected.');
 });
 
 app.use(cors());
 app.use(express.json());
 
-async function ensureMongoConnection(req, res, next) {
+async function ensureMongoConnection(req, res, next) { // Middleware function to ensure MongoDB connection is active before processing API requests
     if (mongoose.connection.readyState === 1) {
         return next();
     }
@@ -49,11 +49,12 @@ async function ensureMongoConnection(req, res, next) {
 }
 
 // Routes
-app.use('/api/users', ensureMongoConnection, require('./routes/userRoutes'));
-app.use('/api/appointments', ensureMongoConnection, require('./routes/appointmentRoutes'));
-app.use('/api/services', ensureMongoConnection, require('./routes/serviceRoutes'));
-app.use('/api/staff', ensureMongoConnection, require('./routes/staffRoutes'));
-app.post('/api/login', async (req, res) => {
+app.use('/api/users', ensureMongoConnection, require('./routes/userRoutes')); // User registration and management routes
+app.use('/api/appointments', ensureMongoConnection, require('./routes/appointmentRoutes')); // Appointment booking and management routes
+app.use('/api/services', ensureMongoConnection, require('./routes/serviceRoutes')); // Service management routes
+app.use('/api/staff', ensureMongoConnection, require('./routes/staffRoutes')); // Staff management routes
+app.use('/api/messages', ensureMongoConnection, require('./routes/messageRoutes')); // Contact form message handling routes
+app.post('/api/login', async (req, res) => { // User login route to authenticate users and provide JWT tokens for session management
     try {
         // Capture email and password from the request body
         const { email, password } = req.body; 
@@ -90,7 +91,7 @@ app.post('/api/login', async (req, res) => {
     }
 });
 
-async function connectMongo() {
+async function connectMongo() { // Function to establish a connection to MongoDB with error handling and DNS fallback
     if (!process.env.MONGO_URI) {
         console.log('MongoDB connection skipped: MONGO_URI is not set.');
         return false;
@@ -119,7 +120,7 @@ async function connectMongo() {
     }
 }
 
-app.get('/', (req, res) => {
+app.get('/', (req, res) => { // Basic route to check if the server is running
     res.send('Salon Management API is running!');
 });
 
