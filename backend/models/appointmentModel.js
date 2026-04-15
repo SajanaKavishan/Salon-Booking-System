@@ -6,10 +6,11 @@ const appointmentSchema = new mongoose.Schema({
         required: true,
         ref: 'User', // This creates a reference to the User model, allowing us to associate an appointment with a specific user.
     },
-    service: {
-        type: String,
-        required: [true, 'Please enter the service name'],
-    },
+    services: [{ 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'Service',
+    required: true 
+    }], // This is an array of ObjectIds that reference the Service model, allowing an appointment to include multiple services.
     stylist: {
         type: String,
         required: [true, 'Please enter the stylist name'],
@@ -19,17 +20,12 @@ const appointmentSchema = new mongoose.Schema({
         type: String,
         required: [true, 'Please enter the date'],
     },
-    time: {
-        type: String,
-        required: [true, 'Please enter the time'],
-    },
-    status: {
-        type: String,
-        required: true,
-        default: 'Pending', // Initially set to Pending
-    }
-}, {
-    timestamps: true
-});
+    startTime: { type: String, required: true }, 
+    endTime: { type: String, required: true },   
+    totalDuration: { type: Number, required: true }, 
+    totalAmount: { type: Number, required: true },   
+
+    status: { type: String, default: 'Pending' }
+}, { timestamps: true });
 
 module.exports = mongoose.model('Appointment', appointmentSchema);

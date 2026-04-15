@@ -13,9 +13,9 @@ function Dashboard() {
     const token = localStorage.getItem('token');
 
     if (storedUser && token) {
-      setUser(JSON.parse(storedUser));
       const fetchAppointments = async () => {
         try {
+          setUser(JSON.parse(storedUser));
           const response = await axios.get('http://localhost:5000/api/appointments', {
             headers: {
               Authorization: `Bearer ${token}`
@@ -29,12 +29,6 @@ function Dashboard() {
       fetchAppointments();
     }
   }, []);
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    navigate('/');
-  };
 
   const handleCancel = async (id) => {
     if (window.confirm("Are you sure you want to cancel this appointment?")) {
@@ -52,31 +46,83 @@ function Dashboard() {
     }
   };
 
-  const isCancellable = (apptDate, apptTime) => {
-    const appointmentDateTime = new Date(`${apptDate}T${apptTime}`);
-    const currentDateTime = new Date();
-    const differenceInMs = appointmentDateTime - currentDateTime;
-    const differenceInHours = differenceInMs / (1000 * 60 * 60);
-    return differenceInHours >= 2;
+  // Helper function to convert time string (e.g., "09:30 AM") to total minutes
+  const timeToMinutes = (timeStr) => {
+    if (!timeStr || typeof timeStr !== 'string') return 0;
+    const parts = timeStr.split(' ');
+    if (parts.length < 2) return 0;
+    const [time, modifier] = parts;
+    const timeParts = time.split(':');
+    if (timeParts.length < 2) return 0;
+    let [hours, minutes] = timeParts.map(Number);
+    if (isNaN(hours) || isNaN(minutes)) return 0;
+    if (hours === 12) hours = 0;
+    if (modifier === 'PM') hours += 12;
+    return hours * 60 + minutes;
+  };
+
+  // Robust cancellation check: appointment must be at least 2 hours away
+  const isCancellable = (apptDate, apptStartTime, appointment) => {
+    try {
+      // Handle undefined inputs - use fallback to old 'time' field if available
+      const timeStr = apptStartTime || (appointment && appointment.time);
+      
+      if (!apptDate || !timeStr) {
+        // If we can't parse the time, assume it's not cancellable
+        return false;
+      }
+
+      // Parse date: YYYY-MM-DD format
+      const dateParts = apptDate.split('-');
+      if (dateParts.length < 3) return false;
+      
+      const [year, month, day] = dateParts.map(Number);
+      if (isNaN(year) || isNaN(month) || isNaN(day)) return false;
+      
+      // Parse time: e.g., "09:30 AM" to minutes, then to hours and minutes
+      const timeMins = timeToMinutes(timeStr);
+      const hours = Math.floor(timeMins / 60);
+      const minutes = timeMins % 60;
+
+      // Create appointment Date object (local time)
+      const appointmentDateTime = new Date(year, month - 1, day, hours, minutes, 0, 0);
+      const currentDateTime = new Date();
+
+      // Calculate difference in milliseconds, then convert to hours
+      const differenceInMs = appointmentDateTime.getTime() - currentDateTime.getTime();
+      const differenceInHours = differenceInMs / (1000 * 60 * 60);
+
+      // Return true only if appointment is at least 2 hours away
+      return differenceInHours >= 2;
+    } catch (error) {
+      console.error('Error checking if appointment is cancellable:', error);
+      return false;
+    }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-slate-900 py-10 px-4 sm:px-6 lg:px-8 transition-colors duration-300">
-      <div className="max-w-4xl mx-auto">
+    /* Main Container with Background Image */
+    <div className="min-h-screen relative flex flex-col py-10 px-4 sm:px-6 lg:px-8 font-sans text-white selection:bg-[#d4af37] selection:text-black bg-[url('/loginBg.jpg')] bg-cover bg-center bg-no-repeat fixed bg-fixed">
+      
+      {/* Dark Overlay (80% Black) */}
+      <div className="absolute inset-0 bg-black/80 z-0"></div>
+
+      {/* Content Wrapper */}
+      <div className="relative z-10 w-full max-w-4xl mx-auto">
         
         {/* Welcome Header Card */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-8 mb-8 flex flex-col sm:flex-row items-center justify-between border-l-4 border-blue-600 dark:border-blue-500 transition-colors duration-300">
+        <div className="bg-[#111111]/70 backdrop-blur-md rounded-xl shadow-2xl p-8 mb-8 flex flex-col sm:flex-row items-center justify-between border border-white/10 border-l-4 border-l-[#d4af37]">
           <div>
-            <h2 className="text-3xl font-extrabold text-gray-900 dark:text-gray-100">
-              Welcome back, <span className="text-blue-600">{user ? user.name || user.email : 'Guest'}</span>! 
+            <h2 className="text-3xl font-serif text-white">
+              Welcome back, <span className="text-[#d4af37]">{user ? user.name || user.email : 'Guest'}</span>! 
             </h2>
-            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Manage your salon appointments with ease.</p>
+            <p className="mt-2 text-sm text-gray-400 font-light">Manage your salon appointments with ease.</p>
           </div>
           
           <div className="mt-6 sm:mt-0 flex gap-4">
             <button 
               onClick={() => navigate('/book')} 
-              className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-300 transform hover:-translate-y-1"
+              className="bg-[#d4af37] hover:bg-yellow-400 text-black font-semibold py-2 px-6 rounded-md shadow-[0_0_15px_rgba(212,175,55,0.3)] hover:shadow-[0_0_25px_rgba(212,175,55,0.5)] transition duration-300 transform hover:-translate-y-1"
             >
               + Book New
             </button>
@@ -84,17 +130,17 @@ function Dashboard() {
         </div>
 
         {/* Appointments Section */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-8 transition-colors duration-300">
-          <h3 className="text-2xl font-bold text-gray-800 dark:text-gray-100 mb-6 border-b pb-4 border-gray-200 dark:border-slate-700">
+        <div className="bg-[#111111]/70 backdrop-blur-md rounded-xl shadow-2xl p-8 border border-white/10">
+          <h3 className="text-2xl font-serif text-[#d4af37] mb-6 border-b pb-4 border-white/10">
             My Appointments
           </h3>
 
           {appointments.length === 0 ? (
             <div className="text-center py-10">
-              <p className="text-gray-500 dark:text-gray-400 text-lg">You have no upcoming appointments. </p>
+              <p className="text-gray-400 text-lg font-light">You have no upcoming appointments. </p>
               <button 
                 onClick={() => navigate('/book')}
-                className="mt-4 text-blue-600 font-semibold hover:underline"
+                className="mt-4 text-[#d4af37] font-semibold hover:text-yellow-400 hover:underline transition"
               >
                 Book your first appointment now
               </button>
@@ -102,19 +148,24 @@ function Dashboard() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {appointments.map((appt) => {
-                const canCancel = isCancellable(appt.date, appt.time);
+                const canCancel = isCancellable(appt.date, appt.startTime, appt);
+                
+                // Get service names from the services array
+                const serviceNames = appt.services && appt.services.length > 0 
+                  ? appt.services.map(s => s.name || s).join(', ')
+                  : 'N/A';
 
                 return (
                   <div 
                     key={appt._id} 
-                    className="bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-slate-700 rounded-xl p-6 hover:shadow-md transition duration-300 relative overflow-hidden"
+                    className="bg-[#0a0a0a]/80 border border-white/10 rounded-xl p-6 hover:border-[#d4af37]/50 transition duration-300 relative overflow-hidden group"
                   >
                     {/* Status Badge */}
                     <div className="absolute top-4 right-4">
                       <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
-                        appt.status === 'Pending' ? 'bg-yellow-100 text-yellow-800 border border-yellow-300' : 
-                        appt.status === 'Approved' ? 'bg-green-100 text-green-800 border border-green-300' :
-                        'bg-red-100 text-red-800 border border-red-300'
+                        appt.status === 'Pending' ? 'bg-yellow-900/30 text-yellow-400 border border-yellow-700/50' : 
+                        appt.status === 'Approved' ? 'bg-green-900/30 text-green-400 border border-green-700/50' :
+                        'bg-red-900/30 text-red-400 border border-red-700/50'
                       }`}>
                         {appt.status}
                       </span>
@@ -122,26 +173,30 @@ function Dashboard() {
 
                     {/* Appointment Details */}
                     <div className="space-y-3 mb-6 mt-2">
-                      <div className="flex items-center text-gray-700 dark:text-gray-300">
-                        <span className="font-semibold w-20">Service:</span>
-                        <span className="text-gray-900 dark:text-gray-100 font-medium">{appt.service}</span>
+                      <div className="flex items-start">
+                        <span className="text-gray-400 font-medium w-20">Services:</span>
+                        <span className="text-white font-medium flex-1">{serviceNames}</span>
                       </div>
-                      <div className="flex items-center text-gray-700 dark:text-gray-300">
-                        <span className="font-semibold w-20">Date:</span>
-                        <span>{new Date(appt.date).toLocaleDateString()}</span>
+                      <div className="flex items-center">
+                        <span className="text-gray-400 font-medium w-20">Date:</span>
+                        <span className="text-white">{new Date(appt.date).toLocaleDateString()}</span>
                       </div>
-                      <div className="flex items-center text-gray-700 dark:text-gray-300">
-                        <span className="font-semibold w-20">Time:</span>
-                        <span>{appt.time}</span>
+                      <div className="flex items-center">
+                        <span className="text-gray-400 font-medium w-20">Time:</span>
+                        <span className="text-white">{appt.startTime} - {appt.endTime}</span>
+                      </div>
+                      <div className="flex items-center">
+                        <span className="text-gray-400 font-medium w-20">Amount:</span>
+                        <span className="text-[#d4af37] font-semibold">Rs. {appt.totalAmount}</span>
                       </div>
                     </div>
 
                     {/* Action Button Area */}
-                    <div className="border-t border-gray-200 dark:border-slate-700 pt-4 mt-4">
+                    <div className="border-t border-white/10 pt-4 mt-4">
                       {canCancel ? (
                         <button 
                           onClick={() => handleCancel(appt._id)}
-                          className="w-full bg-red-50 hover:bg-red-500 text-red-600 hover:text-white font-semibold py-2 px-4 border border-red-200 hover:border-transparent rounded-lg transition duration-300"
+                          className="w-full bg-[#1a1a1a] hover:bg-red-900/80 text-red-400 hover:text-white font-semibold py-2 px-4 border border-red-900/50 hover:border-transparent rounded-md transition duration-300"
                         >
                           Cancel Booking
                         </button>
@@ -149,11 +204,11 @@ function Dashboard() {
                         <div className="text-center">
                           <button 
                             disabled
-                            className="w-full bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400 font-semibold py-2 px-4 rounded-lg cursor-not-allowed"
+                            className="w-full bg-[#111111] text-gray-600 font-semibold py-2 px-4 rounded-md cursor-not-allowed border border-white/5"
                           >
                             Cannot Cancel
                           </button>
-                          <p className="text-xs text-red-500 mt-2">
+                          <p className="text-xs text-red-400/80 mt-2 font-light">
                             * Cancellations only allowed 2 hours prior to the appointment.
                           </p>
                         </div>
@@ -172,4 +227,3 @@ function Dashboard() {
 }
 
 export default Dashboard;
-
