@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import Spinner from '../components/Spinner';
 import { useGoogleLogin } from '@react-oauth/google';
+import { FaEye, FaEyeSlash } from 'react-icons/fa';
 
 function Login() {
   const navigate = useNavigate();
@@ -11,6 +12,8 @@ function Login() {
     email: '',
     password: '',
   });
+
+  const [showPassword, setShowPassword] = useState(false);
   
   // Loading state 
   const [isLoading, setIsLoading] = useState(false); 
@@ -152,15 +155,24 @@ function Login() {
                   Forgot Password?
                 </span>
               </div>
-              <input
-                type="password"
-                name="password"
-                value={password}
-                onChange={onChange}
-                placeholder="Enter your password"
-                required 
-                className="w-full bg-[#0a0a0a]/80 border border-white/10 p-3 rounded-md text-white placeholder-gray-500 focus:outline-none focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] transition"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  name="password"
+                  value={password}
+                  onChange={onChange}
+                  placeholder="Enter your password"
+                  required 
+                  className="w-full bg-[#0a0a0a]/80 border border-white/10 p-3 pr-12 rounded-md text-white placeholder-gray-500 focus:outline-none focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] transition"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-[#d4af37] transition-colors focus:outline-none"
+                >
+                  {showPassword ? <FaEyeSlash size={18} /> : <FaEye size={18} />}
+                </button>
+              </div>
             </div>
 
             {/* Submit Button (Updated to Gold) */}

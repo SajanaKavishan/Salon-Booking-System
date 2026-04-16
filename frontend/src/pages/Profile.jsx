@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import Spinner from '../components/Spinner';
+import { FaEye, FaEyeSlash } from 'react-icons/fa';
 
 function Profile() {
   const [user, setUser] = useState(() => {
@@ -10,14 +11,26 @@ function Profile() {
   });
   
   const [password, setPassword] = useState(''); 
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Look for the user in localStorage on component mount and update state
+  const [isEditing, setIsEditing] = useState(false);
 
-  // When changing the name or email input fields, we update the user state with the new values. The onChange function takes the event object, extracts the name of the input field (either 'name' or 'email') and its value, and updates the corresponding property in the user state using the spread operator to keep the other properties unchanged.
   const onChange = (e) => {
     setUser({ ...user, [e.target.name]: e.target.value });
   };
 
-  // When the user submits the form to update their profile, we send a PUT request to the backend API with the updated name, email, and optionally a new password. We also include the authentication token in the request headers to ensure that only authenticated users can update their profiles. If the update is successful, we update the user information in localStorage and show a success toast notification. If there's an error, we show an error toast notification with the error message from the backend.
+  // Clicking Cancel will exit Edit Mode and reset any unsaved changes
+  const handleCancel = () => {
+    setIsEditing(false);
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      setUser(JSON.parse(storedUser));
+    }
+    setPassword('');
+  };
+
   const handleUpdate = async (e) => {
     e.preventDefault();
     setIsLoading(true);
@@ -30,7 +43,6 @@ function Profile() {
         },
       };
 
-      // Data for the PUT request, we include the updated name and email from the user state, and if a new password is provided, we include that as well. The backend will handle updating only the fields that are provided, so if the password is left blank, it will keep the existing password.
       const updateData = {
         name: user.name,
         email: user.email,
@@ -39,10 +51,8 @@ function Profile() {
         updateData.password = password;
       }
 
-      // Send the PUT request to the backend API to update the user's profile. The endpoint is /api/users/profile, and we include the updated data and the authentication token in the request. If the request is successful, we get the updated user information in the response, which we then use to update the user information in localStorage so that it reflects the changes immediately in the UI.
       const response = await axios.put('http://localhost:5000/api/users/profile', updateData, config);
 
-      // After successfully updating the profile, we update the user information in localStorage with the new name, email, and role from the response. This ensures that the updated profile information is stored locally and can be accessed throughout the app without needing to refresh or log out and back in.
       localStorage.setItem('user', JSON.stringify({
         id: response.data._id,
         name: response.data.name,
@@ -50,8 +60,9 @@ function Profile() {
         role: response.data.role,
       }));
 
-      toast.success("Profile updated successfully! ");
-      setPassword(''); // After updating, we clear the password field for security reasons, so that the new password is not visible in the input field after the update.
+      toast.success("Profile updated successfully!");
+      setPassword(''); 
+      setIsEditing(false); // Exit Edit Mode after successful update
 
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to update profile.");
@@ -61,13 +72,17 @@ function Profile() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-slate-900 py-12 px-4 sm:px-6 lg:px-8 transition-colors duration-300">
-      <div className="max-w-3xl mx-auto">
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl overflow-hidden border-t-4 border-blue-500 dark:border-blue-400 transition-colors duration-300">
+    <div className="min-h-screen relative flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 font-sans text-white selection:bg-[#d4af37] selection:text-black bg-[url('/profileBg.jpg')] bg-cover bg-center bg-no-repeat fixed bg-fixed">
+      
+      <div className="absolute inset-0 bg-black/80 z-0"></div>
+
+      <div className="relative z-10 w-full max-w-3xl mx-auto">
+        
+        <div className="bg-[#111111]/70 backdrop-blur-md rounded-xl shadow-2xl overflow-hidden border border-white/10 w-full">
           
-          <div className="bg-gradient-to-r from-blue-200 to-blue-100 dark:from-gray-800 dark:to-gray-700 h-32 relative transition-colors duration-300">
+          <div className="bg-gradient-to-r from-black/80 to-[#d4af37]/20 h-32 relative border-b border-white/5">
             <div className="absolute -bottom-12 left-1/2 transform -translate-x-1/2">
-              <div className="w-24 h-24 bg-blue-500 rounded-full border-4 border-white dark:border-slate-900 flex items-center justify-center text-white text-4xl font-bold shadow-md transition-colors duration-300">
+              <div className="w-24 h-24 bg-[#0a0a0a] rounded-full border-4 border-[#111111] ring-2 ring-[#d4af37] flex items-center justify-center text-[#d4af37] text-4xl font-bold shadow-[0_0_15px_rgba(212,175,55,0.4)]">
                 {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
               </div>
             </div>
@@ -75,62 +90,105 @@ function Profile() {
 
           <div className="pt-16 pb-8 px-8">
             <div className="text-center mb-8">
-              <h2 className="text-3xl font-extrabold text-gray-900 dark:text-gray-100">{user.name}</h2>
-              <p className="text-sm text-gray-500 dark:text-gray-300 capitalize mt-1 border border-gray-200 dark:border-slate-700 inline-block px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-700">
+              <h2 className="text-3xl font-serif text-white mb-2">{user.name}</h2>
+              <p className="text-sm text-[#d4af37] capitalize mt-1 border border-[#d4af37]/30 inline-block px-4 py-1 rounded-full bg-[#d4af37]/10 tracking-wider">
                 {user.role} Account
               </p>
             </div>
 
-            <form onSubmit={handleUpdate} className="space-y-6 max-w-lg mx-auto">
-              
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Full Name</label>
-                <input 
-                  type="text" 
-                  name="name"
-                  value={user.name || ''} 
-                  onChange={onChange}
-                  required
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
-                />
-              </div>
+            {/* View or Edit Mode */}
+            {!isEditing ? (
+              // VIEW MODE (Dsiplay user info) 
+              <div className="max-w-lg mx-auto space-y-6">
+                <div className="bg-[#0a0a0a]/60 border border-white/10 p-5 rounded-lg">
+                  <div className="mb-4">
+                    <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Full Name</p>
+                    <p className="text-lg text-gray-200">{user.name}</p>
+                  </div>
+                  <div className="border-t border-white/5 my-4"></div>
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Email Address</p>
+                    <p className="text-lg text-gray-200">{user.email}</p>
+                  </div>
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Email Address</label>
-                <input 
-                  type="email" 
-                  name="email"
-                  value={user.email || ''} 
-                  onChange={onChange}
-                  required
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
-                />
+                <div className="pt-4 flex justify-center">
+                  <button 
+                    onClick={() => setIsEditing(true)}
+                    className="w-full text-black font-semibold py-3 px-4 rounded-md transition duration-300 text-lg flex justify-center items-center shadow-[0_0_15px_rgba(212,175,55,0.3)] hover:shadow-[0_0_25px_rgba(212,175,55,0.5)] bg-[#d4af37] hover:bg-yellow-400"
+                  >
+                    Edit Profile
+                  </button>
+                </div>
               </div>
+            ) : (
+              // EDIT MODE (Form to update user info)
+              <form onSubmit={handleUpdate} className="space-y-6 max-w-lg mx-auto">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Full Name</label>
+                  <input 
+                    type="text" 
+                    name="name"
+                    value={user.name || ''} 
+                    onChange={onChange}
+                    required
+                    className="w-full bg-[#0a0a0a]/80 border border-white/10 p-3 rounded-md text-white placeholder-gray-500 focus:outline-none focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] transition"
+                  />
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">New Password (Optional)</label>
-                <input 
-                  type="password" 
-                  value={password} 
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Leave blank to keep current password"
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-100"
-                />
-              </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Email Address</label>
+                  <input 
+                    type="email" 
+                    name="email"
+                    value={user.email || ''} 
+                    onChange={onChange}
+                    required
+                    className="w-full bg-[#0a0a0a]/80 border border-white/10 p-3 rounded-md text-white placeholder-gray-500 focus:outline-none focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] transition"
+                  />
+                </div>
 
-              <div className="pt-4">
-                <button 
-                  type="submit"
-                  disabled={isLoading}
-                  className={`w-full text-white font-bold py-3 px-4 rounded-lg transition-all duration-300 shadow-lg ${
-                    isLoading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-500 hover:bg-blue-600 transform hover:-translate-y-1'
-                  }`}
-                >
-                  {isLoading ? <Spinner /> : 'Update Profile'}
-                </button>
-              </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">New Password (Optional)</label>
+                  <div className="relative">
+                    <input 
+                      type={showPassword ? 'text' : 'password'}
+                      value={password} 
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Leave blank to keep current password"
+                      className="w-full bg-[#0a0a0a]/80 border border-white/10 p-3 pr-12 rounded-md text-white placeholder-gray-500 focus:outline-none focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] transition"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((prev) => !prev)}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-[#d4af37] transition-colors focus:outline-none"
+                    >
+                      {showPassword ? <FaEyeSlash size={18} /> : <FaEye size={18} />}
+                    </button>
+                  </div>
+                </div>
 
-            </form>
+                <div className="pt-4 flex flex-col sm:flex-row gap-4">
+                  <button 
+                    type="button"
+                    onClick={handleCancel}
+                    disabled={isLoading}
+                    className="w-full sm:w-1/3 text-gray-300 font-semibold py-3 px-4 rounded-md transition duration-300 bg-[#1a1a1a] border border-white/10 hover:bg-white/10"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit"
+                    disabled={isLoading}
+                    className={`w-full sm:w-2/3 text-black font-semibold py-3 px-4 rounded-md transition duration-300 flex justify-center items-center shadow-[0_0_15px_rgba(212,175,55,0.3)] hover:shadow-[0_0_25px_rgba(212,175,55,0.5)] ${
+                      isLoading ? 'bg-yellow-600/70 cursor-not-allowed' : 'bg-[#d4af37] hover:bg-yellow-400'
+                    }`}
+                  >
+                    {isLoading ? <Spinner /> : 'Save Changes'}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       </div>
@@ -139,4 +197,3 @@ function Profile() {
 }
 
 export default Profile;
-
