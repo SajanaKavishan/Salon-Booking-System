@@ -11,6 +11,7 @@ import Register from './pages/Register';
 import Navbar from './Navbar';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import AdminMessages from './components/AdminMessages';
 
 function App() {
   return (
@@ -58,6 +59,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <AdminDashboard />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/admin/messages" 
+            element={
+              <ProtectedRoute>
+                <AdminMessages />
               </ProtectedRoute>
             } 
           />

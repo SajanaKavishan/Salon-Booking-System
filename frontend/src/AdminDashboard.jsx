@@ -118,13 +118,19 @@ function AdminDashboard() {
 
                       {/* Service */}
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-300 font-light">{appt.service}</div>
+                        <div className="text-sm text-gray-300 font-light">
+                          {appt.services && appt.services.length > 0
+                            ? appt.services.map((service) => service.name || service).join(', ')
+                            : appt.service || 'N/A'}
+                        </div>
                       </td>
 
                       {/* Date & Time */}
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-200 mb-1">{new Date(appt.date).toLocaleDateString()}</div>
-                        <div className="text-xs text-gray-400 font-light">{appt.time}</div>
+                        <div className="text-xs text-gray-400 font-light">
+                          {appt.startTime ? `${appt.startTime}${appt.endTime ? ` - ${appt.endTime}` : ''}` : appt.time}
+                        </div>
                       </td>
 
                       {/* Status Badge */}

@@ -1,8 +1,7 @@
 import React from 'react'; 
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import ThemeToggle from './components/ThemeToggle'; // Import the new ThemeToggle component
 
-// Main Navbar Component
+// Navbar Component
 function Navbar() {
   const navigate = useNavigate();
   const location = useLocation(); 
@@ -16,57 +15,79 @@ function Navbar() {
     localStorage.removeItem('user');
     navigate('/');
   };
-
-  if (location.pathname === '/' || location.pathname === '/login' || location.pathname === '/register') {
+  
+  // Hide Navbar on Login and Register pages
+  if (location.pathname === '/login' || location.pathname === '/register') {
     return null; 
   }
 
+  const scrollToSection = (id) => {
+    if (location.pathname !== '/') {
+      navigate('/');
+      setTimeout(() => {
+        const element = document.getElementById(id);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth' });
+        }
+      }, 100);
+    } else {
+      const element = document.getElementById(id);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
+  };
+
+
+  // Structure of the Navbar with conditional rendering based on authentication status and user role
   return (
-    <nav className="bg-white dark:bg-slate-900 shadow-md py-4 px-6 mb-8 border-b-4 border-blue-600 dark:border-blue-500 transition-colors duration-300">
+    <nav className="bg-[#111111] py-4 px-6 border-b border-white/5 font-sans z-50 sticky top-0 shadow-lg">
       <div className="max-w-7xl mx-auto flex justify-between items-center">
         
-        {/* Logo Section */}
-        <div className="text-2xl font-extrabold text-gray-900 dark:text-white transition-colors duration-300">
-          <Link to={user?.role === 'admin' ? '/admin' : '/dashboard'}>
-            Salon<span className="text-blue-600 dark:text-blue-400">Booking</span>
-          </Link>
+        <div className="text-3xl font-bold tracking-widest text-white cursor-pointer" onClick={() => scrollToSection('home')}>
+          Salon<span className="text-[#d4af37]">DEES</span>
+        </div>
+
+        <div className="hidden md:flex space-x-8 text-gray-300 text-xl font-medium tracking-wide">
+          <button onClick={() => scrollToSection('services')} className="hover:text-[#d4af37] transition duration-300">Services</button>
+          <button onClick={() => scrollToSection('about')} className="hover:text-[#d4af37] transition duration-300">About</button>
+          <button onClick={() => scrollToSection('gallery')} className="hover:text-[#d4af37] transition duration-300">Gallery</button>
+          <button onClick={() => scrollToSection('contact')} className="hover:text-[#d4af37] transition duration-300">Contact</button>
         </div>
         
-        {/* Navigation Links */}
         <div className="flex space-x-6 items-center">
-          {isLoggedIn && (
+          {isLoggedIn ? (
             <>
               {user.role === 'admin' ? (
-                // Links for Admin users
-                <Link to="/admin" className="text-gray-600 dark:text-gray-300 hover:text-blue-500 dark:hover:text-blue-400 font-bold transition duration-300">
+                <Link to="/admin" className="text-gray-300 hover:text-[#d4af37] text-xl font-medium transition duration-300">
                   Admin Dashboard
                 </Link>
               ) : (
-                // Links for regular customers
                 <>
-                  <Link to="/dashboard" className="text-gray-600 dark:text-gray-300 hover:text-blue-500 dark:hover:text-blue-400 font-bold transition duration-300">
-                    My Dashboard
+                  <Link to="/dashboard" className="text-gray-300 hover:text-[#d4af37] text-xl font-medium transition duration-300 hidden sm:block">
+                    Dashboard
                   </Link>
-                  <Link to="/book" className="text-gray-600 dark:text-gray-300 hover:text-blue-500 dark:hover:text-blue-400 font-bold transition duration-300">
-                    Book Appointment
+                  <Link to="/book" className="text-gray-300 hover:text-[#d4af37] text-xl font-medium transition duration-300 hidden sm:block">
+                    Book Now
                   </Link>
-                  <Link to="/profile" className="text-gray-600 dark:text-gray-300 hover:text-blue-500 dark:hover:text-blue-400 font-bold transition duration-300">
-                    My Profile
+                  <Link to="/profile" className="text-gray-300 hover:text-[#d4af37] text-xl font-medium transition duration-300 hidden sm:block">
+                    Profile
                   </Link>
                 </>
               )}
-              
-              {/* 👇 අලුත් Day / Night Toggle Button එක 👇 */}
-              <ThemeToggle />
-              {/* ☝️ අලුත් Button එකේ අවසානය ☝️ */}
-
-              {/* Logout Button */}
-              <button 
-                onClick={handleLogout}
-                className="bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white font-bold py-2 px-5 rounded-lg shadow-md transition duration-300 transform hover:-translate-y-1"
-              >
+              <button onClick={handleLogout} className="bg-white/5 hover:bg-red-500/20 text-gray-300 hover:text-red-400 border border-white/10 text-xl font-medium py-2 px-5 rounded-sm transition duration-300">
                 Logout
               </button>
+            </>
+          ) : (
+            <>
+              <Link to="/login" className="text-gray-300 hover:text-white text-xl font-medium transition duration-300">
+                Sign In
+              </Link>
+              {/* Sign Up */}
+              <Link to="/register" className="bg-[#d4af37] text-black text-xl font-semibold py-2 px-5 rounded-sm hover:bg-yellow-600 transition duration-300">
+                Sign Up
+              </Link>
             </>
           )}
         </div>
