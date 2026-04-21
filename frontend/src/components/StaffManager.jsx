@@ -1,10 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 
 function StaffManager() {
   const [staffList, setStaffList] = useState([]);
   const [formData, setFormData] = useState({ name: '', specialty: '', workingHours: '', offDays: '' });
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [imagePreview, setImagePreview] = useState('');
+  const fileInputRef = useRef(null);
   
   // States for Manage Menu & Edit Modal
   const [activeMenuId, setActiveMenuId] = useState(null);
@@ -23,8 +26,60 @@ function StaffManager() {
     return () => { isActive = false; };
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (imagePreview) {
+        URL.revokeObjectURL(imagePreview);
+      }
+    };
+  }, [imagePreview]);
+
   const handleInputChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleImageChange = (file) => {
+    if (!file) {
+      setSelectedImage(null);
+      setImagePreview('');
+      return;
+    }
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file.');
+      return;
+    }
+
+    if (imagePreview) {
+      URL.revokeObjectURL(imagePreview);
+    }
+
+    setSelectedImage(file);
+    setImagePreview(URL.createObjectURL(file));
+  };
+
+  const handleFileInputChange = (e) => {
+    handleImageChange(e.target.files?.[0] || null);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    handleImageChange(e.dataTransfer.files?.[0] || null);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+  };
+
+  const clearSelectedImage = () => {
+    if (imagePreview) {
+      URL.revokeObjectURL(imagePreview);
+    }
+    setSelectedImage(null);
+    setImagePreview('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   const handleEditInputChange = (e) => {
@@ -34,9 +89,19 @@ function StaffManager() {
   const handleAddStaff = async (e) => {
     e.preventDefault();
     try {
-      const response = await axios.post('http://localhost:5000/api/staff', formData);
+      const payload = new FormData();
+      payload.append('name', formData.name);
+      payload.append('specialty', formData.specialty);
+      payload.append('workingHours', formData.workingHours);
+      payload.append('offDays', formData.offDays);
+      if (selectedImage) {
+        payload.append('image', selectedImage);
+      }
+
+      const response = await axios.post('http://localhost:5000/api/staff', payload);
       setStaffList((currentStaff) => [...currentStaff, response.data]);
       setFormData({ name: '', specialty: '', workingHours: '', offDays: '' });
+      clearSelectedImage();
       toast.success('Staff member added successfully!');
     } catch (error) {
       toast.error(error.response?.data?.message || 'Failed to add staff');
@@ -79,7 +144,7 @@ function StaffManager() {
       <h3 className="text-2xl font-serif text-[#d4af37] mb-6 border-b pb-4 border-white/10">Manage Salon Staff</h3>
 
       {/* Add New Staff Form */}
-      <form onSubmit={handleAddStaff} className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
+      <form onSubmit={handleAddStaff} className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-8">
         <input type="text" name="name" placeholder="Name (e.g. Kamal)" value={formData.name} onChange={handleInputChange} required className="px-4 py-2 bg-[#0a0a0a]/80 border border-white/10 rounded-md text-white placeholder-gray-500 focus:outline-none focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] transition" />
         <select name="specialty" value={formData.specialty} onChange={handleInputChange} required className="px-4 py-2 bg-[#0a0a0a]/80 border border-white/10 rounded-md text-white focus:outline-none focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] transition cursor-pointer">
           <option value="" disabled className="bg-[#111111] text-gray-500">Select Specialty</option>
@@ -106,6 +171,46 @@ function StaffManager() {
           <option value="Saturday" className="bg-[#111111]">Saturday</option>
           <option value="Sunday" className="bg-[#111111]">Sunday</option>
         </select>
+        <div className="md:col-span-2">
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            className="h-full min-h-[120px] cursor-pointer rounded-md border border-dashed border-white/10 bg-[#0a0a0a]/80 px-4 py-3 text-sm text-gray-300 transition hover:border-[#d4af37]/60 hover:bg-white/5"
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileInputChange}
+              className="hidden"
+            />
+            {imagePreview ? (
+              <div className="flex h-full items-center gap-4">
+                <img src={imagePreview} alt="Staff preview" className="h-20 w-20 rounded-full object-cover border border-[#d4af37]/40" />
+                <div className="min-w-0">
+                  <p className="font-medium text-white">Image selected</p>
+                  <p className="truncate text-xs text-gray-400">{selectedImage?.name}</p>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      clearSelectedImage();
+                    }}
+                    className="mt-2 text-xs text-[#d4af37] hover:text-yellow-400"
+                  >
+                    Remove image
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex h-full flex-col justify-center">
+                <p className="font-medium text-white">Drag and drop an image here</p>
+                <p className="text-xs text-gray-400">or click to choose a file from your device</p>
+              </div>
+            )}
+          </div>
+        </div>
         <button type="submit" className="bg-[#d4af37] hover:bg-yellow-400 text-black font-semibold py-2 px-4 rounded-md transition duration-300 transform hover:-translate-y-1 shadow-[0_0_15px_rgba(212,175,55,0.3)] hover:shadow-[0_0_25px_rgba(212,175,55,0.5)]">
           + Add Staff
         </button>

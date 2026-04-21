@@ -8,6 +8,7 @@ import StaffManager from './components/StaffManager';
 function AdminDashboard() {
   const navigate = useNavigate();
   const [appointments, setAppointments] = useState([]);
+  const [activeTab, setActiveTab] = useState('Pending');
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -53,6 +54,13 @@ function AdminDashboard() {
     }
   };
 
+  const filteredAppointments = appointments.filter((appt) => {
+    if (activeTab === 'All') {
+      return true;
+    }
+    return appt.status === activeTab;
+  });
+
   return (
     /* Main Container with Background Image */
     <div className="min-h-screen relative flex flex-col py-10 px-4 sm:px-6 lg:px-8 font-sans text-white selection:bg-[#d4af37] selection:text-black bg-[url('/registerBg.jpg')] bg-cover bg-center bg-no-repeat fixed bg-fixed">
@@ -89,7 +97,22 @@ function AdminDashboard() {
             <h3 className="text-2xl font-serif text-[#d4af37]">All Appointments</h3>
           </div>
 
-          {appointments.length === 0 ? (
+          <div className="flex flex-wrap gap-2 p-4 border-b border-white/10 bg-[#0a0a0a]/50">
+            {['Pending', 'Approved', 'Completed', 'Rejected', 'All'].map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setActiveTab(tab)}
+                className={activeTab === tab
+                  ? 'bg-[#d4af37] text-black font-semibold shadow-[0_0_10px_rgba(212,175,55,0.3)] px-4 py-2 rounded-full text-sm transition-all duration-300'
+                  : 'text-gray-400 hover:text-white hover:bg-white/10 border border-white/10 px-4 py-2 rounded-full text-sm transition-all duration-300'}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+
+          {filteredAppointments.length === 0 ? (
             <div className="p-10 text-center text-gray-300 font-light bg-[#0a0a0a]/30">
               There are no appointments to display at the moment.
             </div>
@@ -106,7 +129,7 @@ function AdminDashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {appointments.map((appt) => (
+                  {filteredAppointments.map((appt) => (
                     <tr key={appt._id} className="hover:bg-white/5 transition-colors duration-200 group">
                       
                       {/* Customer Name */}

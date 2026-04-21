@@ -19,7 +19,8 @@ const addStaff = async (req, res) => {
     if (!name || !specialty || !workingHours || !offDays) {
       return res.status(400).json({ message: 'Please add all fields' });
     }
-    const staff = await Staff.create({ name, specialty, workingHours, offDays });
+    const imageUrl = req.file?.path || '';
+    const staff = await Staff.create({ name, imageUrl, specialty, workingHours, offDays });
     res.status(201).json(staff);
   } catch (error) {
     res.status(500).json({ message: error.message });

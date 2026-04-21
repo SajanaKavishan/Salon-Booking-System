@@ -7,6 +7,7 @@ function Dashboard() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [appointments, setAppointments] = useState([]);
+  const [activeTab, setActiveTab] = useState('Upcoming');
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
@@ -100,6 +101,13 @@ function Dashboard() {
     }
   };
 
+  const filteredAppointments = appointments.filter((appt) => {
+    if (activeTab === 'Upcoming') {
+      return appt.status === 'Pending' || appt.status === 'Approved';
+    }
+    return appt.status === 'Completed' || appt.status === 'Rejected';
+  });
+
   return (
     /* Main Container with Background Image */
     <div className="min-h-screen relative flex flex-col py-10 px-4 sm:px-6 lg:px-8 font-sans text-white selection:bg-[#d4af37] selection:text-black bg-[url('/loginBg.jpg')] bg-cover bg-center bg-no-repeat fixed bg-fixed">
@@ -135,9 +143,26 @@ function Dashboard() {
             My Appointments
           </h3>
 
-          {appointments.length === 0 ? (
+          <div className="flex space-x-4 mb-6 border-b border-white/10 pb-2">
+            {['Upcoming', 'History'].map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setActiveTab(tab)}
+                className={activeTab === tab
+                  ? 'text-[#d4af37] font-semibold border-b-2 border-[#d4af37] pb-2 px-2 transition-all duration-300'
+                  : 'text-gray-400 hover:text-white pb-2 px-2 transition-all duration-300 cursor-pointer'}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+
+          {filteredAppointments.length === 0 ? (
             <div className="text-center py-10">
-              <p className="text-gray-400 text-lg font-light">You have no upcoming appointments. </p>
+              <p className="text-gray-400 text-lg font-light">
+                {activeTab === 'Upcoming' ? 'You have no upcoming appointments.' : 'Your appointment history is empty.'}
+              </p>
               <button 
                 onClick={() => navigate('/book')}
                 className="mt-4 text-[#d4af37] font-semibold hover:text-yellow-400 hover:underline transition"
@@ -147,7 +172,7 @@ function Dashboard() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {appointments.map((appt) => {
+              {filteredAppointments.map((appt) => {
                 const canCancel = isCancellable(appt.date, appt.startTime, appt);
                 
                 // Get service names from the services array

@@ -3,6 +3,7 @@ import axios from 'axios';
 import { toast } from 'react-toastify';
 
 function ServiceManager() {
+  const fallbackServiceImage = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='300' viewBox='0 0 400 300'><rect width='400' height='300' fill='%23111111'/><rect x='24' y='24' width='352' height='252' rx='20' fill='%230a0a0a' stroke='%23d4af37' stroke-opacity='0.35'/><circle cx='200' cy='126' r='42' fill='%23d4af37' fill-opacity='0.18'/><path d='M200 92c-12 0-22 10-22 22s10 22 22 22 22-10 22-22-10-22-22-22Zm0 56c-26 0-60 13-60 38v10h120v-10c0-25-34-38-60-38Z' fill='%23d4af37'/><text x='200' y='232' text-anchor='middle' fill='%23cfcfcf' font-family='Arial, sans-serif' font-size='18'>Salon Service</text></svg>";
   const [services, setServices] = useState([]);
   const [formData, setFormData] = useState({ name: '', price: '', duration: '', image: '' });
   const [activeMenuId, setActiveMenuId] = useState(null);
@@ -125,7 +126,15 @@ function ServiceManager() {
                 {/* Image Column */}
                 <td className="p-4 border-b border-white/10">
                   {service.image ? (
-                    <img src={service.image} alt={service.name} className="w-12 h-12 object-cover rounded-md border border-white/20" />
+                    <img
+                      src={service.image}
+                      alt={service.name}
+                      className="w-12 h-12 object-cover rounded-md border border-white/20"
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = fallbackServiceImage;
+                      }}
+                    />
                   ) : (
                     <div className="w-12 h-12 bg-gray-800 rounded-md flex items-center justify-center text-xs text-gray-500 border border-white/10">No Img</div>
                   )}
@@ -170,7 +179,15 @@ function ServiceManager() {
               {/* Photo Preview in Edit Modal */}
               {editData.image && (
                 <div className="mt-2 flex justify-center">
-                  <img src={editData.image} alt="Preview" className="w-full h-32 object-cover rounded-md border border-white/20" />
+                  <img
+                    src={editData.image}
+                    alt="Preview"
+                    className="w-full h-32 object-cover rounded-md border border-white/20"
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = fallbackServiceImage;
+                    }}
+                  />
                 </div>
               )}
 

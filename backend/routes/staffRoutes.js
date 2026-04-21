@@ -2,8 +2,9 @@ const express = require('express');
 const router = express.Router();
 const { getStaff, addStaff, deleteStaff } = require('../controllers/staffController');
 const Staff = require('../models/Staff'); // Import the Staff model for the PUT route
+const uploadStaffImage = require('../middleware/uploadStaffImage');
 
-router.route('/').get(getStaff).post(addStaff);
+router.route('/').get(getStaff).post(uploadStaffImage.single('image'), addStaff);
 router.route('/:id').delete(deleteStaff);
 // Update Staff Member (PUT)
 router.put('/:id', async (req, res) => {
