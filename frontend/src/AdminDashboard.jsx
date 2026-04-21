@@ -10,6 +10,60 @@ function AdminDashboard() {
   const [appointments, setAppointments] = useState([]);
   const [activeTab, setActiveTab] = useState('Pending');
   const [dateFilter, setDateFilter] = useState('All');
+  const finalStatuses = ['Completed', 'Rejected', 'Cancelled', 'No-Show'];
+
+  const timeTo24Hour = (timeStr) => {
+    if (!timeStr || typeof timeStr !== 'string') return { hours: 0, minutes: 0 };
+
+    const parts = timeStr.trim().split(' ');
+    if (parts.length < 2) return { hours: 0, minutes: 0 };
+
+    const [time, modifier] = parts;
+    const [rawHours, rawMinutes] = time.split(':').map(Number);
+
+    if (Number.isNaN(rawHours) || Number.isNaN(rawMinutes)) return { hours: 0, minutes: 0 };
+
+    let hours = rawHours;
+    if (hours === 12) hours = 0;
+    if (modifier === 'PM') hours += 12;
+
+    return { hours, minutes: rawMinutes };
+  };
+
+  const isPastStartTime = (appointmentDate, appointmentTime) => {
+    if (!appointmentDate || !appointmentTime) return false;
+
+    const [year, month, day] = String(appointmentDate).split('-').map(Number);
+    if ([year, month, day].some((v) => Number.isNaN(v))) return false;
+
+    const { hours, minutes } = timeTo24Hour(appointmentTime);
+    const scheduledStart = new Date(year, month - 1, day, hours, minutes, 0, 0);
+    const now = new Date();
+
+    return now.getTime() >= scheduledStart.getTime();
+  };
+
+  const getAllowedStatuses = (appointment) => {
+    const currentStatus = appointment.status;
+
+    if (finalStatuses.includes(currentStatus)) {
+      return [currentStatus];
+    }
+
+    if (currentStatus === 'Pending') {
+      return ['Pending', 'Approved', 'Rejected'];
+    }
+
+    if (currentStatus === 'Approved') {
+      const options = ['Approved', 'No-Show'];
+      if (isPastStartTime(appointment.date, appointment.startTime)) {
+        options.push('Completed');
+      }
+      return options;
+    }
+
+    return [currentStatus];
+  };
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -36,6 +90,15 @@ function AdminDashboard() {
 
   const handleStatusChange = async (id, newStatus) => {
     try {
+      const selectedAppointment = appointments.find((appt) => appt._id === id);
+      if (!selectedAppointment) return;
+
+      const allowedStatuses = getAllowedStatuses(selectedAppointment);
+      if (!allowedStatuses.includes(newStatus)) {
+        toast.error('This status transition is not allowed.');
+        return;
+      }
+
       const token = localStorage.getItem('token');
       
       await axios.put(`http://localhost:5000/api/appointments/${id}/status`, 
@@ -174,6 +237,9 @@ function AdminDashboard() {
                 <tbody className="divide-y divide-white/5">
                   {filteredAppointments.map((appt) => {
                     const customerPhone = appt.user?.phone || appt.user?.phoneNumber;
+                    const isStatusLocked = finalStatuses.includes(appt.status);
+                    const canMarkCompleted = isPastStartTime(appt.date, appt.startTime);
+                    const allowedStatuses = getAllowedStatuses(appt);
 
                     return (
                     <tr key={appt._id} className="hover:bg-white/5 transition-colors duration-200 group">
@@ -227,16 +293,30 @@ function AdminDashboard() {
 
                       {/* Action Dropdown */}
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <select 
-                          value={appt.status} 
-                          onChange={(e) => handleStatusChange(appt._id, e.target.value)}
-                          className="block w-full pl-3 pr-8 py-2 text-sm border border-white/20 focus:outline-none focus:ring-1 focus:ring-[#d4af37] focus:border-[#d4af37] rounded-md bg-[#0a0a0a]/80 text-gray-200 shadow-sm transition hover:border-white/40 cursor-pointer"
-                        >
-                          <option value="Pending" className="bg-[#111111] text-white">Pending</option>
-                          <option value="Approved" className="bg-[#111111] text-white">Approved</option>
-                          <option value="Completed" className="bg-[#111111] text-white">Completed</option>
-                          <option value="Rejected" className="bg-[#111111] text-white">Rejected</option>
-                        </select>
+                        <div className="space-y-2">
+                          <select 
+                            value={appt.status} 
+                            disabled={isStatusLocked}
+                            onChange={(e) => handleStatusChange(appt._id, e.target.value)}
+                            className={`block w-full pl-3 pr-8 py-2 text-sm border border-white/20 rounded-md text-gray-200 shadow-sm transition ${
+                              isStatusLocked
+                                ? 'opacity-50 cursor-not-allowed bg-gray-800'
+                                : 'bg-[#0a0a0a]/80 focus:outline-none focus:ring-1 focus:ring-[#d4af37] focus:border-[#d4af37] hover:border-white/40 cursor-pointer'
+                            }`}
+                          >
+                            {allowedStatuses.map((statusOption) => (
+                              <option key={statusOption} value={statusOption} className="bg-[#111111] text-white">
+                                {statusOption}
+                              </option>
+                            ))}
+                          </select>
+
+                          {appt.status === 'Approved' && !canMarkCompleted && (
+                            <p className="text-xs text-gray-400">
+                              Can complete after {new Date(`${appt.date}T00:00:00`).toLocaleDateString()} {appt.startTime}
+                            </p>
+                          )}
+                        </div>
                       </td>
 
                     </tr>
