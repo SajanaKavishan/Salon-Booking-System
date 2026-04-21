@@ -172,7 +172,10 @@ function AdminDashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {filteredAppointments.map((appt) => (
+                  {filteredAppointments.map((appt) => {
+                    const customerPhone = appt.user?.phone || appt.user?.phoneNumber;
+
+                    return (
                     <tr key={appt._id} className="hover:bg-white/5 transition-colors duration-200 group">
                       
                       {/* Customer Name */}
@@ -180,6 +183,17 @@ function AdminDashboard() {
                         <div className="text-sm font-medium text-gray-200 group-hover:text-white transition">
                           {appt.user ? appt.user.name : 'Unknown User'}
                         </div>
+                        {customerPhone ? (
+                          <a
+                            href={`tel:${customerPhone}`}
+                            className="mt-1 inline-flex items-center gap-1 text-xs text-gray-400 hover:text-[#d4af37] transition-colors"
+                          >
+                            <span aria-hidden="true">☎</span>
+                            {customerPhone}
+                          </a>
+                        ) : (
+                          <span className="mt-1 block text-gray-500 text-xs">No phone provided</span>
+                        )}
                       </td>
 
                       {/* Service */}
@@ -226,7 +240,8 @@ function AdminDashboard() {
                       </td>
 
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
               </div>

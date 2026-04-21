@@ -119,7 +119,7 @@ const getMyAppointments = async (req, res) => {
 
 const getAllAppointments = async (req, res) => {
     try {        // Find all appointments and populate the user field with the user's name and email for better readability. The services field is also populated to include the name, price, and duration of each service in the appointment. The appointments are sorted by creation date in descending order, so the most recent appointments will appear first in the response. This route is intended for admin users to view all appointments.
-        const appointments = await Appointment.find({}).populate('user', 'name email').populate('services', 'name price').sort({ createdAt: -1 }); 
+        const appointments = await Appointment.find({}).populate('user', 'name email phone').populate('services', 'name price').sort({ createdAt: -1 }); 
         res.status(200).json(appointments);
     }catch (error) {
         console.error("Get All Appointments Error:", error);

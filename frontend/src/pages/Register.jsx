@@ -10,12 +10,13 @@ function Register() {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
+    phone: '',
     password: '',
   });
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  const { name, email, password } = formData;
+  const { name, email, phone, password } = formData;
 
   const onChange = (e) => {
     setFormData((prevState) => ({
@@ -39,6 +40,7 @@ function Register() {
           id: response.data._id,
           name: response.data.name,
           email: response.data.email,
+          phone: response.data.phone,
           role: response.data.role,
         })
       );
@@ -114,6 +116,22 @@ function Register() {
                 onChange={onChange}
                 placeholder="Enter your email"
                 required 
+                className="w-full bg-[#0a0a0a]/80 border border-white/10 p-3 rounded-md text-white placeholder-gray-500 focus:outline-none focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] transition"
+              />
+            </div>
+
+            {/* Phone Input */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Phone Number
+              </label>
+              <input
+                type="tel"
+                name="phone"
+                value={phone}
+                onChange={onChange}
+                placeholder="Enter your phone number"
+                required
                 className="w-full bg-[#0a0a0a]/80 border border-white/10 p-3 rounded-md text-white placeholder-gray-500 focus:outline-none focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] transition"
               />
             </div>

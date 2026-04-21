@@ -10,6 +10,15 @@ function BookAppointment() {
   const [time, setTime] = useState(''); 
   const [selectedServices, setSelectedServices] = useState([]); 
   const [stylist, setStylist] = useState('');
+  const [isPhoneModalOpen, setIsPhoneModalOpen] = useState(false);
+  const [missingPhone, setMissingPhone] = useState('');
+  const [user, setUser] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('user')) || null;
+    } catch {
+      return null;
+    }
+  });
   
   const [servicesList, setServicesList] = useState([]);
   const [stylistsList, setStylistsList] = useState([]);
@@ -96,7 +105,7 @@ function BookAppointment() {
   };
 
   const handleBooking = async (e) => {
-    e.preventDefault(); 
+    if (e) e.preventDefault(); 
     
     // Validation
     if (selectedServices.length === 0) {
@@ -144,6 +153,56 @@ function BookAppointment() {
       toast.error(error.response?.data?.message || "Sorry! There was an error booking your appointment.");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleConfirmBookingClick = (e) => {
+    e.preventDefault();
+
+    if (!user?.phone || !String(user.phone).trim()) {
+      setMissingPhone('');
+      setIsPhoneModalOpen(true);
+      return;
+    }
+
+    handleBooking();
+  };
+
+  const handleSavePhoneAndBook = async () => {
+    if (!missingPhone.trim()) {
+      toast.error('Please enter your phone number.');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.put(
+        'http://localhost:5000/api/users/profile',
+        { phone: missingPhone.trim() },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      const updatedUser = {
+        ...(user || {}),
+        ...(response.data || {}),
+        phone: response.data?.phone || missingPhone.trim()
+      };
+
+      setUser(updatedUser);
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+
+      setIsPhoneModalOpen(false);
+      setMissingPhone('');
+      toast.success('Phone number saved successfully.');
+
+      handleBooking();
+    } catch (error) {
+      console.error('Save Phone Error:', error);
+      toast.error(error.response?.data?.message || 'Failed to save phone number.');
     }
   };
 
@@ -319,7 +378,8 @@ function BookAppointment() {
 
           {/* Submit Button */}
           <button 
-            type="submit" 
+            type="button"
+            onClick={handleConfirmBookingClick}
             disabled={isLoading || !time || selectedServices.length === 0} 
             className={`w-full text-black font-semibold py-3 px-4 rounded-md transition duration-300 flex justify-center items-center mt-6 ${
               isLoading || !time || selectedServices.length === 0
@@ -332,6 +392,45 @@ function BookAppointment() {
           
         </form>
       </div>
+
+      {isPhoneModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="bg-[#111111] border border-[#d4af37]/50 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl">
+            <h3 className="text-xl font-serif text-[#d4af37] mb-2">Phone Number Required</h3>
+            <p className="text-sm text-gray-300 mb-4">
+              Please provide a contact number so our staff can reach you if needed.
+            </p>
+
+            <input
+              type="text"
+              value={missingPhone}
+              onChange={(e) => setMissingPhone(e.target.value)}
+              placeholder="Enter phone number"
+              className="w-full bg-[#0a0a0a]/80 border border-white/10 p-3 rounded-md text-white placeholder-gray-500 focus:outline-none focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] transition"
+            />
+
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsPhoneModalOpen(false);
+                  setMissingPhone('');
+                }}
+                className="bg-transparent border border-white/20 text-white px-4 py-2 rounded hover:bg-white/10 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSavePhoneAndBook}
+                className="bg-[#d4af37] text-black px-4 py-2 rounded hover:bg-yellow-400 shadow-[0_0_15px_rgba(212,175,55,0.3)] transition-colors"
+              >
+                Save & Continue Booking
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

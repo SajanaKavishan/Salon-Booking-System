@@ -11,9 +11,9 @@ const generateToken = (id) => { // Generate a JWT token with the user's ID as pa
 
 const registerUser = async (req, res) => { // Register a new user
     try {
-        const { name, email, password } = req.body;
+    const { name, email, password, phone } = req.body;
 
-        if (!name || !email || !password) { // Check if all required fields are provided
+    if (!name || !email || !password || !phone) { // Check if all required fields are provided
             return res.status(400).json({ message: 'Please enter all details' });
         }
 
@@ -28,6 +28,7 @@ const registerUser = async (req, res) => { // Register a new user
         const user = await User.create({ // Create a new user in the database with the provided details and hashed password
             name,
             email,
+          phone,
             password: hashedPassword,
         });
 
@@ -36,6 +37,7 @@ const registerUser = async (req, res) => { // Register a new user
                 _id: user.id,
                 name: user.name,
                 email: user.email,
+                phone: user.phone,
                 token: generateToken(user._id), 
             });
         } else {
@@ -58,6 +60,7 @@ const loginUser = async (req, res) => { // Authenticate a user and return their 
                 _id: user.id,
                 name: user.name,
                 email: user.email,
+            phone: user.phone,
                 role: user.role,
                 token: generateToken(user._id), //Create a token for the user
             });
@@ -95,6 +98,7 @@ const googleLogin = async (req, res) => {
           _id: user.id,
           name: user.name,
           email: user.email,
+          phone: user.phone,
           role: user.role,
           token: generateToken(user._id),
         });
@@ -107,6 +111,7 @@ const googleLogin = async (req, res) => {
         user = await User.create({ // Create a new user in the database with the Google info and a hashed random password
           name,
           email,
+          phone: 'Not Provided',
           password: hashedPassword, 
           role: 'customer', 
         });
@@ -116,6 +121,7 @@ const googleLogin = async (req, res) => {
             _id: user.id,
             name: user.name,
             email: user.email,
+            phone: user.phone,
             role: user.role,
             token: generateToken(user._id),
           });
@@ -142,6 +148,7 @@ const updateUserProfile = async (req, res) => {
     if (user) { // If the user is found, update their details with the provided data (if any)
       user.name = req.body.name || user.name;
       user.email = req.body.email || user.email;
+      user.phone = req.body.phone || user.phone;
 
       if (req.body.password) {
         const salt = await bcrypt.genSalt(10);
@@ -154,6 +161,7 @@ const updateUserProfile = async (req, res) => {
         _id: updatedUser._id,
         name: updatedUser.name,
         email: updatedUser.email,
+        phone: updatedUser.phone,
         role: updatedUser.role,
         token: req.headers.authorization.split(' ')[1], 
       });
