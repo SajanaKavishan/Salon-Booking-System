@@ -256,10 +256,40 @@ const updateAppointmentStatus = async (req, res) => {
     }
 };
 
+// @desc    Soft hide an appointment from customer's history
+// @route   PUT /api/appointments/:id/hide
+// @access  Private
+const hideAppointmentByCustomer = async (req, res) => {
+    try {
+        const appointment = await Appointment.findById(req.params.id);
+
+        if (!appointment) {
+            return res.status(404).json({ message: 'Appointment not found.' });
+        }
+
+        if (appointment.user.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+            return res.status(401).json({ message: 'You are not authorized to update this appointment.' });
+        }
+
+        appointment.isHiddenByCustomer = true;
+        await appointment.save();
+
+        res.status(200).json({
+            message: 'Appointment hidden successfully.',
+            id: appointment._id,
+            isHiddenByCustomer: appointment.isHiddenByCustomer
+        });
+    } catch (error) {
+        console.error('Hide Appointment Error:', error);
+        res.status(500).json({ message: 'Server Error: Could not hide appointment.' });
+    }
+};
+
 module.exports = {
     createAppointment,
     getMyAppointments,
     getAllAppointments,
     deleteAppointment,
-    updateAppointmentStatus
+    updateAppointmentStatus,
+    hideAppointmentByCustomer
 };

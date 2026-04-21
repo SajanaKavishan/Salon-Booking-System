@@ -25,6 +25,7 @@ const appointmentSchema = new mongoose.Schema({
     totalDuration: { type: Number, required: true }, 
     totalAmount: { type: Number, required: true },   
 
+    isHiddenByCustomer: { type: Boolean, default: false },
     status: { type: String, default: 'Pending' }
 }, { timestamps: true });
 

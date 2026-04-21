@@ -8,6 +8,8 @@ function ServiceManager() {
   const [formData, setFormData] = useState({ name: '', price: '', duration: '', image: '' });
   const [activeMenuId, setActiveMenuId] = useState(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState(null);
   // Editing state to hold the current values of the service being edited, including the image URL
   const [editData, setEditData] = useState({ name: '', price: '', duration: '', image: '' });
   const [editingId, setEditingId] = useState(null);
@@ -48,15 +50,19 @@ function ServiceManager() {
     }
   };
 
-  const handleDeleteService = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this service?')) return;
+  const confirmDelete = async () => {
+    if (!itemToDelete) return;
+
     try {
-      await axios.delete(`http://localhost:5000/api/services/${id}`);
-      setServices((currentServices) => currentServices.filter((service) => service._id !== id));
+      await axios.delete(`http://localhost:5000/api/services/${itemToDelete}`);
+      setServices((currentServices) => currentServices.filter((service) => service._id !== itemToDelete));
       toast.success('Service deleted!');
       setActiveMenuId(null);
     } catch (error) {
       toast.error(error.response?.data?.message || 'Failed to delete service');
+    } finally {
+      setIsDeleteModalOpen(false);
+      setItemToDelete(null);
     }
   };
 
@@ -146,7 +152,15 @@ function ServiceManager() {
                   {activeMenuId === service._id ? (
                     <div className="flex items-center justify-center gap-2">
                       <button onClick={() => openEditModal(service)} className="text-blue-400 hover:text-white font-semibold px-3 py-1 bg-blue-900/30 hover:bg-blue-600 rounded-md transition duration-300 border border-blue-800/50 text-sm">Edit</button>
-                      <button onClick={() => handleDeleteService(service._id)} className="text-red-400 hover:text-white font-semibold px-3 py-1 bg-red-900/30 hover:bg-red-600 rounded-md transition duration-300 border border-red-800/50 text-sm">Delete</button>
+                      <button
+                        onClick={() => {
+                          setItemToDelete(service._id);
+                          setIsDeleteModalOpen(true);
+                        }}
+                        className="text-red-400 hover:text-white font-semibold px-3 py-1 bg-red-900/30 hover:bg-red-600 rounded-md transition duration-300 border border-red-800/50 text-sm"
+                      >
+                        Delete
+                      </button>
                       <button onClick={() => setActiveMenuId(null)} className="text-gray-400 hover:text-white px-2 py-1 bg-gray-800 hover:bg-gray-700 rounded-md transition text-sm">✕</button>
                     </div>
                   ) : (
@@ -196,6 +210,34 @@ function ServiceManager() {
                 <button type="submit" className="px-4 py-2 bg-[#d4af37] text-black font-semibold rounded-md hover:bg-yellow-400 transition shadow-[0_0_15px_rgba(212,175,55,0.3)]">Save Changes</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="bg-[#111111] border border-white/10 border-t-4 border-t-red-600 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl transform transition-all">
+            <h4 className="text-xl font-semibold text-white mb-3">Delete Service</h4>
+            <p className="text-gray-400 mb-6">Are you sure you want to delete this? This action cannot be undone.</p>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsDeleteModalOpen(false);
+                  setItemToDelete(null);
+                }}
+                className="bg-transparent border border-white/20 text-white px-4 py-2 rounded hover:bg-white/10 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDelete}
+                className="bg-red-600/90 text-white px-4 py-2 rounded hover:bg-red-700 shadow-[0_0_15px_rgba(220,38,38,0.4)] transition-colors"
+              >
+                Yes, Delete
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -12,6 +12,8 @@ function StaffManager() {
   // States for Manage Menu & Edit Modal
   const [activeMenuId, setActiveMenuId] = useState(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState(null);
   const [editData, setEditData] = useState({ name: '', specialty: '', workingHours: '', offDays: '' });
   const [editingId, setEditingId] = useState(null);
 
@@ -108,15 +110,19 @@ function StaffManager() {
     }
   };
 
-  const handleDeleteStaff = async (id) => {
-    if (!window.confirm('Are you sure you want to remove this staff member?')) return;
+  const confirmDelete = async () => {
+    if (!itemToDelete) return;
+
     try {
-      await axios.delete(`http://localhost:5000/api/staff/${id}`);
-      setStaffList((currentStaff) => currentStaff.filter((staff) => staff._id !== id));
+      await axios.delete(`http://localhost:5000/api/staff/${itemToDelete}`);
+      setStaffList((currentStaff) => currentStaff.filter((staff) => staff._id !== itemToDelete));
       toast.success('Staff member removed!');
       setActiveMenuId(null);
     } catch (error) {
       toast.error(error.response?.data?.message || 'Failed to remove staff');
+    } finally {
+      setIsDeleteModalOpen(false);
+      setItemToDelete(null);
     }
   };
 
@@ -239,7 +245,15 @@ function StaffManager() {
                   {activeMenuId === staff._id ? (
                     <div className="flex items-center justify-center gap-2">
                       <button onClick={() => openEditModal(staff)} className="text-blue-400 hover:text-white font-semibold px-3 py-1 bg-blue-900/30 hover:bg-blue-600 rounded-md transition duration-300 border border-blue-800/50 text-sm">Edit</button>
-                      <button onClick={() => handleDeleteStaff(staff._id)} className="text-red-400 hover:text-white font-semibold px-3 py-1 bg-red-900/30 hover:bg-red-600 rounded-md transition duration-300 border border-red-800/50 text-sm">Delete</button>
+                      <button
+                        onClick={() => {
+                          setItemToDelete(staff._id);
+                          setIsDeleteModalOpen(true);
+                        }}
+                        className="text-red-400 hover:text-white font-semibold px-3 py-1 bg-red-900/30 hover:bg-red-600 rounded-md transition duration-300 border border-red-800/50 text-sm"
+                      >
+                        Delete
+                      </button>
                       <button onClick={() => setActiveMenuId(null)} className="text-gray-400 hover:text-white px-2 py-1 bg-gray-800 hover:bg-gray-700 rounded-md transition text-sm">✕</button>
                     </div>
                   ) : (
@@ -290,6 +304,34 @@ function StaffManager() {
                 <button type="submit" className="px-4 py-2 bg-[#d4af37] text-black font-semibold rounded-md hover:bg-yellow-400 transition shadow-[0_0_15px_rgba(212,175,55,0.3)]">Save Changes</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {isDeleteModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="bg-[#111111] border border-white/10 border-t-4 border-t-red-600 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl transform transition-all">
+            <h4 className="text-xl font-semibold text-white mb-3">Delete Staff Member</h4>
+            <p className="text-gray-400 mb-6">Are you sure you want to delete this? This action cannot be undone.</p>
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsDeleteModalOpen(false);
+                  setItemToDelete(null);
+                }}
+                className="bg-transparent border border-white/20 text-white px-4 py-2 rounded hover:bg-white/10 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDelete}
+                className="bg-red-600/90 text-white px-4 py-2 rounded hover:bg-red-700 shadow-[0_0_15px_rgba(220,38,38,0.4)] transition-colors"
+              >
+                Yes, Delete
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -47,6 +47,21 @@ function Dashboard() {
     }
   };
 
+  const handleHideFromHistory = async (id) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`http://localhost:5000/api/appointments/${id}/hide`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      setAppointments((prev) => prev.filter((appt) => appt._id !== id));
+      toast.success('Booking removed from history.');
+    } catch (error) {
+      console.error('Hide History Error:', error);
+      toast.error('Failed to remove booking from history.');
+    }
+  };
+
   // Helper function to convert time string (e.g., "09:30 AM") to total minutes
   const timeToMinutes = (timeStr) => {
     if (!timeStr || typeof timeStr !== 'string') return 0;
@@ -105,7 +120,7 @@ function Dashboard() {
     if (activeTab === 'Upcoming') {
       return appt.status === 'Pending' || appt.status === 'Approved';
     }
-    return appt.status === 'Completed' || appt.status === 'Rejected';
+    return (appt.status === 'Completed' || appt.status === 'Rejected') && !appt.isHiddenByCustomer;
   });
 
   return (
@@ -218,25 +233,34 @@ function Dashboard() {
 
                     {/* Action Button Area */}
                     <div className="border-t border-white/10 pt-4 mt-4">
-                      {canCancel ? (
-                        <button 
-                          onClick={() => handleCancel(appt._id)}
+                      {activeTab === 'Upcoming' ? (
+                        canCancel ? (
+                          <button 
+                            onClick={() => handleCancel(appt._id)}
+                            className="w-full bg-[#1a1a1a] hover:bg-red-900/80 text-red-400 hover:text-white font-semibold py-2 px-4 border border-red-900/50 hover:border-transparent rounded-md transition duration-300"
+                          >
+                            Cancel Booking
+                          </button>
+                        ) : (
+                          <div className="text-center">
+                            <button 
+                              disabled
+                              className="w-full bg-[#111111] text-gray-600 font-semibold py-2 px-4 rounded-md cursor-not-allowed border border-white/5"
+                            >
+                              Cannot Cancel
+                            </button>
+                            <p className="text-xs text-red-400/80 mt-2 font-light">
+                              * Cancellations only allowed 2 hours prior to the appointment.
+                            </p>
+                          </div>
+                        )
+                      ) : (
+                        <button
+                          onClick={() => handleHideFromHistory(appt._id)}
                           className="w-full bg-[#1a1a1a] hover:bg-red-900/80 text-red-400 hover:text-white font-semibold py-2 px-4 border border-red-900/50 hover:border-transparent rounded-md transition duration-300"
                         >
-                          Cancel Booking
+                          Remove
                         </button>
-                      ) : (
-                        <div className="text-center">
-                          <button 
-                            disabled
-                            className="w-full bg-[#111111] text-gray-600 font-semibold py-2 px-4 rounded-md cursor-not-allowed border border-white/5"
-                          >
-                            Cannot Cancel
-                          </button>
-                          <p className="text-xs text-red-400/80 mt-2 font-light">
-                            * Cancellations only allowed 2 hours prior to the appointment.
-                          </p>
-                        </div>
                       )}
                     </div>
                   </div>

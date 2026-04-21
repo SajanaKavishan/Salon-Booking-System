@@ -9,6 +9,7 @@ function AdminDashboard() {
   const navigate = useNavigate();
   const [appointments, setAppointments] = useState([]);
   const [activeTab, setActiveTab] = useState('Pending');
+  const [dateFilter, setDateFilter] = useState('All');
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -55,10 +56,36 @@ function AdminDashboard() {
   };
 
   const filteredAppointments = appointments.filter((appt) => {
-    if (activeTab === 'All') {
-      return true;
+    const appointmentDate = new Date(appt.date);
+    const now = new Date();
+
+    const statusMatches = activeTab === 'All' ? true : appt.status === activeTab;
+
+    let dateMatches = true;
+
+    if (dateFilter === 'Today') {
+      dateMatches =
+        appointmentDate.getFullYear() === now.getFullYear() &&
+        appointmentDate.getMonth() === now.getMonth() &&
+        appointmentDate.getDate() === now.getDate();
+    } else if (dateFilter === 'This Week') {
+      const startOfWeek = new Date(now);
+      const dayOfWeek = startOfWeek.getDay();
+      startOfWeek.setHours(0, 0, 0, 0);
+      startOfWeek.setDate(startOfWeek.getDate() - dayOfWeek);
+
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(endOfWeek.getDate() + 6);
+      endOfWeek.setHours(23, 59, 59, 999);
+
+      dateMatches = appointmentDate >= startOfWeek && appointmentDate <= endOfWeek;
+    } else if (dateFilter === 'This Month') {
+      dateMatches =
+        appointmentDate.getFullYear() === now.getFullYear() &&
+        appointmentDate.getMonth() === now.getMonth();
     }
-    return appt.status === activeTab;
+
+    return statusMatches && dateMatches;
   });
 
   return (
@@ -97,19 +124,34 @@ function AdminDashboard() {
             <h3 className="text-2xl font-serif text-[#d4af37]">All Appointments</h3>
           </div>
 
-          <div className="flex flex-wrap gap-2 p-4 border-b border-white/10 bg-[#0a0a0a]/50">
-            {['Pending', 'Approved', 'Completed', 'Rejected', 'All'].map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => setActiveTab(tab)}
-                className={activeTab === tab
-                  ? 'bg-[#d4af37] text-black font-semibold shadow-[0_0_10px_rgba(212,175,55,0.3)] px-4 py-2 rounded-full text-sm transition-all duration-300'
-                  : 'text-gray-400 hover:text-white hover:bg-white/10 border border-white/10 px-4 py-2 rounded-full text-sm transition-all duration-300'}
+          <div className="flex flex-col gap-4 p-4 border-b border-white/10 bg-[#0a0a0a]/50 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap gap-2">
+              {['Pending', 'Approved', 'Completed', 'Rejected', 'All'].map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setActiveTab(tab)}
+                  className={activeTab === tab
+                    ? 'bg-[#d4af37] text-black font-semibold shadow-[0_0_10px_rgba(212,175,55,0.3)] px-4 py-2 rounded-full text-sm transition-all duration-300'
+                    : 'text-gray-400 hover:text-white hover:bg-white/10 border border-white/10 px-4 py-2 rounded-full text-sm transition-all duration-300'}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+
+            <div className="w-full sm:w-auto">
+              <select
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+                className="w-full sm:w-48 pl-3 pr-8 py-2 text-sm border border-white/20 focus:outline-none focus:ring-1 focus:ring-[#d4af37] focus:border-[#d4af37] rounded-md bg-[#0a0a0a]/80 text-gray-200 shadow-sm transition hover:border-white/40 cursor-pointer"
               >
-                {tab}
-              </button>
-            ))}
+                <option value="All" className="bg-[#111111] text-white">All Dates</option>
+                <option value="Today" className="bg-[#111111] text-white">Today</option>
+                <option value="This Week" className="bg-[#111111] text-white">This Week</option>
+                <option value="This Month" className="bg-[#111111] text-white">This Month</option>
+              </select>
+            </div>
           </div>
 
           {filteredAppointments.length === 0 ? (
@@ -117,7 +159,8 @@ function AdminDashboard() {
               There are no appointments to display at the moment.
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="max-h-[500px] overflow-y-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-[#d4af37]/50 [&::-webkit-scrollbar-thumb]:rounded-full">
+              <div className="overflow-x-auto">
               <table className="min-w-full text-left border-collapse">
                 <thead className="bg-[#0a0a0a]/80">
                   <tr>
@@ -186,6 +229,7 @@ function AdminDashboard() {
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
           )}
         </div>
