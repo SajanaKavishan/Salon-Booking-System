@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import axios from 'axios'; 
-import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
+import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import Spinner from '../components/Spinner';
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
+import Spinner from '../components/Spinner';
+import { AuthShell, BrandMark, DarkInput, GlassCard, GoldButton } from '../components/SystemUI';
 
 function Register() {
   const navigate = useNavigate();
@@ -28,11 +29,10 @@ function Register() {
   const onSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-    console.log("Registering User:", formData);
 
     try {
       const response = await axios.post('http://localhost:5000/api/users/register', formData);
-      
+
       localStorage.setItem('token', response.data.token);
       localStorage.setItem(
         'user',
@@ -45,141 +45,130 @@ function Register() {
         })
       );
 
-      console.log("Registration Success:", response.data);
-      toast.success("Registration successful!");
-      navigate('/dashboard'); 
-      
+      toast.success('Registration successful!');
+      navigate('/dashboard');
     } catch (error) {
-      console.error("Registration Failed:", error.response?.data?.message || error.message);
-      toast.error(error.response?.data?.message || "Registration failed. Please try again.");
+      toast.error(error.response?.data?.message || 'Registration failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    /* Background Image Container */
-    <div className="min-h-screen relative flex flex-col items-center justify-center px-4 font-sans text-white selection:bg-[#d4af37] selection:text-black bg-[url('/registerBg.jpg')] bg-cover bg-center bg-no-repeat fixed bg-fixed">
-      
-      {/* Dark Overlay */}
-      <div className="absolute inset-0 bg-black/80 z-0"></div>
+    <AuthShell backgroundImage="bg-[url('/registerBg.jpg')]">
+      <div className="mx-auto flex w-full max-w-6xl flex-col items-center gap-10 lg:flex-row lg:items-stretch lg:gap-14">
+        <div className="flex w-full max-w-xl flex-col justify-center">
+          <BrandMark onClick={() => navigate('/')} subtitle="Start Your Client Account" className="text-left lg:text-left" />
+          <div className="mt-10 space-y-6">
+            <div>
+              <p className="text-xs uppercase tracking-[0.24em] text-[#d4af37]/85">New Member Setup</p>
+              <h1 className="mt-4 font-serif text-4xl text-white sm:text-5xl">Create your salon profile in one clean step.</h1>
+              <p className="mt-4 max-w-lg text-base leading-7 text-gray-300">
+                Book faster, track your visits, and keep your preferences connected to every appointment.
+              </p>
+            </div>
 
-      {/* Content Wrapper */}
-      <div className="relative z-10 w-full flex flex-col items-center">
-        
-        {/* Logo */}
-        <div className="text-4xl font-bold tracking-widest mb-10 cursor-pointer drop-shadow-lg" onClick={() => navigate('/')}>
-          Salon<span className="text-[#d4af37]">DEES</span>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {[
+                'Store your booking details in one place',
+                'Easy access to upcoming and past appointments',
+                'Smooth handoff into the booking flow after sign-up',
+                'Consistent dark and gold experience from day one'
+              ].map((item) => (
+                <div key={item} className="rounded-xl border border-white/10 bg-[#111111]/45 px-4 py-4 backdrop-blur-sm">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 flex h-6 w-6 items-center justify-center rounded-full border border-[#d4af37]/20 bg-[#d4af37]/10 text-[#d4af37]">
+                      <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="m5 12 4.2 4.2L19 6.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                    <p className="text-sm leading-6 text-gray-300">{item}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
 
-        {/* Register Card - Glass effect (backdrop-blur-md) */}
-        <div className="bg-[#111111]/70 backdrop-blur-md p-8 md:p-10 rounded-xl border border-white/10 shadow-2xl w-full max-w-md">
-          
-          {/* Title Section */}
-          <div className="text-center mb-8">
-            <h2 className="text-3xl font-serif mb-2 text-white">
-              Create an Account
-            </h2>
-            <p className="text-gray-300 font-light text-sm">
-              Join our Salon Booking System today!
-            </p>
+        <GlassCard className="w-full max-w-md p-8 md:p-10">
+          <div className="text-center">
+            <h2 className="text-3xl font-serif text-white">Create an Account</h2>
+            <p className="mt-2 text-sm text-gray-400">Join Salon DEES and start booking with less friction.</p>
           </div>
-          
-          {/* Register Form */}
-          <form onSubmit={onSubmit} className="space-y-5">
-            
-            {/* Name Input */}
+
+          <form onSubmit={onSubmit} className="mt-8 space-y-5">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Full Name
-              </label>
-              <input
+              <label className="mb-2 block text-sm font-medium text-gray-300">Full Name</label>
+              <DarkInput
                 type="text"
                 name="name"
                 value={name}
                 onChange={onChange}
                 placeholder="Enter your full name"
-                required 
-                className="w-full bg-[#0a0a0a]/80 border border-white/10 p-3 rounded-md text-white placeholder-gray-500 focus:outline-none focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] transition"
+                required
               />
             </div>
 
-            {/* Email Input */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Email Address
-              </label>
-              <input
+              <label className="mb-2 block text-sm font-medium text-gray-300">Email Address</label>
+              <DarkInput
                 type="email"
                 name="email"
                 value={email}
                 onChange={onChange}
                 placeholder="Enter your email"
-                required 
-                className="w-full bg-[#0a0a0a]/80 border border-white/10 p-3 rounded-md text-white placeholder-gray-500 focus:outline-none focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] transition"
+                required
               />
             </div>
 
-            {/* Phone Input */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Phone Number
-              </label>
-              <input
+              <label className="mb-2 block text-sm font-medium text-gray-300">Phone Number</label>
+              <DarkInput
                 type="tel"
                 name="phone"
                 value={phone}
                 onChange={onChange}
                 placeholder="Enter your phone number"
                 required
-                className="w-full bg-[#0a0a0a]/80 border border-white/10 p-3 rounded-md text-white placeholder-gray-500 focus:outline-none focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] transition"
               />
             </div>
 
-            {/* Password Input */}
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Password
-              </label>
+              <label className="mb-2 block text-sm font-medium text-gray-300">Password</label>
               <div className="relative">
-                <input
+                <DarkInput
                   type={showPassword ? 'text' : 'password'}
                   name="password"
                   value={password}
                   onChange={onChange}
                   placeholder="Create a password"
-                  required 
-                  className="w-full bg-[#0a0a0a]/80 border border-white/10 p-3 pr-12 rounded-md text-white placeholder-gray-500 focus:outline-none focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] transition"
+                  required
+                  className="pr-12"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((prev) => !prev)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-[#d4af37] transition-colors focus:outline-none"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 transition-colors hover:text-[#d4af37]"
                 >
                   {showPassword ? <FaEyeSlash size={18} /> : <FaEye size={18} />}
                 </button>
               </div>
             </div>
 
-            {/* Submit Button */}
-            <button 
-              type="submit" 
-              disabled={isLoading}
-              className={`w-full text-black font-semibold py-3 px-4 rounded-md transition duration-300 text-lg flex justify-center items-center mt-6 shadow-[0_0_15px_rgba(212,175,55,0.3)] hover:shadow-[0_0_25px_rgba(212,175,55,0.5)] ${
-                isLoading ? 'bg-yellow-600/70 cursor-not-allowed' : 'bg-[#d4af37] hover:bg-yellow-400'
-              }`}
-            >
-              {isLoading ? <Spinner /> : 'Register'}
-            </button>
+            <GoldButton type="submit" disabled={isLoading} className="mt-6 w-full py-3 text-lg">
+              {isLoading ? <Spinner /> : 'Create Account'}
+            </GoldButton>
           </form>
 
-          {/* Already have an account? */}
-          <p className="text-center text-gray-400 text-sm mt-6">
-            Already have an account? <a href="/login" className="text-[#d4af37] hover:text-yellow-400 font-semibold hover:underline transition">Log in here</a>
+          <p className="mt-8 text-center text-sm text-gray-400">
+            Already have an account?{' '}
+            <Link to="/login" className="font-medium text-[#d4af37] transition hover:text-yellow-400 hover:underline">
+              Sign in here
+            </Link>
           </p>
-        </div>
+        </GlassCard>
       </div>
-    </div>
+    </AuthShell>
   );
 }
 
