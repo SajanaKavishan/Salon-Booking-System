@@ -127,6 +127,31 @@ const getAllAppointments = async (req, res) => {
     }
 };
 
+// @desc    Get appointments assigned to the logged in staff member
+// @route   GET /api/appointments/staff-schedule
+// @access  Private/Staff
+const getStaffAppointments = async (req, res) => {
+    try {
+        if (req.user.role !== 'staff' && req.user.role !== 'admin') {
+            return res.status(401).json({ message: 'Unauthorized' });
+        }
+
+        const query = req.user.role === 'admin'
+            ? {}
+            : { stylist: req.user.name };
+
+        const appointments = await Appointment.find(query)
+            .populate('user', 'name email phone')
+            .populate('services', 'name price duration')
+            .sort({ date: 1, startTime: 1 });
+
+        res.status(200).json(appointments);
+    } catch (error) {
+        console.error('Get Staff Appointments Error:', error);
+        res.status(500).json({ message: 'Server Error: Could not fetch staff appointments.' });
+    }
+};
+
 // @desc    Delete an appointment
 // @route   DELETE /api/appointments/:id
 // @access  Private
@@ -256,6 +281,61 @@ const updateAppointmentStatus = async (req, res) => {
     }
 };
 
+// @desc    Update appointment status by assigned staff member
+// @route   PUT /api/appointments/:id/staff-status
+// @access  Private/Staff
+const updateAppointmentStatusByStaff = async (req, res) => {
+    try {
+        const { status } = req.body;
+        const allowedStatuses = ['Completed', 'No-Show'];
+
+        if (!allowedStatuses.includes(status)) {
+            return res.status(400).json({ message: 'This status transition is not allowed for staff.' });
+        }
+
+        if (req.user.role !== 'staff' && req.user.role !== 'admin') {
+            return res.status(401).json({ message: 'Unauthorized' });
+        }
+
+        const appointment = await Appointment.findById(req.params.id)
+            .populate('user', 'name email')
+            .populate('services', 'name');
+
+        if (!appointment) {
+            return res.status(404).json({ message: 'Appointment not found.' });
+        }
+
+        if (req.user.role === 'staff' && appointment.stylist !== req.user.name) {
+            return res.status(401).json({ message: 'You are not assigned to this appointment.' });
+        }
+
+        if (appointment.status !== 'Approved') {
+            return res.status(400).json({ message: 'Only approved appointments can be completed or marked no-show.' });
+        }
+
+        const [year, month, day] = appointment.date.split('-').map(Number);
+        const appointmentStartMinutes = timeToMinutes(appointment.startTime);
+        const startHours = Math.floor(appointmentStartMinutes / 60);
+        const startMinutes = appointmentStartMinutes % 60;
+        const appointmentStart = new Date(year, month - 1, day, startHours, startMinutes, 0, 0);
+
+        if (Date.now() < appointmentStart.getTime()) {
+            return res.status(400).json({ message: 'This appointment cannot be updated before its start time.' });
+        }
+
+        appointment.status = status;
+        const updatedAppointment = await appointment.save();
+
+        res.status(200).json({
+            message: 'Status updated successfully!',
+            appointment: updatedAppointment
+        });
+    } catch (error) {
+        console.error('Staff Status Update Error:', error);
+        res.status(500).json({ message: 'Server Error: Could not update appointment status.' });
+    }
+};
+
 // @desc    Soft hide an appointment from customer's history
 // @route   PUT /api/appointments/:id/hide
 // @access  Private
@@ -289,7 +369,9 @@ module.exports = {
     createAppointment,
     getMyAppointments,
     getAllAppointments,
+    getStaffAppointments,
     deleteAppointment,
     updateAppointmentStatus,
+    updateAppointmentStatusByStaff,
     hideAppointmentByCustomer
 };
