@@ -7,7 +7,7 @@ const getRoleHome = (role) => {
   return '/dashboard';
 };
 
-function ProtectedRoute({ children, allowedRoles = [] }) {
+function CustomerRoute({ children }) {
   const token = localStorage.getItem('token');
   const userRole = localStorage.getItem('userRole');
 
@@ -15,12 +15,11 @@ function ProtectedRoute({ children, allowedRoles = [] }) {
     return <Navigate to="/login" replace />;
   }
 
-  if (allowedRoles.length > 0 && !allowedRoles.includes(userRole)) {
+  if (userRole !== 'customer') {
     return <Navigate to={getRoleHome(userRole)} replace />;
   }
 
   return children;
 }
 
-export default ProtectedRoute;
-
+export default CustomerRoute;

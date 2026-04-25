@@ -20,8 +20,8 @@ function Login() {
 
   const getRedirectPath = (role) => {
     if (role === 'admin') return '/admin';
-    if (role === 'staff') return '/staff';
-    return '/dashboard';
+    if (role === 'staff') return '/staff/dashboard';
+    return '/booking';
   };
 
   const onChange = (e) => {
@@ -36,15 +36,16 @@ function Login() {
     setIsLoading(true);
 
     try {
-      const response = await axios.post('http://localhost:5000/api/users/login', formData);
+      const response = await axios.post('/api/auth/login', formData);
 
       localStorage.setItem('token', response.data.token);
+      localStorage.setItem('userRole', response.data.role);
       localStorage.setItem(
         'user',
         JSON.stringify({
-          id: response.data._id,
-          name: response.data.name,
-          email: response.data.email,
+          id: response.data._id || response.data.user?.id,
+          name: response.data.name || response.data.user?.name,
+          email: response.data.email || response.data.user?.email,
           role: response.data.role,
         })
       );
@@ -67,6 +68,7 @@ function Login() {
         });
 
         localStorage.setItem('token', response.data.token);
+        localStorage.setItem('userRole', response.data.role);
         localStorage.setItem(
           'user',
           JSON.stringify({

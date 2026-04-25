@@ -4,24 +4,12 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
-
-  let user = null;
-  try {
-    user = JSON.parse(localStorage.getItem('user'));
-  } catch {
-    user = null;
-  }
-
-  const token = localStorage.getItem('token');
-  const isLoggedIn = Boolean(user && token);
-  const role = user?.role;
-  const isCustomer = role === 'customer' || (!role && isLoggedIn);
-  const isStaffOrAdmin = role === 'admin' || role === 'staff';
-  const showPublicLinks = !isLoggedIn;
+  const userRole = localStorage.getItem('userRole');
 
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('userRole');
     navigate('/');
   };
 
@@ -58,9 +46,7 @@ function Navbar() {
     { label: 'Contact', id: 'contact' }
   ];
 
-  const dashboardPath = role === 'admin' ? '/admin' : role === 'staff' ? '/staff' : '/dashboard';
-  const dashboardLabel = role === 'admin' ? 'Admin' : role === 'staff' ? 'Staff' : 'Dashboard';
-  const avatarLabel = (user?.name || role || 'A').trim().charAt(0).toUpperCase();
+  const dashboardPath = userRole === 'admin' ? '/admin' : '/staff/dashboard';
 
   return (
     <nav className="sticky top-0 z-50 border-b border-white/5 bg-[#111111]/95 px-4 py-4 font-sans shadow-lg backdrop-blur-md sm:px-6">
@@ -73,23 +59,21 @@ function Navbar() {
           Salon<span className="text-[#d4af37]">DEES</span>
         </button>
 
-        {showPublicLinks && (
-          <div className="hidden items-center gap-8 text-lg font-medium tracking-wide text-gray-300 lg:flex">
-            {publicLinks.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => scrollToSection(item.id)}
-                className="transition duration-300 hover:text-[#d4af37]"
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="hidden items-center gap-8 text-lg font-medium tracking-wide text-gray-300 lg:flex">
+          {publicLinks.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => scrollToSection(item.id)}
+              className="transition duration-300 hover:text-[#d4af37]"
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
 
         <div className="flex items-center gap-3 sm:gap-4">
-          {!isLoggedIn && (
+          {!userRole && (
             <>
               <Link
                 to="/login"
@@ -106,50 +90,21 @@ function Navbar() {
             </>
           )}
 
-          {isCustomer && (
+          {(userRole === 'admin' || userRole === 'staff') && (
             <>
               <Link
                 to={dashboardPath}
-                className="hidden text-base font-medium text-gray-300 transition duration-300 hover:text-[#d4af37] sm:block sm:text-lg"
+                className="rounded-md bg-[#d4af37] px-4 py-2 text-base font-semibold text-black transition duration-300 hover:bg-yellow-400 hover:shadow-[0_0_20px_rgba(212,175,55,0.25)] sm:px-5 sm:text-lg"
               >
-                Dashboard
-              </Link>
-              <Link
-                to="/profile"
-                className="hidden text-base font-medium text-gray-300 transition duration-300 hover:text-[#d4af37] sm:block sm:text-lg"
-              >
-                Profile
+                Go to Dashboard
               </Link>
               <button
                 type="button"
                 onClick={handleLogout}
-                className="rounded-sm border border-white/10 bg-white/5 px-4 py-2 text-base font-medium text-gray-300 transition duration-300 hover:border-red-500/30 hover:bg-red-500/15 hover:text-red-400 sm:px-5 sm:text-lg"
+                className="rounded-md border border-white/10 bg-white/5 px-4 py-2 text-base font-medium text-gray-300 transition duration-300 hover:border-red-500/30 hover:bg-red-500/15 hover:text-red-400 sm:px-5 sm:text-lg"
               >
                 Logout
               </button>
-            </>
-          )}
-
-          {isStaffOrAdmin && (
-            <>
-              <Link
-                to={dashboardPath}
-                className="hidden text-base font-medium text-gray-300 transition duration-300 hover:text-[#d4af37] sm:block sm:text-lg"
-              >
-                {dashboardLabel}
-              </Link>
-              <button
-                type="button"
-                aria-label="Notifications"
-                className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-[#0a0a0a]/80 text-gray-300 transition duration-300 hover:border-[#d4af37]/50 hover:text-[#d4af37]"
-              >
-                <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M15 17h5l-1.4-1.4a2 2 0 0 1-.6-1.4V10a6 6 0 1 0-12 0v4.2a2 2 0 0 1-.6 1.4L4 17h5m6 0a3 3 0 1 1-6 0m6 0H9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-              <div className="flex h-11 w-11 items-center justify-center rounded-full border border-[#d4af37]/25 bg-[#d4af37]/10 text-sm font-semibold text-[#d4af37]">
-                {avatarLabel}
-              </div>
             </>
           )}
         </div>

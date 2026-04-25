@@ -6,6 +6,7 @@ function Home() {
   const navigate = useNavigate();
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
+  const userRole = localStorage.getItem('userRole');
 
   // Contact Form State
   const [formData, setFormData] = useState({ name: '', email: '', message: '' });
@@ -28,14 +29,25 @@ function Home() {
     fetchServices();
   }, []);
 
-  const handleBookNow = () => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      navigate('/book');
-    } else {
-      navigate('/login');
+  const handlePrimaryCTA = () => {
+    if (userRole === 'admin') {
+      navigate('/admin');
+      return;
     }
+
+    if (userRole === 'staff') {
+      navigate('/staff/dashboard');
+      return;
+    }
+
+    navigate('/booking');
   };
+
+  const primaryCTALabel = userRole === 'admin'
+    ? 'Go to Admin Dashboard'
+    : userRole === 'staff'
+      ? 'Go to Staff Dashboard'
+      : 'Book Now';
 
   const scrollToSection = (id) => {
     const element = document.getElementById(id);
@@ -109,10 +121,10 @@ function Home() {
 
           <div className="flex flex-col sm:flex-row gap-5">
             <button
-              onClick={handleBookNow}
+              onClick={handlePrimaryCTA}
               className="bg-white text-black px-10 py-4 rounded-sm font-semibold hover:bg-gray-200 transition duration-300 flex items-center justify-center gap-2 text-lg"
             >
-              Book Now <span>→</span>
+              {primaryCTALabel} <span>→</span>
             </button>
             <button
               onClick={() => scrollToSection('services')}

@@ -49,6 +49,7 @@ async function ensureMongoConnection(req, res, next) { // Middleware function to
 }
 
 // Routes
+app.use('/api/auth', ensureMongoConnection, require('./routes/authRoutes'));
 app.use('/api/users', ensureMongoConnection, require('./routes/userRoutes')); // User registration and management routes
 app.use('/api/appointments', ensureMongoConnection, require('./routes/appointmentRoutes')); // Appointment booking and management routes
 app.use('/api/services', ensureMongoConnection, require('./routes/serviceRoutes')); // Service management routes

@@ -4,6 +4,7 @@ import Home from './pages/Home';
 import Login from './pages/Login'; 
 import Dashboard from './Dashboard';
 import ProtectedRoute from './ProtectedRoute';
+import CustomerRoute from './CustomerRoute';
 import Profile from './pages/Profile';
 import BookAppointment from './BookAppointment';
 import AdminDashboard from './AdminDashboard';
@@ -35,27 +36,35 @@ function App() {
           <Route 
             path="/dashboard" 
             element={
-              <ProtectedRoute>
+              <CustomerRoute>
                 <Dashboard />
-              </ProtectedRoute>
+              </CustomerRoute>
             } 
           />
 
           <Route 
             path="/profile" 
             element={
-              <ProtectedRoute>
+              <CustomerRoute>
                 <Profile />
-              </ProtectedRoute>
+              </CustomerRoute>
             } 
           />
             {/* Route for booking appointments, also protected */}  
           <Route 
             path="/book" 
             element={
-              <ProtectedRoute>
+              <CustomerRoute>
                 <BookAppointment />
-              </ProtectedRoute>
+              </CustomerRoute>
+            } 
+          />
+          <Route 
+            path="/booking" 
+            element={
+              <CustomerRoute>
+                <BookAppointment />
+              </CustomerRoute>
             } 
           />
 
@@ -63,7 +72,7 @@ function App() {
           <Route 
             path="/admin" 
             element={
-              <ProtectedRoute>
+              <ProtectedRoute allowedRoles={['admin']}>
                 <Layout />
               </ProtectedRoute>
             } 
@@ -75,17 +84,25 @@ function App() {
             <Route path="services" element={<ServicesPage />} />
           </Route>
           <Route 
-            path="/staff" 
+            path="/staff/dashboard" 
             element={
-              <ProtectedRoute>
+              <ProtectedRoute allowedRoles={['staff']}>
                 <StaffDashboard />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/staff/appointments" 
+            element={
+              <ProtectedRoute allowedRoles={['staff']}>
+                <AppointmentsPage />
               </ProtectedRoute>
             } 
           />
           <Route 
             path="/admin/messages" 
             element={
-              <ProtectedRoute>
+              <ProtectedRoute allowedRoles={['admin']}>
                 <AdminMessages />
               </ProtectedRoute>
             } 
