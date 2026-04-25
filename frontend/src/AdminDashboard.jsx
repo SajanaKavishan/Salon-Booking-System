@@ -1,339 +1,281 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
-import ServiceManager from './components/ServiceManager';
-import StaffManager from './components/StaffManager';
+import {
+  DashboardStatCard,
+  GlassCard,
+  SectionPanel,
+  StatusBadge
+} from './components/SystemUI';
 
 function AdminDashboard() {
-  const navigate = useNavigate();
   const [appointments, setAppointments] = useState([]);
-  const [activeTab, setActiveTab] = useState('Pending');
-  const [dateFilter, setDateFilter] = useState('All');
-  const finalStatuses = ['Completed', 'Rejected', 'Cancelled', 'No-Show'];
-
-  const timeTo24Hour = (timeStr) => {
-    if (!timeStr || typeof timeStr !== 'string') return { hours: 0, minutes: 0 };
-
-    const parts = timeStr.trim().split(' ');
-    if (parts.length < 2) return { hours: 0, minutes: 0 };
-
-    const [time, modifier] = parts;
-    const [rawHours, rawMinutes] = time.split(':').map(Number);
-
-    if (Number.isNaN(rawHours) || Number.isNaN(rawMinutes)) return { hours: 0, minutes: 0 };
-
-    let hours = rawHours;
-    if (hours === 12) hours = 0;
-    if (modifier === 'PM') hours += 12;
-
-    return { hours, minutes: rawMinutes };
-  };
-
-  const isPastStartTime = (appointmentDate, appointmentTime) => {
-    if (!appointmentDate || !appointmentTime) return false;
-
-    const [year, month, day] = String(appointmentDate).split('-').map(Number);
-    if ([year, month, day].some((v) => Number.isNaN(v))) return false;
-
-    const { hours, minutes } = timeTo24Hour(appointmentTime);
-    const scheduledStart = new Date(year, month - 1, day, hours, minutes, 0, 0);
-    const now = new Date();
-
-    return now.getTime() >= scheduledStart.getTime();
-  };
-
-  const getAllowedStatuses = (appointment) => {
-    const currentStatus = appointment.status;
-
-    if (finalStatuses.includes(currentStatus)) {
-      return [currentStatus];
-    }
-
-    if (currentStatus === 'Pending') {
-      return ['Pending', 'Approved', 'Rejected'];
-    }
-
-    if (currentStatus === 'Approved') {
-      const options = ['Approved', 'No-Show'];
-      if (isPastStartTime(appointment.date, appointment.startTime)) {
-        options.push('Completed');
-      }
-      return options;
-    }
-
-    return [currentStatus];
-  };
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const user = JSON.parse(localStorage.getItem('user'));
-
-    if (!user || user.role !== 'admin') {
-      navigate('/dashboard');
-      return;
-    }
-
     const fetchAllAppointments = async () => {
       try {
+        const token = localStorage.getItem('token');
         const response = await axios.get('http://localhost:5000/api/appointments/all', {
           headers: { Authorization: `Bearer ${token}` }
         });
         setAppointments(response.data);
       } catch (error) {
-        console.error("Error fetching all appointments:", error);
+        console.error('Error fetching all appointments:', error);
+        toast.error('Could not load appointments right now.');
+      } finally {
+        setIsLoading(false);
       }
     };
 
     fetchAllAppointments();
-  }, [navigate]);
+  }, []);
 
-  const handleStatusChange = async (id, newStatus) => {
-    try {
-      const selectedAppointment = appointments.find((appt) => appt._id === id);
-      if (!selectedAppointment) return;
-
-      const allowedStatuses = getAllowedStatuses(selectedAppointment);
-      if (!allowedStatuses.includes(newStatus)) {
-        toast.error('This status transition is not allowed.');
-        return;
-      }
-
-      const token = localStorage.getItem('token');
-      
-      await axios.put(`http://localhost:5000/api/appointments/${id}/status`, 
-        { status: newStatus },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      setAppointments(appointments.map(appt => 
-        appt._id === id ? { ...appt, status: newStatus } : appt
-      ));
-
-      toast.success(`Status changed to "${newStatus}" successfully!`);
-
-    } catch (error) {
-      console.error("Status Update Error:", error);
-      toast.error("Oops! Failed to update the appointment status.");
-    }
-  };
-
-  const filteredAppointments = appointments.filter((appt) => {
+  const today = new Date();
+  const todayCount = appointments.filter((appt) => {
     const appointmentDate = new Date(appt.date);
-    const now = new Date();
+    return (
+      appointmentDate.getFullYear() === today.getFullYear() &&
+      appointmentDate.getMonth() === today.getMonth() &&
+      appointmentDate.getDate() === today.getDate()
+    );
+  }).length;
 
-    const statusMatches = activeTab === 'All' ? true : appt.status === activeTab;
+  const pendingCount = appointments.filter((appt) => appt.status === 'Pending').length;
+  const activeClients = new Set(
+    appointments
+      .map((appt) => appt.user?._id || appt.user?.email || appt.user?.phone || appt.user?.phoneNumber || appt.user?.name)
+      .filter(Boolean)
+  ).size;
 
-    let dateMatches = true;
+  const recentAppointments = useMemo(() => {
+    return [...appointments]
+      .sort((a, b) => {
+        const dateDifference = new Date(b.date).getTime() - new Date(a.date).getTime();
+        if (dateDifference !== 0) return dateDifference;
+        return String(b.startTime || '').localeCompare(String(a.startTime || ''));
+      })
+      .slice(0, 6);
+  }, [appointments]);
 
-    if (dateFilter === 'Today') {
-      dateMatches =
-        appointmentDate.getFullYear() === now.getFullYear() &&
-        appointmentDate.getMonth() === now.getMonth() &&
-        appointmentDate.getDate() === now.getDate();
-    } else if (dateFilter === 'This Week') {
-      const startOfWeek = new Date(now);
-      const dayOfWeek = startOfWeek.getDay();
-      startOfWeek.setHours(0, 0, 0, 0);
-      startOfWeek.setDate(startOfWeek.getDate() - dayOfWeek);
-
-      const endOfWeek = new Date(startOfWeek);
-      endOfWeek.setDate(endOfWeek.getDate() + 6);
-      endOfWeek.setHours(23, 59, 59, 999);
-
-      dateMatches = appointmentDate >= startOfWeek && appointmentDate <= endOfWeek;
-    } else if (dateFilter === 'This Month') {
-      dateMatches =
-        appointmentDate.getFullYear() === now.getFullYear() &&
-        appointmentDate.getMonth() === now.getMonth();
+  const statCards = [
+    {
+      label: "Today's Revenue",
+      value: 'Rs. 15,400',
+      trend: '+12.5%',
+      color: 'bg-[#d4af37]/15 border-[#d4af37]/30',
+      icon: (
+        <svg className="h-7 w-7 text-[#d4af37]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 3v18M17 7.5c-.8-1.2-2.4-2-4.3-2-2.4 0-4.2 1.2-4.2 3s1.5 2.5 4.1 3.1c2.8.6 4.4 1.4 4.4 3.4s-1.9 3.5-4.7 3.5c-2.1 0-4-.8-5.3-2.2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )
+    },
+    {
+      label: "Today's Appointments",
+      value: todayCount,
+      trend: `${pendingCount} pending`,
+      color: 'bg-[#d4af37]/15 border-[#d4af37]/30',
+      icon: (
+        <svg className="h-7 w-7 text-[#d4af37]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M7 3v3M17 3v3M4.5 9h15M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )
+    },
+    {
+      label: 'Active Clients',
+      value: activeClients || appointments.length,
+      trend: 'Returning traffic',
+      color: 'bg-[#d4af37]/15 border-[#d4af37]/30',
+      icon: (
+        <svg className="h-7 w-7 text-[#d4af37]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M16 19c0-2.2-1.8-4-4-4s-4 1.8-4 4M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM21 19c0-1.8-1.2-3.3-2.8-3.8M18 6a3 3 0 0 1 0 5.7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )
+    },
+    {
+      label: 'Active Staff',
+      value: '4',
+      trend: 'On shift',
+      color: 'bg-[#d4af37]/15 border-[#d4af37]/30',
+      icon: (
+        <svg className="h-7 w-7 text-[#d4af37]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M16 19c0-2.2-1.8-4-4-4s-4 1.8-4 4M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM19 8v4M21 10h-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )
     }
+  ];
 
-    return statusMatches && dateMatches;
-  });
+  const revenuePoints = '0,154 60,130 120,138 180,94 240,58 300,22 360,118';
+  const serviceBars = [
+    { label: 'Haircut', height: 82 },
+    { label: 'Color', height: 52 },
+    { label: 'Styling', height: 34 },
+    { label: 'Spa', height: 26 },
+    { label: 'Manicure', height: 42 }
+  ];
 
   return (
-    /* Main Container with Background Image */
-    <div className="min-h-screen relative flex flex-col py-10 px-4 sm:px-6 lg:px-8 font-sans text-white selection:bg-[#d4af37] selection:text-black bg-[url('/registerBg.jpg')] bg-cover bg-center bg-no-repeat fixed bg-fixed">
-      
-      {/* Dark Overlay (80% Black) */}
-      <div className="absolute inset-0 bg-black/80 z-0"></div>
+    <div className="w-full max-w-7xl mx-auto">
+      <header className="mb-10">
+        <h1 className="text-4xl font-serif font-bold tracking-tight text-white">
+          Admin <span className="text-[#d4af37]">Dashboard</span>
+        </h1>
+        <p className="mt-3 text-lg tracking-wide text-gray-400">
+          Welcome back! Here&apos;s what&apos;s happening today.
+        </p>
+      </header>
 
-      {/* Content Wrapper */}
-      <div className="relative z-10 w-full max-w-7xl mx-auto space-y-8">
-        
-        {/* Header Section */}
-        <div className="bg-[#111111]/70 backdrop-blur-md rounded-xl shadow-2xl p-8 flex flex-col sm:flex-row items-center justify-between border border-white/10 border-l-4 border-l-[#d4af37]">
-          <div>
-            <h2 className="text-3xl font-serif text-white mb-2">
-              Admin <span className="text-[#d4af37]">Dashboard</span> 
-            </h2>
-            <p className="text-lg text-gray-400 font-light">Overview and management of all system appointments and settings.</p>
-          </div>
-          
-          {/* View Messages Button */}
-          <div className="mt-4 sm:mt-0">
-            <button 
-              onClick={() => navigate('/admin/messages')}
-              className="bg-[#d4af37] text-black px-6 py-2.5 rounded font-semibold hover:bg-[#b5952f] transition-colors duration-300 shadow-[0_0_15px_rgba(212,175,55,0.3)]"
-            >
-              View Messages
-            </button>
-          </div>
-        </div>
+      <section className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4">
+        {statCards.map((card) => (
+          <DashboardStatCard
+            key={card.label}
+            label={card.label}
+            value={card.value}
+            icon={card.icon}
+            iconClassName={`h-[58px] w-[58px] rounded-lg ${card.color}`}
+            trend={
+              <span className="inline-flex items-center gap-1">
+                <svg className="h-4 w-4" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M3 10l4-4 3 3 3-5M10 4h3v3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                {card.trend}
+              </span>
+            }
+            className="p-8"
+          />
+        ))}
+      </section>
 
-        {/* Appointments Table Section */}
-        <div className="bg-[#111111]/70 backdrop-blur-md rounded-xl shadow-2xl border border-white/10 overflow-hidden">
-          <div className="p-6 border-b border-white/10">
-            <h3 className="text-2xl font-serif text-[#d4af37]">All Appointments</h3>
+      <section className="mt-10 grid grid-cols-1 gap-8 xl:grid-cols-2">
+        <SectionPanel className="p-8">
+          <h2 className="salon-heading">Weekly Revenue</h2>
+          <div className="mt-8 h-[270px]">
+            <svg className="h-full w-full overflow-visible" viewBox="0 0 420 230" fill="none" role="img" aria-label="Weekly revenue chart">
+              {[0, 1, 2, 3, 4].map((line) => (
+                <line key={line} x1="48" x2="400" y1={22 + line * 45} y2={22 + line * 45} stroke="rgba(255,255,255,0.08)" strokeDasharray="4 4" />
+              ))}
+              {[0, 1, 2, 3, 4, 5, 6].map((line) => (
+                <line key={line} x1={48 + line * 58} x2={48 + line * 58} y1="20" y2="202" stroke="rgba(255,255,255,0.06)" strokeDasharray="4 4" />
+              ))}
+              <line x1="48" y1="20" x2="48" y2="202" stroke="rgba(255,255,255,0.35)" />
+              <line x1="48" y1="202" x2="400" y2="202" stroke="rgba(255,255,255,0.35)" />
+              <path d={`M ${revenuePoints} L 360,202 L 0,202 Z`} fill="url(#revenueFill)" transform="translate(48 0)" opacity="0.85" />
+              <path d={`M ${revenuePoints}`} stroke="#d4af37" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" transform="translate(48 0)" />
+              <defs>
+                <linearGradient id="revenueFill" x1="180" y1="20" x2="180" y2="202" gradientUnits="userSpaceOnUse">
+                  <stop stopColor="#d4af37" stopOpacity="0.28" />
+                  <stop offset="1" stopColor="#d4af37" stopOpacity="0.04" />
+                </linearGradient>
+              </defs>
+              {['10000', '7500', '5000', '2500', '0'].map((label, index) => (
+                <text key={label} x="38" y={28 + index * 45} textAnchor="end" className="fill-gray-400 text-[14px]">{label}</text>
+              ))}
+              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((label, index) => (
+                <text key={label} x={48 + index * 58} y="225" textAnchor="middle" className="fill-gray-400 text-[14px]">{label}</text>
+              ))}
+            </svg>
+          </div>
+        </SectionPanel>
+
+        <SectionPanel className="p-8">
+          <h2 className="salon-heading">Popular Services</h2>
+          <div className="mt-8 h-[270px]">
+            <svg className="h-full w-full overflow-visible" viewBox="0 0 420 230" fill="none" role="img" aria-label="Popular services chart">
+              {[0, 1, 2, 3, 4].map((line) => (
+                <line key={line} x1="48" x2="400" y1={22 + line * 45} y2={22 + line * 45} stroke="rgba(255,255,255,0.08)" strokeDasharray="4 4" />
+              ))}
+              {[0, 1, 2, 3, 4, 5].map((line) => (
+                <line key={line} x1={48 + line * 68} x2={48 + line * 68} y1="20" y2="202" stroke="rgba(255,255,255,0.06)" strokeDasharray="4 4" />
+              ))}
+              <line x1="48" y1="20" x2="48" y2="202" stroke="rgba(255,255,255,0.35)" />
+              <line x1="48" y1="202" x2="400" y2="202" stroke="rgba(255,255,255,0.35)" />
+              {serviceBars.map((bar, index) => {
+                const x = 56 + index * 70;
+                const height = bar.height * 1.9;
+                const y = 202 - height;
+
+                return (
+                  <g key={bar.label}>
+                    <rect x={x} y={y} width="56" height={height} rx="7" fill="#d4af37" opacity="0.88" />
+                    <text x={x + 28} y="225" textAnchor="middle" className="fill-gray-400 text-[14px]">{bar.label}</text>
+                  </g>
+                );
+              })}
+              {['60', '45', '30', '15', '0'].map((label, index) => (
+                <text key={label} x="38" y={28 + index * 45} textAnchor="end" className="fill-gray-400 text-[14px]">{label}</text>
+              ))}
+            </svg>
+          </div>
+        </SectionPanel>
+      </section>
+
+      <section className="mt-10 grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <SectionPanel className="p-8">
+          <div className="flex items-center justify-between gap-4 border-b border-white/10 pb-4">
+            <div>
+              <h2 className="salon-heading">Latest Appointments</h2>
+              <p className="salon-subtext mt-2">A quick pulse check on recent bookings.</p>
+            </div>
+            <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-gray-300">
+              {appointments.length} total
+            </div>
           </div>
 
-          <div className="flex flex-col gap-4 p-4 border-b border-white/10 bg-[#0a0a0a]/50 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-wrap gap-2">
-              {['Pending', 'Approved', 'Completed', 'Rejected', 'All'].map((tab) => (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => setActiveTab(tab)}
-                  className={activeTab === tab
-                    ? 'bg-[#d4af37] text-black font-semibold shadow-[0_0_10px_rgba(212,175,55,0.3)] px-4 py-2 rounded-full text-sm transition-all duration-300'
-                    : 'text-gray-400 hover:text-white hover:bg-white/10 border border-white/10 px-4 py-2 rounded-full text-sm transition-all duration-300'}
-                >
-                  {tab}
-                </button>
+          {isLoading ? (
+            <div className="mt-6 grid gap-4">
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div key={index} className="rounded-xl border border-white/10 bg-[#0a0a0a]/40 p-4">
+                  <div className="h-4 w-32 animate-pulse rounded bg-white/10"></div>
+                  <div className="mt-3 h-4 w-48 animate-pulse rounded bg-white/10"></div>
+                </div>
               ))}
             </div>
-
-            <div className="w-full sm:w-auto">
-              <select
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
-                className="w-full sm:w-48 pl-3 pr-8 py-2 text-sm border border-white/20 focus:outline-none focus:ring-1 focus:ring-[#d4af37] focus:border-[#d4af37] rounded-md bg-[#0a0a0a]/80 text-gray-200 shadow-sm transition hover:border-white/40 cursor-pointer"
-              >
-                <option value="All" className="bg-[#111111] text-white">All Dates</option>
-                <option value="Today" className="bg-[#111111] text-white">Today</option>
-                <option value="This Week" className="bg-[#111111] text-white">This Week</option>
-                <option value="This Month" className="bg-[#111111] text-white">This Month</option>
-              </select>
-            </div>
-          </div>
-
-          {filteredAppointments.length === 0 ? (
-            <div className="p-10 text-center text-gray-300 font-light bg-[#0a0a0a]/30">
-              There are no appointments to display at the moment.
+          ) : recentAppointments.length === 0 ? (
+            <div className="mt-6 rounded-xl border border-white/10 bg-[#0a0a0a]/40 p-6 text-center text-sm text-gray-400">
+              No appointment activity available yet.
             </div>
           ) : (
-            <div className="max-h-[500px] overflow-y-auto [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:bg-[#d4af37]/50 [&::-webkit-scrollbar-thumb]:rounded-full">
-              <div className="overflow-x-auto">
-              <table className="min-w-full text-left border-collapse">
-                <thead className="bg-[#0a0a0a]/80">
-                  <tr>
-                    <th className="px-6 py-4 text-xs font-medium text-[#d4af37] uppercase tracking-[0.15em] border-b border-white/10">Customer Info</th>
-                    <th className="px-6 py-4 text-xs font-medium text-[#d4af37] uppercase tracking-[0.15em] border-b border-white/10">Service</th>
-                    <th className="px-6 py-4 text-xs font-medium text-[#d4af37] uppercase tracking-[0.15em] border-b border-white/10">Date & Time</th>
-                    <th className="px-6 py-4 text-xs font-medium text-[#d4af37] uppercase tracking-[0.15em] border-b border-white/10">Current Status</th>
-                    <th className="px-6 py-4 text-xs font-medium text-[#d4af37] uppercase tracking-[0.15em] border-b border-white/10">Update Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {filteredAppointments.map((appt) => {
-                    const customerPhone = appt.user?.phone || appt.user?.phoneNumber;
-                    const isStatusLocked = finalStatuses.includes(appt.status);
-                    const canMarkCompleted = isPastStartTime(appt.date, appt.startTime);
-                    const allowedStatuses = getAllowedStatuses(appt);
-
-                    return (
-                    <tr key={appt._id} className="hover:bg-white/5 transition-colors duration-200 group">
-                      
-                      {/* Customer Name */}
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-200 group-hover:text-white transition">
-                          {appt.user ? appt.user.name : 'Unknown User'}
-                        </div>
-                        {customerPhone ? (
-                          <a
-                            href={`tel:${customerPhone}`}
-                            className="mt-1 inline-flex items-center gap-1 text-xs text-gray-400 hover:text-[#d4af37] transition-colors"
-                          >
-                            <span aria-hidden="true">☎</span>
-                            {customerPhone}
-                          </a>
-                        ) : (
-                          <span className="mt-1 block text-gray-500 text-xs">No phone provided</span>
-                        )}
-                      </td>
-
-                      {/* Service */}
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-300 font-light">
-                          {appt.services && appt.services.length > 0
-                            ? appt.services.map((service) => service.name || service).join(', ')
-                            : appt.service || 'N/A'}
-                        </div>
-                      </td>
-
-                      {/* Date & Time */}
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-200 mb-1">{new Date(appt.date).toLocaleDateString()}</div>
-                        <div className="text-xs text-gray-400 font-light">
-                          {appt.startTime ? `${appt.startTime}${appt.endTime ? ` - ${appt.endTime}` : ''}` : appt.time}
-                        </div>
-                      </td>
-
-                      {/* Status Badge */}
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-3 py-1 inline-flex text-xs leading-5 font-bold rounded-full border uppercase tracking-wider
-                          ${appt.status === 'Pending' ? 'bg-yellow-900/30 text-yellow-400 border-yellow-700/50' : 
-                            appt.status === 'Approved' ? 'bg-blue-900/30 text-blue-400 border-blue-700/50' : 
-                            appt.status === 'Completed' ? 'bg-green-900/30 text-green-400 border-green-700/50' : 
-                            'bg-red-900/30 text-red-400 border-red-700/50'}`}
-                        >
-                          {appt.status}
-                        </span>
-                      </td>
-
-                      {/* Action Dropdown */}
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="space-y-2">
-                          <select 
-                            value={appt.status} 
-                            disabled={isStatusLocked}
-                            onChange={(e) => handleStatusChange(appt._id, e.target.value)}
-                            className={`block w-full pl-3 pr-8 py-2 text-sm border border-white/20 rounded-md text-gray-200 shadow-sm transition ${
-                              isStatusLocked
-                                ? 'opacity-50 cursor-not-allowed bg-gray-800'
-                                : 'bg-[#0a0a0a]/80 focus:outline-none focus:ring-1 focus:ring-[#d4af37] focus:border-[#d4af37] hover:border-white/40 cursor-pointer'
-                            }`}
-                          >
-                            {allowedStatuses.map((statusOption) => (
-                              <option key={statusOption} value={statusOption} className="bg-[#111111] text-white">
-                                {statusOption}
-                              </option>
-                            ))}
-                          </select>
-
-                          {appt.status === 'Approved' && !canMarkCompleted && (
-                            <p className="text-xs text-gray-400">
-                              Can complete after {new Date(`${appt.date}T00:00:00`).toLocaleDateString()} {appt.startTime}
-                            </p>
-                          )}
-                        </div>
-                      </td>
-
-                    </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              </div>
+            <div className="mt-6 grid gap-4">
+              {recentAppointments.map((appointment) => (
+                <GlassCard key={appointment._id} className="p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-base font-semibold text-white">{appointment.user?.name || 'Unknown User'}</p>
+                      <p className="mt-1 text-sm text-gray-400">
+                        {appointment.services?.map((service) => service.name || service).join(', ') || appointment.service || 'N/A'}
+                      </p>
+                      <p className="mt-2 text-xs uppercase tracking-[0.16em] text-gray-500">
+                        {new Date(appointment.date).toLocaleDateString()} {appointment.startTime ? `• ${appointment.startTime}` : ''}
+                      </p>
+                    </div>
+                    <StatusBadge status={appointment.status} />
+                  </div>
+                </GlassCard>
+              ))}
             </div>
           )}
-        </div>
+        </SectionPanel>
 
-        {/* Components are already styled with Glass Effect in their own files */}
-        <ServiceManager />
-        <StaffManager />
-        
-      </div>
+        <SectionPanel className="p-8">
+          <h2 className="salon-heading">Operational Snapshot</h2>
+          <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            <GlassCard className="p-5">
+              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-gray-400">Pending Approvals</p>
+              <div className="mt-4 flex items-end justify-between gap-4">
+                <p className="text-4xl font-serif font-semibold text-[#d4af37]">{pendingCount}</p>
+                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${pendingCount > 0 ? 'bg-rose-100 text-rose-600' : 'bg-emerald-100 text-emerald-600'}`}>
+                  {pendingCount > 0 ? 'Needs review' : 'All clear'}
+                </span>
+              </div>
+            </GlassCard>
+            <GlassCard className="p-5">
+              <p className="text-sm font-semibold uppercase tracking-[0.16em] text-gray-400">Total Appointments</p>
+              <p className="mt-4 text-4xl font-serif font-semibold text-[#d4af37]">{appointments.length}</p>
+              <p className="mt-3 text-sm text-gray-400">Across all recent booking activity.</p>
+            </GlassCard>
+          </div>
+        </SectionPanel>
+      </section>
     </div>
   );
 }
