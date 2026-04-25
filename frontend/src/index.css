@@ -113,6 +113,15 @@
 	}
 }
 
+.no-scrollbar {
+	-ms-overflow-style: none;
+	scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+	display: none;
+}
+
 body {
 	@apply bg-[#0a0a0a] text-white transition-colors duration-300;
 }
