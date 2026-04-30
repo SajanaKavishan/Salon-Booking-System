@@ -19,6 +19,16 @@ import AppointmentsPage from './pages/admin/AppointmentsPage';
 import ClientsPage from './pages/admin/ClientsPage';
 import StaffPage from './pages/admin/StaffPage';
 import ServicesPage from './pages/admin/ServicesPage';
+import StaffProfile from './StaffProfile';
+
+function PlaceholderPage({ title, subtitle }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-[#111111]/70 p-8 shadow-xl backdrop-blur-md">
+      <h1 className="text-3xl font-serif text-white">{title}</h1>
+      <p className="mt-3 text-gray-400">{subtitle}</p>
+    </div>
+  );
+}
 
 function App() {
   return (
@@ -32,41 +42,18 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          {/* After logging in, show the dashboard */}
-          <Route 
-            path="/dashboard" 
+          <Route
             element={
               <CustomerRoute>
-                <Dashboard />
+                <Layout />
               </CustomerRoute>
-            } 
-          />
-
-          <Route 
-            path="/profile" 
-            element={
-              <CustomerRoute>
-                <Profile />
-              </CustomerRoute>
-            } 
-          />
-            {/* Route for booking appointments, also protected */}  
-          <Route 
-            path="/book" 
-            element={
-              <CustomerRoute>
-                <BookAppointment />
-              </CustomerRoute>
-            } 
-          />
-          <Route 
-            path="/booking" 
-            element={
-              <CustomerRoute>
-                <BookAppointment />
-              </CustomerRoute>
-            } 
-          />
+            }
+          >
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/book" element={<BookAppointment />} />
+            <Route path="/booking" element={<BookAppointment />} />
+          </Route>
 
           {/* Admin routes */}  
           <Route 
@@ -82,23 +69,23 @@ function App() {
             <Route path="clients" element={<ClientsPage />} />
             <Route path="staff" element={<StaffPage />} />
             <Route path="services" element={<ServicesPage />} />
+            <Route path="analytics" element={<PlaceholderPage title="Analytics" subtitle="Analytics dashboard will be available here." />} />
+            <Route path="settings" element={<PlaceholderPage title="Settings" subtitle="Account and system settings will be available here." />} />
           </Route>
+
           <Route 
-            path="/staff/dashboard" 
+            path="/staff" 
             element={
               <ProtectedRoute allowedRoles={['staff']}>
-                <StaffDashboard />
+                <Layout />
               </ProtectedRoute>
             } 
-          />
-          <Route 
-            path="/staff/appointments" 
-            element={
-              <ProtectedRoute allowedRoles={['staff']}>
-                <AppointmentsPage />
-              </ProtectedRoute>
-            } 
-          />
+          >
+            <Route index element={<Navigate to="dashboard" replace />} />
+            <Route path="dashboard" element={<StaffDashboard />} />
+            <Route path="appointments" element={<AppointmentsPage />} />
+            <Route path="profile" element={<StaffProfile />} />
+          </Route>
           <Route 
             path="/admin/messages" 
             element={

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
-import { DarkSelect, StatusBadge } from '../../components/SystemUI';
+import { DarkSelect, GoldButton, StatusBadge } from '../../components/SystemUI';
 
 const finalStatuses = ['Completed', 'Rejected', 'Cancelled', 'No-Show'];
 
@@ -169,6 +169,83 @@ function AppointmentsPage() {
 
   const tabs = ['Pending', 'Approved', 'Completed', 'Rejected', 'All'];
 
+  const getServicesLabel = (appointment) => (
+    appointment.services && appointment.services.length > 0
+      ? appointment.services.map((service) => service.name || service).join(', ')
+      : appointment.service || 'N/A'
+  );
+
+  const getTimeLabel = (appointment) => (
+    appointment.startTime
+      ? `${appointment.startTime}${appointment.endTime ? ` - ${appointment.endTime}` : ''}`
+      : appointment.time
+  );
+
+  const renderMobileActions = (appointment) => {
+    const allowedStatuses = getAllowedStatuses(appointment).filter((status) => status !== appointment.status);
+
+    if (allowedStatuses.length === 0) {
+      return (
+        <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-gray-400">
+          No further actions available
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex flex-wrap gap-2">
+        {allowedStatuses.includes('Approved') && (
+          <GoldButton
+            type="button"
+            onClick={() => handleStatusChange(appointment._id, 'Approved')}
+            className="rounded-lg px-4 py-2 text-sm"
+          >
+            Accept
+          </GoldButton>
+        )}
+        {allowedStatuses.includes('Rejected') && (
+          <GoldButton
+            type="button"
+            variant="ghost"
+            onClick={() => handleStatusChange(appointment._id, 'Rejected')}
+            className="rounded-lg border border-red-900/50 bg-[#1a1a1a] px-4 py-2 text-sm text-red-400 hover:border-transparent hover:bg-red-900/80 hover:text-white"
+          >
+            Reject
+          </GoldButton>
+        )}
+        {allowedStatuses.includes('Completed') && (
+          <GoldButton
+            type="button"
+            onClick={() => handleStatusChange(appointment._id, 'Completed')}
+            className="rounded-lg px-4 py-2 text-sm"
+          >
+            Complete
+          </GoldButton>
+        )}
+        {allowedStatuses.includes('No-Show') && (
+          <GoldButton
+            type="button"
+            variant="ghost"
+            onClick={() => handleStatusChange(appointment._id, 'No-Show')}
+            className="rounded-lg border border-white/10 bg-black/20 px-4 py-2 text-sm text-gray-300 hover:border-[#d4af37]/40 hover:text-[#d4af37]"
+          >
+            No-Show
+          </GoldButton>
+        )}
+        {allowedStatuses.includes('Pending') && (
+          <GoldButton
+            type="button"
+            variant="ghost"
+            onClick={() => handleStatusChange(appointment._id, 'Pending')}
+            className="rounded-lg border border-white/10 bg-black/20 px-4 py-2 text-sm text-gray-300 hover:border-[#d4af37]/40 hover:text-[#d4af37]"
+          >
+            Mark Pending
+          </GoldButton>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="w-full max-w-7xl mx-auto">
       <header className="mb-8">
@@ -255,7 +332,57 @@ function AppointmentsPage() {
           </div>
         ) : (
           <div className="salon-scrollbar max-h-[520px] overflow-y-auto pt-6">
-            <div className="overflow-x-auto">
+            <div className="space-y-4 md:hidden">
+              {filteredAppointments.map((appt) => {
+                const customerPhone = appt.user?.phone || appt.user?.phoneNumber;
+                const customerName = appt.user?.name || 'Unknown User';
+
+                return (
+                  <div
+                    key={appt._id}
+                    className="mb-4 flex flex-col gap-3 rounded-xl border border-white/10 bg-[#111111]/70 p-4 backdrop-blur-md"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-lg font-semibold text-white">{customerName}</p>
+                        <p className="mt-1 text-sm text-gray-400">{new Date(appt.date).toLocaleDateString()}</p>
+                      </div>
+                      <StatusBadge status={appt.status} />
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <p className="text-sm">
+                        <span className="text-gray-400">Client:</span>{' '}
+                        <span className="text-white">{customerName}</span>
+                      </p>
+                      <p className="text-sm">
+                        <span className="text-gray-400">Phone:</span>{' '}
+                        <span className="text-white">{customerPhone || 'No phone provided'}</span>
+                      </p>
+                      <p className="text-sm">
+                        <span className="text-gray-400">Service:</span>{' '}
+                        <span className="text-white">{getServicesLabel(appt)}</span>
+                      </p>
+                      <p className="text-sm">
+                        <span className="text-gray-400">Time:</span>{' '}
+                        <span className="text-white">{getTimeLabel(appt)}</span>
+                      </p>
+                      <p className="text-sm">
+                        <span className="text-gray-400">Status:</span>{' '}
+                        <span className="text-white">{appt.status}</span>
+                      </p>
+                    </div>
+
+                    <div className="border-t border-white/10 pt-3">
+                      <p className="mb-3 text-xs uppercase tracking-[0.16em] text-[#d4af37]">Actions</p>
+                      {renderMobileActions(appt)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
               <table className="salon-table">
                 <thead className="sticky top-0 bg-[#0a0a0a]/90">
                   <tr>
@@ -286,14 +413,12 @@ function AppointmentsPage() {
                           )}
                         </td>
                         <td className="salon-table-td text-sm text-gray-300">
-                          {appt.services && appt.services.length > 0
-                            ? appt.services.map((service) => service.name || service).join(', ')
-                            : appt.service || 'N/A'}
+                          {getServicesLabel(appt)}
                         </td>
                         <td className="salon-table-td">
                           <div className="text-sm font-semibold text-gray-200">{new Date(appt.date).toLocaleDateString()}</div>
                           <div className="mt-1 text-xs text-gray-400">
-                            {appt.startTime ? `${appt.startTime}${appt.endTime ? ` - ${appt.endTime}` : ''}` : appt.time}
+                            {getTimeLabel(appt)}
                           </div>
                         </td>
                         <td className="salon-table-td">
