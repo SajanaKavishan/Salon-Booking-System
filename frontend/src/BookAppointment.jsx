@@ -244,7 +244,7 @@ function BookAppointment() {
       <div className="relative z-10 min-h-screen py-10">
         <div className="salon-shell max-w-6xl">
           <div className="mb-6">
-            <GoldButton type="button" variant="ghost" onClick={() => navigate('/dashboard')} className="px-0 py-0 text-sm font-medium text-[#d4af37] hover:bg-transparent hover:text-yellow-400">
+            <GoldButton type="button" variant="ghost" onClick={() => navigate('/dashboard')} className="px-0 py-0 text-xl font-medium text-[#d4af37] hover:bg-transparent hover:text-yellow-400">
               <span aria-hidden="true">←</span>
               Back to Dashboard
             </GoldButton>
