@@ -6,7 +6,7 @@ import {
   GlassCard,
   SectionPanel,
   StatusBadge
-} from './components/SystemUI';
+} from '../../components/admin/SystemUI';
 
 function AdminDashboard() {
   const [appointments, setAppointments] = useState([]);

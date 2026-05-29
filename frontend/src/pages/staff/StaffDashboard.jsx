@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
-import { GlassCard, GoldButton, StatusBadge } from './components/SystemUI';
+import { GlassCard, GoldButton, StatusBadge } from '../../components/admin/SystemUI';
 
 const timeToMinutes = (timeStr) => {
   if (!timeStr || typeof timeStr !== 'string') return 0;
@@ -35,10 +35,12 @@ const buildAppointmentDateTime = (appointment) => {
 };
 
 function StaffDashboard() {
-  const [user, setUser] = useState(null);
+  const [_user, setUser] = useState(null);
   const [appointments, setAppointments] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [actionKey, setActionKey] = useState('');
+  const staffName = localStorage.getItem('userName') || 'Staff';
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -46,6 +48,7 @@ function StaffDashboard() {
 
     if (!token || !storedUser) {
       setIsLoading(false);
+      setError('Authentication token not found. Please log in again.');
       return;
     }
 
@@ -54,15 +57,24 @@ function StaffDashboard() {
 
     const fetchSchedule = async () => {
       try {
-        const response = await axios.get('http://localhost:5000/api/appointments/staff-schedule', {
+        setError(null);
+        const response = await axios.get('http://localhost:5000/api/appointments/staff', {
           headers: {
             Authorization: `Bearer ${token}`
           }
         });
+        console.log("Get data from backend:", response.data); 
         setAppointments(response.data);
       } catch (error) {
-        console.error('Error fetching staff appointments:', error);
-        toast.error('Failed to load staff dashboard.');
+        console.error('Error fetching staff appointments:', {
+          message: error.message,
+          status: error.response?.status,
+          data: error.response?.data,
+          url: error.config?.url
+        });
+        const errorMessage = error.response?.data?.message || 'Failed to load appointments. Please try again later.';
+        setError(errorMessage);
+        toast.error(errorMessage);
       } finally {
         setIsLoading(false);
       }
@@ -71,22 +83,16 @@ function StaffDashboard() {
     fetchSchedule();
   }, []);
 
-  const todayKey = useMemo(() => {
-    const now = new Date();
-    const month = `${now.getMonth() + 1}`.padStart(2, '0');
-    const day = `${now.getDate()}`.padStart(2, '0');
-    return `${now.getFullYear()}-${month}-${day}`;
-  }, []);
 
   const todayAppointments = useMemo(() => {
     return appointments
-      .filter((appointment) => appointment.date === todayKey)
+      //.filter((appointment) => appointment.date === todayKey)
       .sort((first, second) => {
         const firstDate = buildAppointmentDateTime(first)?.getTime() || 0;
         const secondDate = buildAppointmentDateTime(second)?.getTime() || 0;
         return firstDate - secondDate;
       });
-  }, [appointments, todayKey]);
+  }, [appointments]);
 
   const pendingApprovals = todayAppointments.filter((appointment) => appointment.status === 'Pending').length;
   const completedSessions = todayAppointments.filter((appointment) => appointment.status === 'Completed').length;
@@ -168,7 +174,7 @@ function StaffDashboard() {
     <div className="w-full max-w-7xl mx-auto">
       <header className="mb-8 rounded-2xl border border-white/10 bg-[#111111]/70 p-6 shadow-xl backdrop-blur-md">
         <h1 className="text-4xl font-serif font-bold tracking-tight text-white">
-          Welcome back, <span className="text-[#d4af37]">{user?.name || 'Staff Member'}</span>
+          Welcome back, <span className="text-[#d4af37]">{staffName}</span>
         </h1>
         <p className="mt-3 text-base text-gray-400">Here is your schedule for today.</p>
       </header>
@@ -205,6 +211,22 @@ function StaffDashboard() {
             {todayAppointments.length} scheduled
           </div>
         </div>
+
+        {error && (
+          <div className="mb-6 rounded-xl border border-red-700/50 bg-red-900/20 p-4 backdrop-blur-sm">
+            <div className="flex gap-3">
+              <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full border border-red-700/50 bg-red-900/30 text-red-400">
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M12 8v4m0 4v.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-red-400">Error Loading Appointments</p>
+                <p className="mt-1 text-xs text-red-300/80">{error}</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {isLoading ? (
           <div className="grid gap-4">

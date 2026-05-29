@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
-import { DarkSelect, GoldButton, StatusBadge } from '../../components/SystemUI';
+import { DarkSelect, GoldButton, StatusBadge } from '../../components/admin/SystemUI';
 
 const finalStatuses = ['Completed', 'Rejected', 'Cancelled', 'No-Show'];
 
@@ -11,6 +11,8 @@ function AppointmentsPage() {
   const [activeTab, setActiveTab] = useState('Pending');
   const [dateFilter, setDateFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
+  const userRole = localStorage.getItem('userRole') || 'customer';
+  const isAdmin = userRole === 'admin';
 
   const timeTo24Hour = (timeStr) => {
     if (!timeStr || typeof timeStr !== 'string') return { hours: 0, minutes: 0 };
@@ -45,6 +47,17 @@ function AppointmentsPage() {
     const currentStatus = appointment.status;
 
     if (finalStatuses.includes(currentStatus)) return [currentStatus];
+    if (!isAdmin) {
+      if (currentStatus === 'Approved') {
+        const options = ['Approved'];
+        if (isPastStartTime(appointment.date, appointment.startTime)) {
+          options.push('Completed', 'No-Show');
+        }
+        return options;
+      }
+      return [currentStatus];
+    }
+
     if (currentStatus === 'Pending') return ['Pending', 'Approved', 'Rejected'];
     if (currentStatus === 'Approved') {
       const options = ['Approved', 'No-Show'];
@@ -61,20 +74,32 @@ function AppointmentsPage() {
     const fetchAppointments = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await axios.get('http://localhost:5000/api/appointments/all', {
+        if (!token) {
+          toast.error('Please log in again to load appointments.');
+          return;
+        }
+
+        const endpoint = isAdmin
+          ? 'http://localhost:5000/api/appointments/all'
+          : 'http://localhost:5000/api/appointments/staff-schedule';
+
+        const response = await axios.get(endpoint, {
           headers: { Authorization: `Bearer ${token}` }
         });
         setAppointments(response.data);
       } catch (error) {
         console.error('Error fetching all appointments:', error);
-        toast.error('Could not load appointments right now.');
+        const message = error.response?.status === 401
+          ? 'You are not authorized to view these appointments.'
+          : 'Could not load appointments right now.';
+        toast.error(message);
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchAppointments();
-  }, []);
+  }, [isAdmin]);
 
   const handleStatusChange = async (id, newStatus) => {
     try {
@@ -88,8 +113,17 @@ function AppointmentsPage() {
       }
 
       const token = localStorage.getItem('token');
+      if (!token) {
+        toast.error('Please log in again to update appointment status.');
+        return;
+      }
+
+      const statusEndpoint = isAdmin
+        ? `http://localhost:5000/api/appointments/${id}/status`
+        : `http://localhost:5000/api/appointments/${id}/staff-status`;
+
       await axios.put(
-        `http://localhost:5000/api/appointments/${id}/status`,
+        statusEndpoint,
         { status: newStatus },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -167,7 +201,9 @@ function AppointmentsPage() {
       });
   }, [appointments, activeTab, dateFilter, searchQuery]);
 
-  const tabs = ['Pending', 'Approved', 'Completed', 'Rejected', 'All'];
+  const tabs = isAdmin
+    ? ['Pending', 'Approved', 'Completed', 'Rejected', 'All']
+    : ['Approved', 'Completed', 'No-Show', 'All'];
 
   const getServicesLabel = (appointment) => (
     appointment.services && appointment.services.length > 0

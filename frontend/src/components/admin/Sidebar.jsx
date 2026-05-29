@@ -96,7 +96,7 @@ function Sidebar({ isOpen = false, onClose = () => {} }) {
 
   const handleLogout = () => {
     clearAuthStorage();
-    navigate('/login');
+    navigate('/');
   };
 
   const handleNavigate = (to) => {

@@ -1,12 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
+import { FaEye, FaEyeSlash } from 'react-icons/fa';
 import { GlassCard, GoldButton } from './SystemUI';
 
 function StaffManager() {
   const fieldClassName = 'w-full bg-black/50 border border-gray-700 rounded-lg p-3 text-white focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] outline-none transition-all';
   const [staffList, setStaffList] = useState([]);
-  const [formData, setFormData] = useState({ name: '', specialty: '', workingHours: '', offDays: '' });
+  const [formData, setFormData] = useState({ name: '', email: '', password: '', specialty: '', workingHours: '', offDays: '' });
+  const [showPassword, setShowPassword] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
   const [imagePreview, setImagePreview] = useState('');
   const fileInputRef = useRef(null);
@@ -93,6 +95,19 @@ function StaffManager() {
   const handleAddStaff = async (e) => {
     e.preventDefault();
     try {
+      const token = localStorage.getItem('token');
+      const authHeaders = token ? { headers: { Authorization: `Bearer ${token}` } } : undefined;
+
+      await axios.post(
+        'http://localhost:5000/api/users/register-staff',
+        {
+          name: formData.name,
+          email: formData.email,
+          password: formData.password,
+        },
+        authHeaders
+      );
+
       const payload = new FormData();
       payload.append('name', formData.name);
       payload.append('specialty', formData.specialty);
@@ -104,7 +119,7 @@ function StaffManager() {
 
       const response = await axios.post('http://localhost:5000/api/staff', payload);
       setStaffList((currentStaff) => [...currentStaff, response.data]);
-      setFormData({ name: '', specialty: '', workingHours: '', offDays: '' });
+      setFormData({ name: '', email: '', password: '', specialty: '', workingHours: '', offDays: '' });
       clearSelectedImage();
       toast.success('Staff member added successfully!');
     } catch (error) {
@@ -155,8 +170,29 @@ function StaffManager() {
   return (
     <div className="space-y-8">
       <section className="rounded-2xl border border-white/10 bg-[#111111]/70 p-6 shadow-xl backdrop-blur-md">
-        <form onSubmit={handleAddStaff} className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <form onSubmit={handleAddStaff} className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           <input type="text" name="name" placeholder="Name" value={formData.name} onChange={handleInputChange} required className={fieldClassName} />
+          <input type="email" name="email" placeholder="Email Address" value={formData.email} onChange={handleInputChange} required className={fieldClassName} autoComplete="email" />
+          <div className="relative">
+            <input
+              type={showPassword ? 'text' : 'password'}
+              name="password"
+              placeholder="Temporary Password"
+              value={formData.password}
+              onChange={handleInputChange}
+              required
+              className={`${fieldClassName} pr-12`}
+              autoComplete="new-password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((prev) => !prev)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#d4af37] transition-colors hover:text-yellow-400"
+              aria-label={showPassword ? 'Hide temporary password' : 'Show temporary password'}
+            >
+              {showPassword ? <FaEyeSlash size={18} /> : <FaEye size={18} />}
+            </button>
+          </div>
           <select name="specialty" value={formData.specialty} onChange={handleInputChange} required className={fieldClassName}>
             <option value="" disabled className="bg-[#111111] text-gray-500">Select Specialty</option>
             {specialtyOptions.map((option) => (
@@ -176,7 +212,7 @@ function StaffManager() {
             ))}
           </select>
 
-          <div className="md:col-span-2 lg:col-span-4">
+          <div className="md:col-span-2 xl:col-span-3">
             <div
               onClick={() => fileInputRef.current?.click()}
               onDrop={handleDrop}
@@ -220,7 +256,7 @@ function StaffManager() {
             </div>
           </div>
 
-          <div className="md:col-span-2 lg:col-span-4">
+          <div className="md:col-span-2 xl:col-span-3">
             <GoldButton type="submit" className="rounded-lg px-5 py-3 font-bold shadow-[0_0_20px_rgba(212,175,55,0.28)] hover:shadow-[0_0_28px_rgba(212,175,55,0.4)]">
               + Add Staff
             </GoldButton>

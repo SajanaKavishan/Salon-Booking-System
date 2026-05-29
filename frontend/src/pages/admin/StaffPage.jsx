@@ -1,5 +1,5 @@
 import React from 'react';
-import StaffManager from '../../components/StaffManager';
+import StaffManager from '../../components/admin/StaffManager';
 
 function StaffPage() {
   return (

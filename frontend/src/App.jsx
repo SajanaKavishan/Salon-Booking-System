@@ -1,25 +1,26 @@
 import React from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import Home from './pages/Home';
-import Login from './pages/Login'; 
-import Dashboard from './Dashboard';
-import ProtectedRoute from './ProtectedRoute';
-import CustomerRoute from './CustomerRoute';
-import Profile from './pages/Profile';
-import BookAppointment from './BookAppointment';
-import AdminDashboard from './AdminDashboard';
-import StaffDashboard from './StaffDashboard';
-import Register from './pages/Register';
-import Navbar from './Navbar';
+import Home from './pages/auth/Home';
+import Login from './pages/auth/Login';
+import Register from './pages/auth/Register';
+import Dashboard from './pages/customer/Dashboard';
+import Profile from './pages/customer/Profile';
+import BookAppointment from './pages/customer/BookAppointment';
+import AdminDashboard from './pages/admin/AdminDashboard';
+import StaffDashboard from './pages/staff/StaffDashboard';
+import StaffProfile from './pages/staff/StaffProfile';
+import ProtectedRoute from './routes/ProtectedRoute';
+import CustomerRoute from './routes/CustomerRoute';
+import Navbar from './components/common/Navbar';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
-import AdminMessages from './components/AdminMessages';
+import AdminMessages from './components/admin/AdminMessages';
 import Layout from './pages/admin/Layout';
 import AppointmentsPage from './pages/admin/AppointmentsPage';
 import ClientsPage from './pages/admin/ClientsPage';
 import StaffPage from './pages/admin/StaffPage';
 import ServicesPage from './pages/admin/ServicesPage';
-import StaffProfile from './StaffProfile';
+import SettingsPage from './pages/admin/SettingsPage';
 
 function PlaceholderPage({ title, subtitle }) {
   return (
@@ -70,7 +71,7 @@ function App() {
             <Route path="staff" element={<StaffPage />} />
             <Route path="services" element={<ServicesPage />} />
             <Route path="analytics" element={<PlaceholderPage title="Analytics" subtitle="Analytics dashboard will be available here." />} />
-            <Route path="settings" element={<PlaceholderPage title="Settings" subtitle="Account and system settings will be available here." />} />
+            <Route path="settings" element={<SettingsPage />} />
           </Route>
 
           <Route 

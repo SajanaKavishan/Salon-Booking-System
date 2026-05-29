@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'react-toastify';
-import { DashboardStatCard, GlassCard, GoldButton, SectionPanel, StatusBadge } from './components/SystemUI';
+import { DashboardStatCard, GlassCard, GoldButton, SectionPanel, StatusBadge } from '../../components/admin/SystemUI';
 
 function Dashboard() {
   const navigate = useNavigate();

@@ -1,5 +1,5 @@
 import React from 'react';
-import { GlassCard, SectionPanel } from '../../components/SystemUI';
+import { GlassCard, SectionPanel } from '../../components/admin/SystemUI';
 
 function ClientsPage() {
   return (

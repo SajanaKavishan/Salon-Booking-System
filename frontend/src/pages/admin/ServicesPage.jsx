@@ -1,5 +1,5 @@
 import React from 'react';
-import ServiceManager from '../../components/ServiceManager';
+import ServiceManager from '../../components/admin/ServiceManager';
 
 function ServicesPage() {
   return (

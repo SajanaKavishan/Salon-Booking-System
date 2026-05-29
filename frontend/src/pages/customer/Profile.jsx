@@ -1,7 +1,7 @@
 import React, { useState } from 'react'; 
 import axios from 'axios';
 import { toast } from 'react-toastify';
-import Spinner from '../components/Spinner';
+import Spinner from '../../components/common/Spinner';
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
 
 function Profile() {

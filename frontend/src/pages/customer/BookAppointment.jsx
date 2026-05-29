@@ -2,8 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import Spinner from './components/Spinner';
-import { DarkInput, GlassCard, GoldButton, SectionPanel } from './components/SystemUI';
+import Spinner from '../../components/common/Spinner';
+import { Button } from '../../components/common/button';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../../components/common/card';
+import { DarkInput, GlassCard } from '../../components/admin/SystemUI';
+import { useSalonSettings } from '../../hooks/useSalonSettings';
 
 const ANY_STYLIST = '__ANY_STYLIST__';
 
@@ -28,9 +31,10 @@ function BookAppointment() {
   const [totalPrice, setTotalPrice] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [isOptionsLoading, setIsOptionsLoading] = useState(true);
+  const { settings } = useSalonSettings();
 
   const navigate = useNavigate();
-  const fallbackAvatarUrl = 'https://ui-avatars.com/api/?name=Stylist&background=d4af37&color=111111&bold=true&size=256';
+  const fallbackAvatarUrl = 'https://ui-avatars.com/api/?name=Stylist&background=d6b36a&color=0f1115&bold=true&size=256';
 
   const generateTimeSlots = () => {
     const slots = [];
@@ -90,6 +94,19 @@ function BookAppointment() {
   }, [date, stylist]);
 
   useEffect(() => {
+    if (!date || settings.weekendBookings) return;
+
+    const selectedDate = new Date(`${date}T00:00:00`);
+    const day = selectedDate.getDay();
+
+    if (day === 0 || day === 6) {
+      setDate('');
+      setTime('');
+      toast.error('Weekend bookings are currently unavailable.');
+    }
+  }, [date, settings.weekendBookings]);
+
+  useEffect(() => {
     const total = servicesList
       .filter((service) => selectedServices.includes(service._id))
       .reduce((sum, service) => sum + (service.price || 0), 0);
@@ -115,6 +132,25 @@ function BookAppointment() {
     { number: 4, title: 'Review' }
   ];
 
+  const stepHeader = {
+    1: {
+      title: 'Step 1: Select Service',
+      description: 'Choose one or more services to personalize this appointment.'
+    },
+    2: {
+      title: 'Step 2: Choose a Stylist',
+      description: 'Pick a specific stylist or let us match you with the next available.'
+    },
+    3: {
+      title: 'Step 3: Pick Date & Time',
+      description: 'Select your preferred date, then choose from the open time slots.'
+    },
+    4: {
+      title: 'Step 4: Review Booking',
+      description: 'Confirm the details before you finalize your appointment.'
+    }
+  }[step];
+
   const handleServiceToggle = (serviceId) => {
     setSelectedServices((prev) => (
       prev.includes(serviceId)
@@ -138,6 +174,15 @@ function BookAppointment() {
 
     try {
       const token = localStorage.getItem('token');
+      const selectedDate = new Date(`${date}T00:00:00`);
+      const day = selectedDate.getDay();
+
+      if (!settings.weekendBookings && (day === 0 || day === 6)) {
+        toast.error('Weekend bookings are currently unavailable.');
+        setIsLoading(false);
+        return;
+      }
+
       const bookingData = {
         date,
         startTime: time,
@@ -238,181 +283,167 @@ function BookAppointment() {
   };
 
   return (
-    <div className="salon-page bg-[url('/bookingBg.jpg')]">
+    <div className="salon-page">
       <div className="salon-page-overlay fixed inset-0"></div>
+      <div className="pointer-events-none absolute -top-32 left-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-[#7c5cfc]/20 blur-[140px]" />
+      <div className="pointer-events-none absolute right-[-10%] top-[20%] h-96 w-96 rounded-full bg-[#d6b36a]/15 blur-[160px]" />
 
       <div className="relative z-10 min-h-screen py-10">
         <div className="salon-shell max-w-6xl">
           <div className="mb-6">
-            <GoldButton type="button" variant="ghost" onClick={() => navigate('/dashboard')} className="px-0 py-0 text-xl font-medium text-[#d4af37] hover:bg-transparent hover:text-yellow-400">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => navigate('/dashboard')}
+              className="px-0 py-0 text-lg font-medium text-[#d6b36a] hover:bg-transparent hover:text-white"
+            >
               <span aria-hidden="true">←</span>
               Back to Dashboard
-            </GoldButton>
+            </Button>
           </div>
 
           <div className="grid gap-8 xl:grid-cols-[1.5fr_0.85fr]">
-            <SectionPanel className="p-8">
-              <div className="mb-8">
-                <h2 className="text-3xl font-serif text-white">
-                  Book an <span className="text-[#d4af37]">Appointment</span>
-                </h2>
-                <p className="mt-2 text-sm font-light text-gray-400">
-                  Move step by step and build a booking that fits your schedule.
-                </p>
-              </div>
+            <Card className="max-w-2xl mx-auto salon-glass">
+              <CardHeader>
+                <p className="text-xs uppercase tracking-[0.24em] text-gray-500">Book an Appointment</p>
+                <CardTitle className="text-primary font-serif">{stepHeader.title}</CardTitle>
+                <CardDescription>{stepHeader.description}</CardDescription>
+              </CardHeader>
 
-              <div className="mb-8 grid gap-4 sm:grid-cols-4">
-                {stepItems.map((item) => {
-                  const isActive = step === item.number;
-                  const isComplete = step > item.number;
+              <CardContent>
+                <div className="mb-8 grid gap-3 rounded-2xl border border-white/10 bg-[#0f1115]/60 p-3 sm:grid-cols-4">
+                  {stepItems.map((item) => {
+                    const isActive = step === item.number;
+                    const isComplete = step > item.number;
 
-                  return (
-                    <button
-                      key={item.number}
-                      type="button"
-                      onClick={() => {
-                        if (item.number < step) setStep(item.number);
-                      }}
-                      className={`flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition ${
-                        isActive
-                          ? 'border-[#d4af37] bg-[#d4af37]/10'
-                          : isComplete
-                            ? 'border-[#d4af37]/30 bg-[#d4af37]/5 hover:border-[#d4af37]/50'
-                            : 'border-white/10 bg-[#0a0a0a]/40'
-                      }`}
-                    >
-                      <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
-                        isActive
-                          ? 'bg-[#d4af37] text-black'
-                          : isComplete
-                            ? 'border border-[#d4af37]/40 bg-[#d4af37]/10 text-[#d4af37]'
-                            : 'border border-white/10 bg-[#111111] text-gray-400'
-                      }`}>
-                        {isComplete ? '✓' : item.number}
-                      </div>
-                      <div>
-                        <p className={`text-sm font-semibold ${isActive ? 'text-white' : 'text-gray-300'}`}>{item.title}</p>
-                        <p className="text-xs text-gray-500">Step {item.number}</p>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {isOptionsLoading ? (
-                <div className="flex min-h-[420px] items-center justify-center">
-                  <Spinner />
+                    return (
+                      <button
+                        key={item.number}
+                        type="button"
+                        onClick={() => {
+                          if (item.number < step) setStep(item.number);
+                        }}
+                        className={`lux-step flex items-center gap-3 rounded-xl border border-white/10 bg-[#0f1115]/70 p-3 transition ${
+                          isActive ? 'lux-step-active shadow-[0_0_0_1px_rgba(214,179,106,0.35)]' : isComplete ? 'lux-step-complete' : ''
+                        } hover:border-white/20`}
+                      >
+                        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
+                          isActive
+                            ? 'bg-[#d6b36a] text-[#0f1115]'
+                            : isComplete
+                              ? 'border border-[#d6b36a]/40 bg-[#d6b36a]/10 text-[#d6b36a]'
+                              : 'border border-white/10 bg-[#141821] text-gray-400'
+                        }`}>
+                          {isComplete ? '✓' : item.number}
+                        </div>
+                        <div>
+                          <p className={`text-sm font-medium ${isActive ? 'text-white' : 'text-gray-300'}`}>{item.title}</p>
+                          <p className="text-xs text-gray-500">Step {item.number}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
-              ) : (
-                <div className="min-h-[420px]">
-                  {step === 1 && (
-                    <div>
-                      <div className="mb-5">
-                        <h3 className="salon-heading">Choose Services</h3>
-                        <p className="salon-subtext mt-2">Select one or more services for this appointment.</p>
-                      </div>
 
-                      <div className="grid gap-4 md:grid-cols-2">
-                        {servicesList.map((serviceItem) => {
-                          const isSelected = selectedServices.includes(serviceItem._id);
-
-                          return (
-                            <button
-                              key={serviceItem._id}
-                              type="button"
-                              onClick={() => handleServiceToggle(serviceItem._id)}
-                              className={`rounded-xl border p-5 text-left transition-all duration-300 ${
-                                isSelected
-                                  ? 'border-[#d4af37] bg-[#d4af37]/10 shadow-[0_0_18px_rgba(212,175,55,0.1)]'
-                                  : 'border-white/10 bg-[#0a0a0a]/60 hover:border-[#d4af37]/50'
-                              }`}
-                            >
-                              <div className="flex items-start justify-between gap-4">
-                                <div>
-                                  <h4 className="font-semibold text-white">{serviceItem.name}</h4>
-                                  <p className="mt-1 text-sm text-gray-500">{serviceItem.duration || 0} mins</p>
-                                </div>
-                                <div className={`flex h-6 w-6 items-center justify-center rounded-full border text-xs font-bold ${
-                                  isSelected
-                                    ? 'border-[#d4af37] bg-[#d4af37] text-black'
-                                    : 'border-white/15 text-gray-500'
-                                }`}>
-                                  {isSelected ? '✓' : '+'}
-                                </div>
-                              </div>
-                              <p className="mt-4 text-lg font-semibold text-[#d4af37]">Rs. {serviceItem.price || 0}</p>
-                            </button>
-                          );
-                        })}
-                      </div>
+                  {isOptionsLoading ? (
+                    <div className="flex min-h-[420px] items-center justify-center">
+                      <Spinner />
                     </div>
-                  )}
+                  ) : (
+                    <div className="min-h-[420px] lux-fade-in">
+                      {step === 1 && (
+                        <div>
+                          <div className="grid gap-4 md:grid-cols-2">
+                            {servicesList.map((serviceItem) => {
+                              const isSelected = selectedServices.includes(serviceItem._id);
 
-                  {step === 2 && (
-                    <div>
-                      <div className="mb-5">
-                        <h3 className="salon-heading">Choose a Stylist</h3>
-                        <p className="salon-subtext mt-2">Pick a specific stylist or let the salon assign the next available one.</p>
-                      </div>
-
-                      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                        <button
-                          type="button"
-                          onClick={() => setStylist(ANY_STYLIST)}
-                          className={`rounded-xl border p-5 text-left transition-all duration-300 ${
-                            stylist === ANY_STYLIST
-                              ? 'border-[#d4af37] bg-[#d4af37]/10 shadow-[0_0_18px_rgba(212,175,55,0.1)]'
-                              : 'border-white/10 bg-[#0a0a0a]/60 hover:border-[#d4af37]/50'
-                          }`}
-                        >
-                          <div className="flex h-14 w-14 items-center justify-center rounded-full border border-[#d4af37]/20 bg-[#d4af37]/10 text-xl font-bold text-[#d4af37]">
-                            A
+                              return (
+                                <button
+                                  key={serviceItem._id}
+                                  type="button"
+                                  onClick={() => handleServiceToggle(serviceItem._id)}
+                                  className={`lux-card lux-card-hover p-5 text-left ${
+                                    isSelected
+                                      ? 'lux-card-selected'
+                                      : 'hover:border-[#d6b36a]/30'
+                                  }`}
+                                >
+                                  <div className="flex items-start justify-between gap-4">
+                                    <div>
+                                      <h4 className="text-white font-medium">{serviceItem.name}</h4>
+                                      <p className="mt-1 text-sm text-gray-500">{serviceItem.duration || 0} mins</p>
+                                    </div>
+                                    <div className={`flex h-6 w-6 items-center justify-center rounded-full border text-xs font-bold ${
+                                      isSelected
+                                        ? 'border-[#d6b36a] bg-[#d6b36a] text-[#0f1115]'
+                                        : 'border-white/15 text-gray-500'
+                                    }`}>
+                                      {isSelected ? '✓' : '+'}
+                                    </div>
+                                  </div>
+                                  <p className="mt-4 text-lg font-semibold text-[#d6b36a]">Rs. {serviceItem.price || 0}</p>
+                                </button>
+                              );
+                            })}
                           </div>
-                          <h4 className="mt-4 font-semibold text-white">Any Available Stylist</h4>
-                          <p className="mt-1 text-sm text-gray-400">We’ll match you with someone available for your selected time.</p>
-                        </button>
+                        </div>
+                      )}
 
-                        {stylistsList.map((stylistItem) => {
-                          const isSelected = stylist === stylistItem._id;
-                          const imageSrc = stylistItem.imageUrl?.trim() ? stylistItem.imageUrl : fallbackAvatarUrl;
-
-                          return (
+                      {step === 2 && (
+                        <div>
+                          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                             <button
-                              key={stylistItem._id}
                               type="button"
-                              onClick={() => setStylist(stylistItem._id)}
-                              className={`rounded-xl border p-5 text-left transition-all duration-300 ${
-                                isSelected
-                                  ? 'border-[#d4af37] bg-[#d4af37]/10 shadow-[0_0_18px_rgba(212,175,55,0.1)]'
-                                  : 'border-white/10 bg-[#0a0a0a]/60 hover:border-[#d4af37]/50'
+                              onClick={() => setStylist(ANY_STYLIST)}
+                              className={`lux-card lux-card-hover p-5 text-left ${
+                                stylist === ANY_STYLIST
+                                  ? 'lux-card-selected'
+                                  : 'hover:border-[#d6b36a]/30'
                               }`}
                             >
-                              <img
-                                src={imageSrc}
-                                alt={stylistItem.name}
-                                className={`h-14 w-14 rounded-full border-2 object-cover ${
-                                  isSelected ? 'border-[#d4af37]' : 'border-white/10'
-                                }`}
-                                onError={(e) => {
-                                  e.currentTarget.src = fallbackAvatarUrl;
-                                }}
-                              />
-                              <h4 className="mt-4 font-semibold text-white">{stylistItem.name}</h4>
-                              <p className="mt-1 text-sm text-gray-400">{stylistItem.specialty}</p>
+                              <div className="flex h-14 w-14 items-center justify-center rounded-full border border-[#d6b36a]/20 bg-[#d6b36a]/10 text-xl font-bold text-[#d6b36a]">
+                                A
+                              </div>
+                              <h4 className="mt-4 text-white font-medium">Any Available Stylist</h4>
+                              <p className="mt-1 text-sm text-gray-400">We’ll match you with someone available for your selected time.</p>
                             </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
 
-                  {step === 3 && (
-                    <div>
-                      <div className="mb-5">
-                        <h3 className="salon-heading">Pick Date & Time</h3>
-                        <p className="salon-subtext mt-2">Select your preferred date, then choose from the available time slots.</p>
-                      </div>
+                            {stylistsList.map((stylistItem) => {
+                              const isSelected = stylist === stylistItem._id;
+                              const imageSrc = stylistItem.imageUrl?.trim() ? stylistItem.imageUrl : fallbackAvatarUrl;
 
+                              return (
+                                <button
+                                  key={stylistItem._id}
+                                  type="button"
+                                  onClick={() => setStylist(stylistItem._id)}
+                                  className={`lux-card lux-card-hover p-5 text-left ${
+                                    isSelected
+                                      ? 'lux-card-selected'
+                                      : 'hover:border-[#d6b36a]/30'
+                                  }`}
+                                >
+                                  <img
+                                    src={imageSrc}
+                                    alt={stylistItem.name}
+                                    className={`h-14 w-14 rounded-full border-2 object-cover ${
+                                      isSelected ? 'border-[#d6b36a]' : 'border-white/10'
+                                    }`}
+                                    onError={(e) => {
+                                      e.currentTarget.src = fallbackAvatarUrl;
+                                    }}
+                                  />
+                                  <h4 className="mt-4 text-white font-medium">{stylistItem.name}</h4>
+                                  <p className="mt-1 text-sm text-gray-400">{stylistItem.specialty}</p>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {step === 3 && (
+                        <div>
                       <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
                         <GlassCard className="p-5">
                           <label className="mb-2 block text-sm font-medium text-gray-300">Select Date</label>
@@ -425,8 +456,11 @@ function BookAppointment() {
                             className="color-scheme-dark"
                             style={{ colorScheme: 'dark' }}
                           />
+                          {!settings.weekendBookings && (
+                            <p className="mt-3 text-xs text-amber-300">Weekend bookings are disabled by salon settings.</p>
+                          )}
 
-                          <div className="mt-5 rounded-xl border border-white/10 bg-[#0a0a0a]/50 p-4">
+                          <div className="mt-5 rounded-xl border border-white/10 bg-[#0f1115]/60 p-4">
                             <p className="text-xs uppercase tracking-[0.15em] text-gray-500">Stylist</p>
                             <p className="mt-2 text-sm font-semibold text-white">
                               {stylist === ANY_STYLIST
@@ -464,12 +498,12 @@ function BookAppointment() {
                                     type="button"
                                     disabled={isBooked}
                                     onClick={() => setTime(slot)}
-                                    className={`rounded-lg border py-2.5 text-sm font-medium transition-all duration-300 ${
+                                    className={`rounded-xl border py-2.5 text-sm font-medium transition-all duration-300 ${
                                       isBooked
                                         ? 'cursor-not-allowed border-red-900/20 bg-red-950/30 text-red-500/50 line-through'
                                         : time === slot
-                                          ? 'border-[#d4af37] bg-[#d4af37] text-black shadow-[0_0_10px_rgba(212,175,55,0.4)]'
-                                          : 'border-white/10 bg-[#0a0a0a]/80 text-gray-300 hover:border-[#d4af37] hover:text-[#d4af37]'
+                                          ? 'border-[#d6b36a] bg-[#d6b36a] text-[#0f1115] shadow-[0_0_10px_rgba(214,179,106,0.35)]'
+                                          : 'border-white/10 bg-[#0f1115]/80 text-gray-300 hover:border-[#d6b36a]/60 hover:text-[#d6b36a]'
                                     }`}
                                   >
                                     {slot}
@@ -480,7 +514,7 @@ function BookAppointment() {
                           ) : (
                             <div className="flex min-h-[220px] items-center justify-center rounded-xl border border-white/10 bg-[#0a0a0a]/40 p-6 text-center">
                               <p className="text-sm text-gray-400">
-                                Please choose a <span className="text-[#d4af37]">stylist option</span> and a <span className="text-[#d4af37]">date</span> first.
+                                Please choose a <span className="text-[#d6b36a]">stylist option</span> and a <span className="text-[#d6b36a]">date</span> first.
                               </p>
                             </div>
                           )}
@@ -489,19 +523,14 @@ function BookAppointment() {
                     </div>
                   )}
 
-                  {step === 4 && (
-                    <div>
-                      <div className="mb-5">
-                        <h3 className="salon-heading">Review Booking</h3>
-                        <p className="salon-subtext mt-2">Check the summary before confirming your appointment.</p>
-                      </div>
-
+                      {step === 4 && (
+                        <div>
                       <div className="grid gap-4">
                         <GlassCard className="p-5">
                           <p className="text-xs uppercase tracking-[0.15em] text-gray-500">Services</p>
                           <div className="mt-4 flex flex-wrap gap-2">
                             {selectedServiceDetails.map((service) => (
-                              <span key={service._id} className="rounded-full border border-[#d4af37]/20 bg-[#d4af37]/10 px-3 py-1 text-sm font-medium text-[#d4af37]">
+                              <span key={service._id} className="rounded-full border border-[#d6b36a]/20 bg-[#d6b36a]/10 px-3 py-1 text-sm font-medium text-[#d6b36a]">
                                 {service.name}
                               </span>
                             ))}
@@ -526,39 +555,40 @@ function BookAppointment() {
                         </div>
                       </div>
                     </div>
-                  )}
-                </div>
-              )}
+                    )}
+                  </div>
+                )}
+              </CardContent>
 
-              <div className="mt-8 flex flex-col gap-4 border-t border-white/10 pt-6 sm:flex-row sm:items-center sm:justify-between">
-                <GoldButton
+              <CardFooter className="flex flex-col gap-4 border-t border-white/10 pt-6 sm:flex-row sm:items-center sm:justify-between">
+                <Button
                   type="button"
-                  variant="ghost"
+                  variant="outline"
                   onClick={handlePreviousStep}
                   disabled={step === 1}
-                  className="justify-center border border-white/10 bg-[#0a0a0a]/60 px-5 py-3 hover:bg-white/10 hover:text-white disabled:border-white/5 disabled:bg-transparent"
+                  className="justify-center border-white/10 bg-[#0f1115]/60 px-5 py-3 text-white hover:bg-white/10"
                 >
-                  Previous
-                </GoldButton>
+                  Back
+                </Button>
 
                 <div className="flex flex-col items-stretch gap-3 sm:flex-row">
                   {step < 4 ? (
-                    <GoldButton type="button" onClick={handleNextStep} className="px-6 py-3">
-                      Next Step
-                    </GoldButton>
+                    <Button type="button" onClick={handleNextStep} className="px-6 py-3">
+                      Continue
+                    </Button>
                   ) : (
-                    <GoldButton
+                    <Button
                       type="button"
                       onClick={handleConfirmBookingClick}
                       disabled={isLoading || !canMoveToReview || selectedServices.length === 0}
                       className="px-6 py-3"
                     >
                       {isLoading ? <Spinner /> : 'Confirm Booking'}
-                    </GoldButton>
+                    </Button>
                   )}
                 </div>
-              </div>
-            </SectionPanel>
+              </CardFooter>
+            </Card>
 
             <div className="space-y-6">
               <GlassCard className="p-6">
@@ -566,17 +596,17 @@ function BookAppointment() {
                 <p className="mt-2 text-lg font-semibold text-white">Your appointment snapshot</p>
 
                 <div className="mt-6 space-y-4">
-                  <div className="rounded-xl border border-white/10 bg-[#0a0a0a]/50 p-4">
+                  <div className="rounded-xl border border-white/10 bg-[#0f1115]/60 p-4">
                     <p className="text-xs uppercase tracking-[0.15em] text-gray-500">Services Selected</p>
-                    <p className="mt-2 text-2xl font-serif text-[#d4af37]">{selectedServices.length}</p>
+                    <p className="mt-2 text-2xl text-[#d6b36a] font-heading">{selectedServices.length}</p>
                   </div>
-                  <div className="rounded-xl border border-white/10 bg-[#0a0a0a]/50 p-4">
+                  <div className="rounded-xl border border-white/10 bg-[#0f1115]/60 p-4">
                     <p className="text-xs uppercase tracking-[0.15em] text-gray-500">Estimated Total</p>
-                    <p className="mt-2 text-2xl font-serif text-[#d4af37]">Rs. {totalPrice}</p>
+                    <p className="mt-2 text-2xl text-[#d6b36a] font-heading">Rs. {totalPrice}</p>
                   </div>
-                  <div className="rounded-xl border border-white/10 bg-[#0a0a0a]/50 p-4">
+                  <div className="rounded-xl border border-white/10 bg-[#0f1115]/60 p-4">
                     <p className="text-xs uppercase tracking-[0.15em] text-gray-500">Estimated Duration</p>
-                    <p className="mt-2 text-2xl font-serif text-[#d4af37]">{totalDuration} mins</p>
+                    <p className="mt-2 text-2xl text-[#d6b36a] font-heading">{totalDuration} mins</p>
                   </div>
                 </div>
               </GlassCard>
@@ -607,8 +637,8 @@ function BookAppointment() {
 
       {isPhoneModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-          <GlassCard className="w-full max-w-sm border border-[#d4af37]/50 bg-[#111111] p-6 mx-4">
-            <h3 className="text-xl font-serif text-[#d4af37]">Phone Number Required</h3>
+          <GlassCard className="w-full max-w-sm border border-[#d6b36a]/40 bg-[#141821] p-6 mx-4">
+            <h3 className="text-xl text-[#d6b36a] font-heading">Phone Number Required</h3>
             <p className="mt-2 text-sm text-gray-300">
               Please provide a contact number so our staff can reach you if needed.
             </p>
@@ -622,9 +652,9 @@ function BookAppointment() {
             />
 
             <div className="mt-5 flex justify-end gap-3">
-              <GoldButton
+              <Button
                 type="button"
-                variant="ghost"
+                variant="outline"
                 onClick={() => {
                   setIsPhoneModalOpen(false);
                   setMissingPhone('');
@@ -632,10 +662,10 @@ function BookAppointment() {
                 className="border border-white/20 bg-transparent px-4 py-2 text-white hover:bg-white/10 hover:text-white"
               >
                 Cancel
-              </GoldButton>
-              <GoldButton type="button" onClick={handleSavePhoneAndBook} className="px-4 py-2">
+              </Button>
+              <Button type="button" onClick={handleSavePhoneAndBook} className="px-4 py-2">
                 Save & Continue
-              </GoldButton>
+              </Button>
             </div>
           </GlassCard>
         </div>
