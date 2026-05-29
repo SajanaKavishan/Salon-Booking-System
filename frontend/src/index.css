@@ -1,127 +1,285 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Poppins:wght@500;600&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-	:root {
-		--salon-gold: #d4af37;
-		--salon-gold-hover: #f0c84b;
-		--salon-gold-muted: rgba(212, 175, 55, 0.12);
-		--salon-black: #0a0a0a;
-		--salon-panel: #111111;
-		--salon-panel-soft: rgba(17, 17, 17, 0.7);
-		--salon-border: rgba(255, 255, 255, 0.1);
-		--salon-text-muted: #9ca3af;
-	}
+    :root {
+        --salon-accent: #d6b36a;
+        --salon-accent-strong: #7c5cfc;
+        --salon-accent-muted: rgba(214, 179, 106, 0.12);
+        --salon-bg: #0f1115;
+        --salon-surface: #181c23;
+        --salon-card: rgba(24, 28, 35, 0.72);
+        --salon-border: rgba(255, 255, 255, 0.06);
+        --salon-text-muted: #9aa4b2;
+        --salon-success: #34d399;
+        --salon-warning: #f59e0b;
+        --salon-danger: #ef4444;
+    }
+
+    * {
+        @apply border-border outline-ring/50;
+    }
+
+    h1, h2, h3, h4, h5, h6 {
+        @apply font-serif;
+    }
 }
 
 @layer components {
-	.salon-page {
-		@apply min-h-screen bg-cover bg-center bg-fixed font-sans text-white selection:bg-[#d4af37] selection:text-black;
-	}
+    .salon-page {
+        @apply relative min-h-screen font-sans text-white selection:bg-[#d6b36a] selection:text-[#0f1115];
+        background: radial-gradient(140% 140% at 20% 10%, rgba(124, 92, 252, 0.12) 0%, rgba(15, 17, 21, 0) 55%),
+            radial-gradient(120% 120% at 85% 20%, rgba(214, 179, 106, 0.12) 0%, rgba(15, 17, 21, 0) 50%),
+            #0f1115;
+        overflow: hidden;
+    }
 
-	.salon-page-overlay {
-		@apply absolute inset-0 bg-black/80;
-	}
+    .salon-page-overlay {
+        @apply absolute inset-0 pointer-events-none;
+        background: linear-gradient(180deg, rgba(15, 17, 21, 0.75) 0%, rgba(15, 17, 21, 0.9) 70%, rgba(15, 17, 21, 0.95) 100%);
+        backdrop-filter: blur(8px);
+    }
 
-	.salon-shell {
-		@apply relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
-	}
+    .salon-page-overlay::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background-image: repeating-linear-gradient(
+            0deg,
+            rgba(255, 255, 255, 0.025) 0px,
+            rgba(255, 255, 255, 0.025) 1px,
+            transparent 1px,
+            transparent 2px
+        );
+        opacity: 0.15;
+        pointer-events: none;
+    }
 
-	.salon-glass {
-		@apply rounded-xl border border-white/10 bg-[#111111]/70 shadow-2xl backdrop-blur-md;
-	}
+    .salon-shell {
+        @apply relative z-10 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+    }
 
-	.salon-glass-hover {
-		@apply transition-all duration-300 hover:border-[#d4af37]/50 hover:shadow-[0_0_24px_rgba(212,175,55,0.12)];
-	}
+    .salon-glass {
+        @apply rounded-2xl border shadow-xl;
+        background: var(--salon-card);
+        border-color: var(--salon-border);
+        backdrop-filter: blur(16px);
+    }
 
-	.salon-section {
-		@apply rounded-xl border border-white/10 bg-[#111111]/70 p-6 shadow-2xl backdrop-blur-md;
-	}
+    .salon-glass-hover {
+        @apply transition-all duration-300;
+        box-shadow: 0 20px 45px rgba(0, 0, 0, 0.35);
+    }
 
-	.salon-section-accent {
-		@apply rounded-xl border border-white/10 border-t-4 border-t-[#d4af37] bg-[#111111]/70 p-6 shadow-2xl backdrop-blur-md;
-	}
+    .salon-section {
+        @apply rounded-2xl border p-6 shadow-xl;
+        background: var(--salon-card);
+        border-color: var(--salon-border);
+        backdrop-filter: blur(16px);
+    }
 
-	.salon-heading {
-		@apply font-serif text-2xl text-[#d4af37];
-	}
+    .salon-section-accent {
+        @apply rounded-2xl border border-t-2 p-6 shadow-xl;
+        border-color: var(--salon-border);
+        border-top-color: var(--salon-accent);
+        background: var(--salon-card);
+        backdrop-filter: blur(16px);
+    }
 
-	.salon-subtext {
-		@apply text-sm text-gray-400;
-	}
+    .salon-heading {
+        @apply text-2xl text-white;
+        font-family: 'Poppins', sans-serif;
+        font-weight: 600;
+    }
 
-	.salon-button {
-		@apply inline-flex items-center justify-center gap-2 rounded-md bg-[#d4af37] px-5 py-2.5 font-semibold text-black shadow-[0_0_15px_rgba(212,175,55,0.3)] transition duration-300 hover:bg-yellow-400 hover:shadow-[0_0_25px_rgba(212,175,55,0.45)] disabled:cursor-not-allowed disabled:opacity-60;
-	}
+    .salon-subtext {
+        @apply text-sm;
+        color: var(--salon-text-muted);
+    }
 
-	.salon-button-outline {
-		@apply inline-flex items-center justify-center gap-2 rounded-md border border-[#d4af37]/70 px-5 py-2.5 font-semibold text-[#d4af37] transition duration-300 hover:bg-[#d4af37] hover:text-black disabled:cursor-not-allowed disabled:opacity-60;
-	}
+    .salon-button {
+        @apply inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 font-medium text-[#0f1115] transition duration-300 disabled:cursor-not-allowed disabled:opacity-60;
+        background: var(--salon-accent);
+        box-shadow: 0 12px 30px rgba(214, 179, 106, 0.25);
+    }
 
-	.salon-button-ghost {
-		@apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 font-semibold text-gray-300 transition duration-300 hover:bg-white/10 hover:text-[#d4af37] disabled:cursor-not-allowed disabled:opacity-60;
-	}
+    .salon-button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 18px 38px rgba(214, 179, 106, 0.28);
+    }
 
-	.salon-field {
-		@apply w-full rounded-md border border-white/10 bg-[#0a0a0a]/80 px-4 py-3 text-white placeholder-gray-500 transition focus:border-[#d4af37] focus:outline-none focus:ring-1 focus:ring-[#d4af37] disabled:cursor-not-allowed disabled:opacity-60;
-	}
+    .salon-button-outline {
+        @apply inline-flex items-center justify-center gap-2 rounded-full border px-5 py-2.5 font-medium transition duration-300 disabled:cursor-not-allowed disabled:opacity-60;
+        border-color: rgba(214, 179, 106, 0.5);
+        color: var(--salon-accent);
+    }
 
-	.salon-select {
-		@apply w-full cursor-pointer rounded-md border border-white/20 bg-[#0a0a0a]/80 px-3 py-2 text-gray-200 transition hover:border-white/40 focus:border-[#d4af37] focus:outline-none focus:ring-1 focus:ring-[#d4af37] disabled:cursor-not-allowed disabled:opacity-60;
-	}
+    .salon-button-outline:hover {
+        background: rgba(214, 179, 106, 0.12);
+        color: #f5f7fa;
+    }
 
-	.salon-table {
-		@apply min-w-full text-left;
-	}
+    .salon-button-ghost {
+        @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 font-medium transition duration-300 disabled:cursor-not-allowed disabled:opacity-60;
+        color: var(--salon-text-muted);
+    }
 
-	.salon-table-head {
-		@apply bg-[#0a0a0a]/80 text-[#d4af37];
-	}
+    .salon-button-ghost:hover {
+        color: #f5f7fa;
+        background: rgba(255, 255, 255, 0.08);
+    }
 
-	.salon-table-th {
-		@apply px-6 py-4 text-xs font-medium uppercase tracking-[0.15em];
-	}
+    .salon-field {
+        @apply w-full rounded-xl border px-4 py-3 text-white placeholder-gray-500 transition focus:outline-none disabled:cursor-not-allowed disabled:opacity-60;
+        border-color: var(--salon-border);
+        background: rgba(15, 17, 21, 0.8);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+    }
 
-	.salon-table-td {
-		@apply px-6 py-4;
-	}
+    .salon-field:focus {
+        border-color: var(--salon-accent);
+        box-shadow: 0 0 0 1px var(--salon-accent);
+    }
 
-	.salon-status {
-		@apply inline-flex rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-wider;
-	}
+    .salon-select {
+        @apply w-full cursor-pointer rounded-xl border px-3 py-2 text-gray-200 transition focus:outline-none disabled:cursor-not-allowed disabled:opacity-60;
+        border-color: var(--salon-border);
+        background: rgba(15, 17, 21, 0.8);
+    }
 
-	.salon-status-pending {
-		@apply border-yellow-700/50 bg-yellow-900/30 text-yellow-400;
-	}
+    .salon-select:focus {
+        border-color: var(--salon-accent);
+        box-shadow: 0 0 0 1px var(--salon-accent);
+    }
 
-	.salon-status-approved {
-		@apply border-blue-700/50 bg-blue-900/30 text-blue-400;
-	}
+    .salon-table {
+        @apply min-w-full text-left;
+    }
 
-	.salon-status-completed {
-		@apply border-green-700/50 bg-green-900/30 text-green-400;
-	}
+    .salon-table-head {
+        @apply text-white;
+        background: rgba(15, 17, 21, 0.75);
+    }
 
-	.salon-status-danger {
-		@apply border-red-700/50 bg-red-900/30 text-red-400;
-	}
+    .salon-table-th {
+        @apply px-6 py-4 text-xs font-medium uppercase tracking-[0.15em];
+    }
 
-	.salon-scrollbar {
-		@apply [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-[#d4af37]/50;
-	}
+    .salon-table-td {
+        @apply px-6 py-4;
+    }
+
+    .salon-status {
+        @apply inline-flex rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-wider;
+    }
+
+    .salon-status-pending {
+        @apply border-yellow-700/40 bg-yellow-900/20 text-yellow-400;
+    }
+
+    .salon-status-approved {
+        @apply border-blue-700/40 bg-blue-900/20 text-blue-400;
+    }
+
+    .salon-status-completed {
+        @apply border-green-700/40 bg-green-900/20 text-green-400;
+    }
+
+    .salon-status-danger {
+        @apply border-red-700/40 bg-red-900/20 text-red-400;
+    }
+
+    .font-heading {
+        font-family: 'Poppins', sans-serif;
+        font-weight: 600;
+    }
+
+    .font-brand {
+        font-family: 'Playfair Display', serif;
+        font-weight: 600;
+    }
+
+    .font-ui {
+        font-family: 'Inter', sans-serif;
+        font-weight: 400;
+    }
+
+    .lux-card {
+        @apply rounded-2xl border transition-all duration-300;
+        background: var(--salon-card);
+        border-color: var(--salon-border);
+    }
+
+    .lux-card-hover {
+        @apply hover:-translate-y-0.5;
+        box-shadow: 0 18px 36px rgba(0, 0, 0, 0.35);
+    }
+
+    .lux-card-selected {
+        background: rgba(214, 179, 106, 0.08);
+        border-color: var(--salon-accent);
+        box-shadow: 0 14px 30px rgba(214, 179, 106, 0.18);
+    }
+
+    .lux-step {
+        @apply rounded-2xl border px-4 py-3 text-left transition-all duration-300;
+        background: rgba(15, 17, 21, 0.7);
+        border-color: var(--salon-border);
+    }
+
+    .lux-step-active {
+        background: rgba(214, 179, 106, 0.12);
+        border-color: rgba(214, 179, 106, 0.4);
+    }
+
+    .lux-step-complete {
+        background: rgba(255, 255, 255, 0.03);
+        border-color: rgba(255, 255, 255, 0.12);
+    }
+
+    .lux-fade-in {
+        animation: luxFadeIn 0.5s ease-out;
+    }
 }
 
 .no-scrollbar {
-	-ms-overflow-style: none;
-	scrollbar-width: none;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
 }
 
 .no-scrollbar::-webkit-scrollbar {
-	display: none;
+    display: none;
+}
+
+.salon-scrollbar {
+    scrollbar-color: rgba(214, 179, 106, 0.4) transparent;
+    scrollbar-width: thin;
+}
+
+.salon-scrollbar::-webkit-scrollbar {
+    width: 8px;
+}
+
+.salon-scrollbar::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background-color: rgba(214, 179, 106, 0.4);
 }
 
 body {
-	@apply bg-[#0a0a0a] text-white transition-colors duration-300;
+    @apply bg-background text-foreground font-sans antialiased transition-colors duration-300;
+    
+}
+
+@keyframes luxFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
