@@ -4,8 +4,23 @@ import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useGoogleLogin } from '@react-oauth/google';
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
+import { motion } from 'framer-motion';
+import { Check, Scissors } from 'lucide-react';
 import Spinner from '../../components/common/Spinner';
-import { AuthShell, BrandMark, DarkInput, GlassCard, GoldButton } from '../../components/admin/SystemUI';
+import { AuthShell } from '../../components/admin/SystemUI';
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.15, delayChildren: 0.1 }
+  }
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 25 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: 'easeOut' } }
+};
 
 function Login() {
   const navigate = useNavigate();
@@ -99,116 +114,158 @@ function Login() {
   });
 
   return (
-    <AuthShell backgroundImage="bg-[url('/loginBg.jpg')]">
-      <div className="mx-auto w-full max-w-5xl">
-        <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr] lg:items-start">
-          <div className="hidden flex-col justify-between rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(212,175,55,0.22),_transparent_42%),linear-gradient(180deg,rgba(20,20,20,0.92),rgba(9,9,9,0.88))] p-8 shadow-[0_30px_80px_rgba(0,0,0,0.4)] backdrop-blur-xl sm:p-10 lg:flex">
-            <BrandMark onClick={() => navigate('/')} subtitle="Luxury Salon Experience" className="text-left" />
+    <AuthShell
+      backgroundStyle={{
+        backgroundImage: "url('/loginBg.jpg')",
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        backgroundAttachment: 'fixed'
+      }}
+    >
+      <div className="mx-auto flex w-full max-w-7xl items-center justify-center lg:flex-row lg:justify-between lg:gap-16">
+          <motion.div
+            className="hidden w-full flex-col gap-8 lg:flex lg:w-1/2 lg:pr-6"
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+          >
+            <motion.div variants={itemVariants} className="flex flex-col gap-3">
+              <button
+                type="button"
+                onClick={() => navigate('/')}
+                className="flex items-center gap-3 text-2xl font-serif tracking-[0.2em] text-white sm:text-3xl"
+              >
+                <span className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-black/40 text-[#d4af37] shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
+                  <Scissors className="h-5 w-5" />
+                </span>
+                <span>
+                  Salon<span className="text-[#d4af37]">DEES</span>
+                </span>
+              </button>
+              <span className="text-[11px] uppercase tracking-[0.35em] text-gray-400">Luxury Salon Experience</span>
+            </motion.div>
 
-            <div className="mt-10">
-              <p className="text-xs uppercase tracking-[0.3em] text-[#d4af37]/80">Member Sign In</p>
-              <h1 className="mt-4 max-w-md font-serif text-4xl leading-tight text-white sm:text-5xl">
-                Welcome back to your beauty routine.
-              </h1>
-              <p className="mt-5 max-w-lg text-base leading-7 text-gray-300">
-                Access your account, check your upcoming visits, and continue booking with a calmer, faster flow.
-              </p>
+            <div className="space-y-4">
+              <motion.p className="text-[11px] uppercase tracking-[0.4em] text-[#d4af37]" variants={itemVariants}>
+                Member Sign In
+              </motion.p>
+              <motion.div variants={itemVariants}>
+                <h1 className="text-4xl font-serif leading-[1.05] text-white sm:text-5xl lg:text-6xl">
+                  Step back into your booking space.
+                </h1>
+              </motion.div>
+              <motion.div variants={itemVariants}>
+                <p className="max-w-xl text-sm leading-7 text-gray-300 sm:text-base">
+                  Review appointments, manage visits, and keep your salon experience moving without friction.
+                </p>
+              </motion.div>
             </div>
 
-            <div className="mt-10 grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2">
               {[
-                { value: '24/7', label: 'Booking access' },
-                { value: 'Fast', label: 'Sign-in flow' },
-                { value: 'Secure', label: 'Account session' }
+                'Fast access to appointments and account details',
+                'Same dark and gold experience across every visit',
+                'Staff and admin routing handled automatically',
+                'Google sign-in still available'
               ].map((item) => (
-                <div key={item.label} className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                  <p className="font-serif text-2xl text-[#d4af37]">{item.value}</p>
-                  <p className="mt-1 text-sm text-gray-400">{item.label}</p>
-                </div>
+                <motion.div key={item} variants={itemVariants}>
+                  <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-black/50 p-4 shadow-[0_12px_30px_rgba(0,0,0,0.35)] backdrop-blur-sm">
+                    <span className="mt-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-[#d4af37]/15 text-[#d4af37]">
+                      <Check className="h-4 w-4" />
+                    </span>
+                    <p className="text-[13px] leading-6 text-gray-300">{item}</p>
+                  </div>
+                </motion.div>
               ))}
             </div>
-          </div>
+          </motion.div>
 
-          <div className="w-full">
-            <div className="mb-4 rounded-[1.75rem] border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(212,175,55,0.18),_transparent_48%),linear-gradient(180deg,rgba(19,19,19,0.9),rgba(8,8,8,0.82))] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.35)] backdrop-blur-xl lg:hidden">
-              <div className="flex items-start justify-between gap-4">
-                <BrandMark onClick={() => navigate('/')} subtitle="Member Access" className="text-left" />
-                <div className="rounded-full border border-[#d4af37]/25 bg-[#d4af37]/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-[#d4af37]">
-                  Sign In
+          <motion.div
+            className="flex w-full justify-center lg:w-1/2 lg:justify-end"
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.2, ease: 'easeOut' }}
+          >
+            <div className="w-full">
+              <div className="mb-6 flex flex-col items-center lg:hidden">
+                <div className="flex items-center gap-3 text-2xl font-serif tracking-[0.2em] text-white">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-black/40 text-[#d4af37] shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
+                    <Scissors className="h-5 w-5" />
+                  </span>
+                  <span>
+                    Salon<span className="text-[#d4af37]">DEES</span>
+                  </span>
                 </div>
+                <span className="mt-3 text-[11px] uppercase tracking-[0.35em] text-gray-400">
+                  Luxury Salon Experience
+                </span>
               </div>
-              <p className="mt-4 max-w-sm text-sm leading-6 text-gray-300">
-                Securely continue your salon journey and get back to booking in a few taps.
-              </p>
-            </div>
-
-            <GlassCard className="overflow-hidden rounded-[1.75rem] p-0 sm:rounded-[2rem]">
-            <div className="border-b border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0))] px-5 pb-5 pt-6 sm:px-8 sm:pb-6 sm:pt-8 md:px-10 md:pt-10">
-              <div>
-                <h2 className="text-2xl font-serif text-white sm:text-3xl">Access your account</h2>
-                <p className="mt-2 text-sm leading-6 text-gray-400">
-                  Use your email and password or continue with Google.
-                </p>
+              <div className="mx-auto w-full rounded-2xl border border-white/10 bg-[#111111]/75 p-8 shadow-[0_8px_32px_0_rgba(0,0,0,0.5)] backdrop-blur-xl sm:max-w-lg sm:p-10 lg:max-w-md">
+              <div className="text-center">
+                <h2 className="text-3xl font-serif text-white sm:text-4xl">Sign In</h2>
+                <p className="mt-2 text-sm text-gray-400">Enter your details to access your account.</p>
               </div>
-            </div>
 
-            <div className="px-5 py-6 sm:px-8 sm:py-8 md:px-10 md:py-10">
-              <form onSubmit={onSubmit} className="space-y-6">
+              <form onSubmit={onSubmit} className="mt-8 space-y-6">
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-300">Email Address</label>
-                  <DarkInput
+                  <label className="mb-2 block text-sm font-medium text-gray-400">Email Address</label>
+                  <input
                     type="email"
                     name="email"
                     value={email}
                     onChange={onChange}
                     placeholder="you@email.com"
                     required
+                    className="w-full rounded-md bg-[#edf2ff] px-4 py-3 text-sm text-gray-900 placeholder:text-gray-500 shadow-inner transition-all duration-300 focus:border-[#D4AF37] focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/40"
                   />
                 </div>
 
                 <div>
                   <div className="mb-2 flex items-center justify-between gap-4">
-                    <label className="block text-sm font-medium text-gray-300">Password</label>
+                    <label className="text-sm font-medium text-gray-400">Password</label>
                     <span className="text-xs font-medium text-gray-500">Secure account access</span>
                   </div>
                   <div className="relative">
-                    <DarkInput
+                    <input
                       type={showPassword ? 'text' : 'password'}
                       name="password"
                       value={password}
                       onChange={onChange}
                       placeholder="Enter your password"
                       required
-                      className="pr-12"
+                      className="w-full rounded-md bg-[#edf2ff] px-4 py-3 text-sm text-gray-900 placeholder:text-gray-500 shadow-inner transition-all duration-300 focus:border-[#D4AF37] focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/40"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword((prev) => !prev)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 transition-colors hover:text-[#d4af37]"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 transition-colors hover:text-[#d4af37]"
                     >
                       {showPassword ? <FaEyeSlash size={18} /> : <FaEye size={18} />}
                     </button>
                   </div>
                 </div>
 
-                <GoldButton type="submit" disabled={isLoading} className="w-full py-3 text-lg">
+                <motion.button
+                  type="submit"
+                  disabled={isLoading}
+                  whileTap={{ scale: 0.99 }}
+                  className="flex w-full items-center justify-center rounded-md bg-[#d4af37] px-4 py-3 text-sm font-semibold text-black shadow-[0_12px_30px_rgba(212,175,55,0.25)] transition-all duration-200 hover:bg-[#b8952e] hover:scale-[1.01] active:scale-[0.99]"
+                >
                   {isLoading ? <Spinner /> : 'Sign In'}
-                </GoldButton>
+                </motion.button>
               </form>
 
-              <div className="relative my-8">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-white/10"></div>
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="rounded-full bg-[#111111] px-3 text-gray-500">Or continue with</span>
-                </div>
+              <div className="my-8 flex items-center gap-4 text-xs text-gray-500">
+                <span className="h-px flex-1 bg-white/10" />
+                <span>Or continue with</span>
+                <span className="h-px flex-1 bg-white/10" />
               </div>
 
               <button
                 type="button"
                 onClick={handleGoogleLogin}
-                className="flex w-full items-center justify-center gap-3 rounded-xl border border-white/10 bg-[#0a0a0a]/80 px-4 py-3 text-gray-200 transition duration-300 hover:bg-white/10"
+                className="flex w-full items-center justify-center gap-3 rounded-md border border-white/10 bg-black/90 px-4 py-3 text-sm text-gray-200 transition duration-300 hover:bg-white/10"
               >
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
                   <path d="M19.64 10.2045C19.64 9.51136 19.5777 8.84659 19.4614 8.20455H10V12.0057H15.4023C15.1693 13.2614 14.4568 14.3239 13.3943 15.0341V17.5H16.6477C18.5489 15.75 19.64 13.2159 19.64 10.2045Z" fill="#4285F4" />
@@ -225,10 +282,9 @@ function Login() {
                   Register now
                 </Link>
               </p>
+              </div>
             </div>
-            </GlassCard>
-          </div>
-        </div>
+          </motion.div>
       </div>
     </AuthShell>
   );

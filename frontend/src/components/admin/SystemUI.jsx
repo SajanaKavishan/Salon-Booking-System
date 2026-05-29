@@ -54,9 +54,20 @@ export function BrandMark({ className = '', onClick, subtitle }) {
   );
 }
 
-export function AuthShell({ backgroundImage, children }) {
+export function AuthShell({ backgroundImage = '', backgroundStyle, children }) {
+  const resolvedStyle = {
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    backgroundRepeat: 'no-repeat',
+    backgroundAttachment: 'fixed',
+    ...backgroundStyle
+  };
+
   return (
-    <div className={`salon-page relative flex min-h-screen items-center justify-center px-4 py-12 ${backgroundImage}`}>
+    <div
+      className={`salon-page relative flex min-h-screen w-full flex-col items-center justify-center bg-cover bg-center bg-no-repeat bg-fixed p-4 lg:flex-row lg:p-8 ${backgroundImage}`}
+      style={resolvedStyle}
+    >
       <div className="salon-page-overlay fixed inset-0"></div>
       <div className="relative z-10 w-full">{children}</div>
     </div>
