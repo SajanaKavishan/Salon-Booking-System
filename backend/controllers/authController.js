@@ -43,7 +43,6 @@ const registerStaff = async (req, res) => {
       _id: staffUser._id,
       name: staffUser.name,
       email: staffUser.email,
-      phone: staffUser.phone,
       role: staffUser.role
     });
   } catch (error) {
@@ -75,7 +74,6 @@ const login = async (req, res) => {
       _id: user._id,
       name: user.name,
       email: user.email,
-      phone: user.phone,
       role: user.role,
       token
     });

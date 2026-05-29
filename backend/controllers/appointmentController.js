@@ -1,6 +1,7 @@
 const Appointment = require('../models/appointmentModel');
 const Service = require('../models/Service'); // Import the Service model to interact with the services collection in the database
 const sendEmail = require('../utils/sendEmail'); // Import the sendEmail utility function to send email notifications to users about their appointment status updates
+const { ensureSettingsDocument, defaultSettings } = require('./settingsController');
 
 // Utility functions to convert time formats for easier calculations when checking for overlapping appointments. The timeToMinutes function converts a time string (e.g., "10:30 AM") into total minutes, while the minutesToTime function converts total minutes back into a time string format. These functions are essential for accurately determining if appointment times overlap when creating or updating appointments.
 const timeToMinutes = (timeStr) => {
@@ -42,11 +43,26 @@ const minutesToTime = (mins) => {
 const createAppointment = async (req, res) => {
     try {
         const { stylist, date, startTime, services } = req.body;
+        const settings = await ensureSettingsDocument();
+        const salonName = settings?.salonName || defaultSettings.salonName;
+        const supportEmail = settings?.supportEmail || defaultSettings.supportEmail;
+        const contactNumber = settings?.contactNumber || defaultSettings.contactNumber;
 
         // Check if all required fields are provided
-        if (!stylist || !date || !startTime || !services || services.length === 0) {
+        if (!date || !startTime || !services || services.length === 0) {
             return res.status(400).json({ message: "Please fill in all required fields." });
         }
+
+        const appointmentDate = new Date(`${date}T00:00:00`);
+        if (Number.isNaN(appointmentDate.getTime())) {
+            return res.status(400).json({ message: 'Invalid appointment date.' });
+        }
+
+        const dayOfWeek = appointmentDate.getDay();
+        if (!settings.weekendBookings && (dayOfWeek === 0 || dayOfWeek === 6)) {
+            return res.status(400).json({ message: 'Weekend bookings are currently unavailable.' });
+        }
+
         const selectedServices = await Service.find({ _id: { $in: services } });
         let totalDuration = 0;
         let totalAmount = 0;
@@ -57,26 +73,41 @@ const createAppointment = async (req, res) => {
         const startMins = timeToMinutes(startTime);
         const endMins = startMins + totalDuration;
         const endTime = minutesToTime(endMins);
+        const stylistName = stylist && String(stylist).trim() ? stylist : 'Any Available Stylist';
 
-        const existingAppointments = await Appointment.find({ 
-            date: date, 
-            stylist: stylist,
-            status: {$ne: 'Rejected'} // Only consider appointments that are not rejected when checking for overlaps
-        });
+        if (stylistName !== 'Any Available Stylist') {
+            const existingAppointments = await Appointment.find({
+                date: date,
+                stylist: stylistName,
+                status: {$ne: 'Rejected'} // Only consider appointments that are not rejected when checking for overlaps
+            });
 
-        let hasOverlap = false;
-        for (let appt of existingAppointments) {
-            const existingStart = timeToMinutes(appt.startTime);
-            const existingEnd = timeToMinutes(appt.endTime);
+            let hasOverlap = false;
+            for (let appt of existingAppointments) {
+                const existingStart = timeToMinutes(appt.startTime);
+                const existingEnd = timeToMinutes(appt.endTime);
 
-            if ((startMins < existingEnd) && (endMins > existingStart)) {
-                hasOverlap = true;
-                break;
+                if ((startMins < existingEnd) && (endMins > existingStart)) {
+                    hasOverlap = true;
+                    break;
+                }
+            }
+
+            if (hasOverlap) {
+                return res.status(400).json({ message: "Appointment overlaps with an existing appointment." });
             }
         }
 
-        if (hasOverlap) {
-            return res.status(400).json({ message: "Appointment overlaps with an existing appointment." });
+        let appointmentStatus = 'Pending';
+        if (settings.autoConfirmVip) {
+            const completedAppointments = await Appointment.countDocuments({
+                user: req.user._id,
+                status: 'Completed'
+            });
+
+            if (completedAppointments >= 3) {
+                appointmentStatus = 'Approved';
+            }
         }
 
         // Add the user ID to the appointment data. The user ID is obtained from the protect middleware, which adds the logged-in user's information to the req.user object. This way, we can associate the appointment with the user who created it.
@@ -89,8 +120,30 @@ const createAppointment = async (req, res) => {
             endTime: endTime,
             totalDuration: totalDuration,
             totalAmount: totalAmount,
-            stylist: stylist
+            stylist: stylistName,
+            status: appointmentStatus
         });
+
+        if (settings.bookingAlerts && supportEmail) {
+            const serviceNames = selectedServices.map((service) => service.name).join(', ');
+
+            await sendEmail({
+                email: supportEmail,
+                subject: `New Booking Alert - ${salonName}`,
+                message: `
+                    <div style="font-family: Arial, sans-serif; padding: 20px; background: #111111; color: #f5f5f5; border-radius: 10px;">
+                        <h2 style="color: #d4af37; margin-top: 0;">New appointment received</h2>
+                        <p><strong>Client:</strong> ${req.user.name || req.user.email}</p>
+                        <p><strong>Services:</strong> ${serviceNames}</p>
+                        <p><strong>Date:</strong> ${date}</p>
+                        <p><strong>Time:</strong> ${startTime} - ${endTime}</p>
+                        <p><strong>Stylist:</strong> ${stylistName}</p>
+                        <p><strong>Status:</strong> ${appointmentStatus}</p>
+                        <p style="margin-top: 16px; color: #bbbbbb;">For assistance, contact ${supportEmail} or ${contactNumber}</p>
+                    </div>
+                `
+            });
+        }
 
         res.status(201).json({
             message: "Appointment created successfully!",
@@ -210,6 +263,10 @@ const deleteAppointment = async (req, res) => {
 const updateAppointmentStatus = async (req, res) => {
     try {
         const { status } = req.body; 
+        const settings = await ensureSettingsDocument();
+        const salonName = settings?.salonName || defaultSettings.salonName;
+        const supportEmail = settings?.supportEmail || defaultSettings.supportEmail;
+        const contactNumber = settings?.contactNumber || defaultSettings.contactNumber;
         
         const appointment = await Appointment.findById(req.params.id).populate('user', 'name email').populate('services', 'name'); // Populate user details for better readability
 
@@ -221,46 +278,60 @@ const updateAppointmentStatus = async (req, res) => {
         const updatedAppointment = await appointment.save();
 
         // Part of the code to send an email notification to the user about the status update of their appointment. The email includes the appointment details and a message indicating the new status of the appointment. This enhances the user experience by keeping them informed about the status of their appointments in a timely manner.
-        if (appointment.user && appointment.user.email) {
-            const emailSubject = `Appointment ${status} - Salon Booking System`;
+        if (settings.customerEmails && appointment.user && appointment.user.email) {
+            const emailSubject = `Appointment ${status} - ${salonName}`;
 
             const serviceNames = appointment.services.map(s => s.name).join(', ');
-            
-            // Crafting a visually appealing HTML email message to notify the user about the status update of their appointment. The email includes the appointment details such as service, date, time, duration, and total amount. Uses color coding to indicate the status (green for Approved, red for Rejected, etc.).
-            const emailMessage = `
-                <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px; max-width: 550px; margin: 0 auto; background-color: #f9f9f9;">
-                    <h2 style="color: ${status === 'Approved' ? '#27ae60' : status === 'Rejected' ? '#e74c3c' : '#f39c12'}; text-align: center; border-bottom: 2px solid ${status === 'Approved' ? '#27ae60' : status === 'Rejected' ? '#e74c3c' : '#f39c12'}; padding-bottom: 10px;">
-                        Appointment Status: ${status}
-                    </h2>
-                    <p style="font-size: 16px; margin-top: 20px;">Welcome! <strong>${appointment.user.name}</strong>,</p>
-                    <p style="font-size: 14px; color: #555; margin-bottom: 20px;">Your appointment status has been updated to: <strong style="color: ${status === 'Approved' ? '#27ae60' : status === 'Rejected' ? '#e74c3c' : '#f39c12'};">${status}</strong></p>
-                    <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
-                        <tr>
-                            <td style="padding: 10px; border: 1px solid #e0e0e0; background-color: #f5f5f5; font-weight: bold; width: 40%;">Services:</td>
-                            <td style="padding: 10px; border: 1px solid #e0e0e0;">${serviceNames}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 10px; border: 1px solid #e0e0e0; background-color: #f5f5f5; font-weight: bold;">Date:</td>
-                            <td style="padding: 10px; border: 1px solid #e0e0e0;">${appointment.date}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 10px; border: 1px solid #e0e0e0; background-color: #f5f5f5; font-weight: bold;">Time:</td>
-                            <td style="padding: 10px; border: 1px solid #e0e0e0;">${appointment.startTime} - ${appointment.endTime}</td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 10px; border: 1px solid #e0e0e0; background-color: #f5f5f5; font-weight: bold;">Duration:</td>
-                            <td style="padding: 10px; border: 1px solid #e0e0e0;">${appointment.totalDuration} minutes</td>
-                        </tr>
-                        <tr>
-                            <td style="padding: 10px; border: 1px solid #e0e0e0; background-color: #f5f5f5; font-weight: bold;">Total Amount:</td>
-                            <td style="padding: 10px; border: 1px solid #e0e0e0; color: #27ae60; font-weight: bold;">Rs. ${appointment.totalAmount.toFixed(2)}</td>
-                        </tr>
-                    </table>
-                    <p style="margin-top: 20px; font-size: 14px; color: #777; text-align: center;">
-                        Thank you for choosing Salon DEES!<br/><span style="font-size: 12px;">For assistance, contact us at info@salondees.com or +94 77 123 4567</span>
-                    </p>
-                </div>
-            `;
+            const statusColor = status === 'Approved' ? '#27ae60' : status === 'Rejected' ? '#e74c3c' : '#f39c12';
+            const rows = [
+                ['Services', serviceNames],
+                ['Date', appointment.date],
+                ['Time', `${appointment.startTime} - ${appointment.endTime}`],
+                ['Duration', `${appointment.totalDuration} minutes`],
+                ['Total Amount', `Rs. ${appointment.totalAmount.toFixed(2)}`]
+            ];
+
+            const emailMessage = settings.darkReceipts
+                ? `
+                    <div style="font-family: Arial, sans-serif; padding: 24px; border: 1px solid #262626; border-radius: 14px; max-width: 580px; margin: 0 auto; background: #0b0b0b; color: #f5f5f5;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; border-bottom:1px solid #232323; padding-bottom:14px;">
+                            <h2 style="color:#d4af37; margin:0;">${salonName}</h2>
+                            <span style="padding:6px 12px; border-radius:999px; background:${statusColor}; color:#ffffff; font-size:12px; font-weight:bold;">${status}</span>
+                        </div>
+                        <p style="font-size:16px; margin-top:20px;">Hello <strong>${appointment.user.name}</strong>,</p>
+                        <p style="font-size:14px; line-height:1.7; color:#d1d5db;">Your appointment has been updated. Here is your latest booking summary.</p>
+                        <div style="margin-top:18px; border:1px solid #232323; border-radius:12px; overflow:hidden;">
+                            ${rows.map(([label, value], index) => `
+                                <div style="display:flex; justify-content:space-between; gap:16px; padding:12px 14px; ${index < rows.length - 1 ? 'border-bottom:1px solid #232323;' : ''}">
+                                    <span style="color:#9ca3af; font-size:13px;">${label}</span>
+                                    <span style="color:#ffffff; font-size:13px; font-weight:600; text-align:right;">${value}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <p style="margin-top:20px; font-size:13px; color:#9ca3af; text-align:center;">
+                            Thank you for choosing ${salonName}.<br/>Need help? Reach us at ${supportEmail} or ${contactNumber}
+                        </p>
+                    </div>
+                `
+                : `
+                    <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px; max-width: 550px; margin: 0 auto; background-color: #f9f9f9;">
+                        <h2 style="color: ${statusColor}; text-align: center; border-bottom: 2px solid ${statusColor}; padding-bottom: 10px;">
+                            Appointment Status: ${status}
+                        </h2>
+                        <p style="font-size: 16px; margin-top: 20px;">Welcome! <strong>${appointment.user.name}</strong>,</p>
+                        <p style="font-size: 14px; color: #555; margin-bottom: 20px;">Your appointment status has been updated to: <strong style="color: ${statusColor};">${status}</strong></p>
+                        <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+                            <tr><td style="padding: 10px; border: 1px solid #e0e0e0; background-color: #f5f5f5; font-weight: bold; width: 40%;">Services:</td><td style="padding: 10px; border: 1px solid #e0e0e0;">${serviceNames}</td></tr>
+                            <tr><td style="padding: 10px; border: 1px solid #e0e0e0; background-color: #f5f5f5; font-weight: bold;">Date:</td><td style="padding: 10px; border: 1px solid #e0e0e0;">${appointment.date}</td></tr>
+                            <tr><td style="padding: 10px; border: 1px solid #e0e0e0; background-color: #f5f5f5; font-weight: bold;">Time:</td><td style="padding: 10px; border: 1px solid #e0e0e0;">${appointment.startTime} - ${appointment.endTime}</td></tr>
+                            <tr><td style="padding: 10px; border: 1px solid #e0e0e0; background-color: #f5f5f5; font-weight: bold;">Duration:</td><td style="padding: 10px; border: 1px solid #e0e0e0;">${appointment.totalDuration} minutes</td></tr>
+                            <tr><td style="padding: 10px; border: 1px solid #e0e0e0; background-color: #f5f5f5; font-weight: bold;">Total Amount:</td><td style="padding: 10px; border: 1px solid #e0e0e0; color: #27ae60; font-weight: bold;">Rs. ${appointment.totalAmount.toFixed(2)}</td></tr>
+                        </table>
+                        <p style="margin-top: 20px; font-size: 14px; color: #777; text-align: center;">
+                            Thank you for choosing ${salonName}!<br/><span style="font-size: 12px;">For assistance, contact us at ${supportEmail} or ${contactNumber}</span>
+                        </p>
+                    </div>
+                `;
 
             // Send data to sendEmail utility function to send the email notification to the user about the status update of their appointment. The email includes the appointment details and a message indicating the new status of the appointment.
             await sendEmail({

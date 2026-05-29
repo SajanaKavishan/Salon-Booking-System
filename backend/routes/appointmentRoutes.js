@@ -10,12 +10,13 @@ const {
   updateAppointmentStatusByStaff,
   hideAppointmentByCustomer
 } = require('../controllers/appointmentController');
-const { protect, admin } = require('../middleware/authMiddleware'); // Import the protect and admin middleware to secure the routes and restrict access to admin-only routes    
+const { protect, admin, staffOrAdmin } = require('../middleware/authMiddleware'); // Import the protect and admin middleware to secure the routes and restrict access to admin-only routes    
 const Appointment = require('../models/appointmentModel'); // Import the Appointment model to interact with the appointments collection in the database
 
 // Routes for appointments. Both routes are protected, meaning that only authenticated users can access them. The createAppointment route allows users to create a new appointment, while the getMyAppointments route allows users to retrieve their own appointments.
 router.route('/').post(protect, createAppointment).get(protect, getMyAppointments);
 router.get('/all', protect, admin, getAllAppointments);
+router.get('/staff', protect, getStaffAppointments);
 router.get('/staff-schedule', protect, getStaffAppointments);
 
 // Utility functions to convert time formats for easier calculations when checking for blocked time slots
@@ -89,8 +90,8 @@ router.get('/booked-times', async (req, res) => {
 
 // Routes with ID parameters - defined after specific routes to avoid conflicts
 router.route('/:id').delete(protect, deleteAppointment);
-router.route('/:id/status').put(protect, admin, updateAppointmentStatus); // Admin-only route to update the status of an appointment.
-router.route('/:id/staff-status').put(protect, updateAppointmentStatusByStaff);
+router.route('/:id/status').put(protect, staffOrAdmin, updateAppointmentStatus); // Admin and staff route to update the status of an appointment.
+router.route('/:id/staff-status').put(protect, staffOrAdmin, updateAppointmentStatusByStaff);
 router.route('/:id/hide').put(protect, hideAppointmentByCustomer);
 
 module.exports = router;

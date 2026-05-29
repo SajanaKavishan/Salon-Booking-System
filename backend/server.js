@@ -32,8 +32,12 @@ mongoose.connection.on('disconnected', () => { // This event is emitted when Mon
     console.log('Mongoose disconnected.');
 });
 
-app.use(cors());
+app.use(cors({
+    origin: 'http://localhost:5173',
+    credentials: true,
+}));
 app.use(express.json());
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 async function ensureMongoConnection(req, res, next) { // Middleware function to ensure MongoDB connection is active before processing API requests
     if (mongoose.connection.readyState === 1) {
@@ -55,6 +59,7 @@ app.use('/api/appointments', ensureMongoConnection, require('./routes/appointmen
 app.use('/api/services', ensureMongoConnection, require('./routes/serviceRoutes')); // Service management routes
 app.use('/api/staff', ensureMongoConnection, require('./routes/staffRoutes')); // Staff management routes
 app.use('/api/messages', ensureMongoConnection, require('./routes/messageRoutes')); // Contact form message handling routes
+app.use('/api/settings', ensureMongoConnection, require('./routes/settingsRoutes')); // Salon settings routes
 app.post('/api/login', async (req, res) => { // User login route to authenticate users and provide JWT tokens for session management
     try {
         // Capture email and password from the request body

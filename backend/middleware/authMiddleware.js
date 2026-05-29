@@ -39,5 +39,14 @@ const admin = (req, res, next) => {
     }
 };
 
+// Middleware to check if the user is either staff or admin
+const staffOrAdmin = (req, res, next) => {
+    if (req.user && (req.user.role === 'staff' || req.user.role === 'admin')) {
+        next();
+    } else {
+        res.status(401).json({ message: 'Unauthorized' });
+    }
+};
+
 // Export the protect and admin middleware functions so they can be used in other parts of the application, such as in route definitions to protect certain routes or restrict access to admin-only routes. 
-module.exports = { protect, admin };
+module.exports = { protect, admin, staffOrAdmin };
