@@ -3,8 +3,22 @@ import axios from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
+import { motion } from 'framer-motion';
+import { Check, Scissors } from 'lucide-react';
 import Spinner from '../../components/common/Spinner';
-import { AuthShell, BrandMark, DarkInput, GlassCard, GoldButton } from '../../components/admin/SystemUI';
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.15, delayChildren: 0.1 }
+  }
+};
+
+const itemVariants = {
+  hidden: { opacity: 0, y: 25 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: 'easeOut' } }
+};
 
 function Register() {
   const navigate = useNavigate();
@@ -55,140 +69,172 @@ function Register() {
   };
 
   return (
-    <AuthShell backgroundImage="bg-[url('/registerBg.jpg')]">
-      <div className="mx-auto w-full max-w-5xl">
-        <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr] lg:items-start">
-          <div className="hidden flex-col justify-between rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(212,175,55,0.22),_transparent_42%),linear-gradient(180deg,rgba(20,20,20,0.92),rgba(9,9,9,0.88))] p-8 shadow-[0_30px_80px_rgba(0,0,0,0.4)] backdrop-blur-xl sm:p-10 lg:flex">
-            <BrandMark onClick={() => navigate('/')} subtitle="Start Your Client Account" className="text-left" />
+    <div
+      className="relative min-h-screen w-full bg-cover bg-center bg-no-repeat bg-fixed flex flex-col lg:flex-row items-center justify-center p-4 lg:p-8"
+      style={{ backgroundImage: "url('/registerBg.jpg')" }}
+    >
+      <div className="salon-page-overlay fixed inset-0" aria-hidden="true" />
+      <motion.div
+        className="relative z-10 hidden lg:flex flex-col max-w-xl pr-8"
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+      >
+        <motion.div variants={itemVariants} className="flex flex-col gap-3">
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            className="flex items-center gap-3 text-2xl font-serif tracking-[0.2em] text-white sm:text-3xl"
+          >
+            <span className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-black/40 text-[#d4af37] shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
+              <Scissors className="h-5 w-5" />
+            </span>
+            <span>
+              Salon<span className="text-[#d4af37]">DEES</span>
+            </span>
+          </button>
+          <span className="text-[11px] uppercase tracking-[0.35em] text-gray-400">Start Your Client Account</span>
+        </motion.div>
 
-            <div className="mt-10">
-              <p className="text-xs uppercase tracking-[0.3em] text-[#d4af37]/80">New Member Setup</p>
-              <h1 className="mt-4 max-w-md font-serif text-4xl leading-tight text-white sm:text-5xl">
-                Create your account and book in style.
-              </h1>
-              <p className="mt-5 max-w-lg text-base leading-7 text-gray-300">
-                Set up your profile once, then move through future bookings with less friction and a more polished client experience.
-              </p>
-            </div>
+        <motion.div variants={itemVariants} className="mt-8">
+          <h1 className="text-4xl font-serif leading-[1.05] text-white sm:text-5xl lg:text-6xl">
+            Create your account and book in style.
+          </h1>
+        </motion.div>
 
-            <div className="mt-10 space-y-4">
-              {[
-                'Your profile stays ready for faster bookings',
-                'Upcoming and past visits stay connected to one account',
-                'You can move straight into the booking flow after sign up'
-              ].map((item) => (
-                <div key={item} className="flex items-start gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-4">
-                  <div className="mt-0.5 flex h-6 w-6 items-center justify-center rounded-full border border-[#d4af37]/20 bg-[#d4af37]/10 text-[#d4af37]">
-                    <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <path d="m5 12 4.2 4.2L19 6.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </div>
-                  <p className="text-sm leading-6 text-gray-300">{item}</p>
-                </div>
-              ))}
-            </div>
-          </div>
+        <motion.div variants={itemVariants} className="mt-4">
+          <p className="max-w-xl text-sm leading-7 text-gray-300 sm:text-base">
+            Set up your profile once, then move through future bookings with less friction and a more polished client experience.
+          </p>
+        </motion.div>
 
-          <div className="w-full">
-            <div className="mb-4 rounded-[1.75rem] border border-white/10 bg-[radial-gradient(circle_at_top,_rgba(212,175,55,0.18),_transparent_48%),linear-gradient(180deg,rgba(19,19,19,0.9),rgba(8,8,8,0.82))] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.35)] backdrop-blur-xl lg:hidden">
-              <div className="flex items-start justify-between gap-4">
-                <BrandMark onClick={() => navigate('/')} subtitle="New Client Setup" className="text-left" />
-                <div className="rounded-full border border-[#d4af37]/25 bg-[#d4af37]/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-[#d4af37]">
-                  Sign Up
-                </div>
+        <div className="mt-8 grid gap-4">
+          {[
+            'Your profile stays ready for faster bookings',
+            'Upcoming and past visits stay connected to one account',
+            'You can move straight into the booking flow after sign up'
+          ].map((item) => (
+            <motion.div key={item} variants={itemVariants}>
+              <div className="flex items-start gap-3 rounded-2xl border border-white/10 bg-black/50 p-4 shadow-[0_12px_30px_rgba(0,0,0,0.35)] backdrop-blur-sm">
+                <span className="mt-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-[#d4af37]/15 text-[#d4af37]">
+                  <Check className="h-4 w-4" />
+                </span>
+                <p className="text-[13px] leading-6 text-gray-300">{item}</p>
               </div>
-              <p className="mt-4 max-w-sm text-sm leading-6 text-gray-300">
-                Create your account with a cleaner mobile flow and move straight into your first booking.
-              </p>
-            </div>
-
-            <GlassCard className="overflow-hidden rounded-[1.75rem] p-0 sm:rounded-[2rem]">
-            <div className="border-b border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0))] px-5 pb-5 pt-6 sm:px-8 sm:pb-6 sm:pt-8 md:px-10 md:pt-10">
-              <div>
-                <h2 className="text-2xl font-serif text-white sm:text-3xl">Create your account</h2>
-                <p className="mt-2 text-sm leading-6 text-gray-400">
-                  Join Salon DEES and step into a smoother booking experience.
-                </p>
-              </div>
-            </div>
-
-            <div className="px-5 py-6 sm:px-8 sm:py-8 md:px-10 md:py-10">
-              <form onSubmit={onSubmit} className="space-y-5">
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-300">Full Name</label>
-                  <DarkInput
-                    type="text"
-                    name="name"
-                    value={name}
-                    onChange={onChange}
-                    placeholder="Enter your full name"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-300">Email Address</label>
-                  <DarkInput
-                    type="email"
-                    name="email"
-                    value={email}
-                    onChange={onChange}
-                    placeholder="Enter your email"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-300">Phone Number</label>
-                  <DarkInput
-                    type="tel"
-                    name="phone"
-                    value={phone}
-                    onChange={onChange}
-                    placeholder="Enter your phone number"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-300">Password</label>
-                  <div className="relative">
-                    <DarkInput
-                      type={showPassword ? 'text' : 'password'}
-                      name="password"
-                      value={password}
-                      onChange={onChange}
-                      placeholder="Create a password"
-                      required
-                      className="pr-12"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword((prev) => !prev)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 transition-colors hover:text-[#d4af37]"
-                    >
-                      {showPassword ? <FaEyeSlash size={18} /> : <FaEye size={18} />}
-                    </button>
-                  </div>
-                </div>
-
-                <GoldButton type="submit" disabled={isLoading} className="mt-6 w-full py-3 text-lg">
-                  {isLoading ? <Spinner /> : 'Create Account'}
-                </GoldButton>
-              </form>
-
-              <p className="mt-8 text-center text-sm text-gray-400">
-                Already have an account?{' '}
-                <Link to="/login" className="font-medium text-[#d4af37] transition hover:text-yellow-400 hover:underline">
-                  Sign in here
-                </Link>
-              </p>
-            </div>
-            </GlassCard>
-          </div>
+            </motion.div>
+          ))}
         </div>
-      </div>
-    </AuthShell>
+      </motion.div>
+
+      <motion.div
+        className="relative z-10 w-full max-w-md"
+        initial={{ opacity: 0, y: 30 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8, delay: 0.2, ease: 'easeOut' }}
+      >
+        <div className="block lg:hidden flex flex-col items-center mb-6">
+          <div className="flex items-center gap-3 text-2xl font-serif tracking-[0.2em] text-white">
+            <span className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-black/40 text-[#d4af37] shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
+              <Scissors className="h-5 w-5" />
+            </span>
+            <span>
+              Salon<span className="text-[#d4af37]">DEES</span>
+            </span>
+          </div>
+          <span className="mt-3 text-[11px] uppercase tracking-[0.35em] text-gray-400">
+            Luxury Salon Experience
+          </span>
+        </div>
+
+        <div className="bg-[#111111]/75 backdrop-blur-xl border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.5)] rounded-2xl p-6 sm:p-8 w-full">
+          <div className="text-center">
+            <h2 className="text-3xl font-serif text-white sm:text-4xl">Create your account</h2>
+            <p className="mt-2 text-sm text-gray-400">
+              Join Salon DEES and step into a smoother booking experience.
+            </p>
+          </div>
+
+          <form onSubmit={onSubmit} className="mt-8 space-y-4">
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-300">Full Name</label>
+              <input
+                type="text"
+                name="name"
+                value={name}
+                onChange={onChange}
+                placeholder="Enter your full name"
+                required
+                className="w-full rounded-md bg-slate-100 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/40 focus:border-[#D4AF37] transition-all duration-300"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-300">Email Address</label>
+              <input
+                type="email"
+                name="email"
+                value={email}
+                onChange={onChange}
+                placeholder="Enter your email"
+                required
+                className="w-full rounded-md bg-slate-100 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/40 focus:border-[#D4AF37] transition-all duration-300"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-300">Phone Number</label>
+              <input
+                type="tel"
+                name="phone"
+                value={phone}
+                onChange={onChange}
+                placeholder="Enter your phone number"
+                required
+                className="w-full rounded-md bg-slate-100 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/40 focus:border-[#D4AF37] transition-all duration-300"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-gray-300">Password</label>
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  name="password"
+                  value={password}
+                  onChange={onChange}
+                  placeholder="Create a password"
+                  required
+                  className="w-full rounded-md bg-slate-100 px-4 py-2.5 pr-12 text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/40 focus:border-[#D4AF37] transition-all duration-300"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 transition-colors hover:text-[#d4af37]"
+                >
+                  {showPassword ? <FaEyeSlash size={18} /> : <FaEye size={18} />}
+                </button>
+              </div>
+            </div>
+
+            <motion.button
+              type="submit"
+              disabled={isLoading}
+              whileTap={{ scale: 0.99 }}
+              className="mt-5 flex w-full items-center justify-center rounded-md bg-[#D4AF37] px-4 py-2.5 text-sm font-semibold text-black shadow-[0_12px_30px_rgba(212,175,55,0.25)] transition-all duration-200 hover:scale-[1.01] hover:bg-[#b8952e] active:scale-[0.99]"
+            >
+              {isLoading ? <Spinner /> : 'Create Account'}
+            </motion.button>
+          </form>
+
+          <p className="mt-6 text-center text-sm text-gray-400">
+            Already have an account?{' '}
+            <Link to="/login" className="font-medium text-[#d4af37] transition hover:text-yellow-400 hover:underline">
+              Sign in here
+            </Link>
+          </p>
+        </div>
+      </motion.div>
+    </div>
   );
 }
 
