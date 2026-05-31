@@ -1,16 +1,38 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Menu } from 'lucide-react';
 import { Navigate, Outlet } from 'react-router-dom';
 import Sidebar from '../../components/admin/Sidebar';
+import Profile from '../customer/Profile';
 
 function Layout() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-  let user = null;
-  try {
-    user = JSON.parse(localStorage.getItem('user'));
-  } catch {
-    user = null;
-  }
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [user, setUser] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('user'));
+    } catch {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    const handleProfileUpdated = (event) => {
+      setUser(event.detail || null);
+    };
+
+    window.addEventListener('profileUpdated', handleProfileUpdated);
+    return () => window.removeEventListener('profileUpdated', handleProfileUpdated);
+  }, []);
+
+  useEffect(() => {
+    if (!isProfileOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isProfileOpen]);
 
   const role = localStorage.getItem('userRole') || user?.role;
 
@@ -23,27 +45,43 @@ function Layout() {
     : role === 'staff'
       ? 'Staff Suite'
       : 'Customer Suite';
+  const pageTitle = role === 'customer' ? 'Customer Portal' : suiteLabel;
+  const userInitial = user?.name ? user.name.charAt(0).toUpperCase() : 'U';
+
+  const closeProfile = () => setIsProfileOpen(false);
 
   return (
-    <div className="relative flex min-h-screen w-full overflow-hidden bg-[url('/registerBg.jpg')] bg-cover bg-center bg-no-repeat md:bg-fixed">
-      <div className="absolute inset-0 bg-black/60"></div>
+    <div className="min-h-screen w-full bg-[#07090d]">
       <Sidebar isOpen={isMobileSidebarOpen} onClose={() => setIsMobileSidebarOpen(false)} />
 
-      <div className="relative z-10 flex min-h-screen w-full flex-col">
-        <header className="sticky top-0 z-20 flex items-center justify-between border-b border-white/10 bg-[#090909]/85 px-4 py-3 backdrop-blur-md md:hidden">
-          <div>
-            <p className="text-xl font-bold tracking-tight text-white">
-              Salon<span className="text-[#d4af37]">DEES</span>
-            </p>
-            <p className="text-[11px] uppercase tracking-[0.18em] text-gray-400">{suiteLabel}</p>
+      <div className="flex min-h-screen w-full flex-col md:pl-64">
+        <header className="sticky top-0 z-20 flex h-[72px] items-center justify-between bg-[#090d14]/95 px-4 backdrop-blur-md md:px-8">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setIsMobileSidebarOpen(true)}
+              className="inline-flex h-11 w-11 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-[#d4af37] transition hover:bg-white/10 hover:text-yellow-400 md:hidden"
+              aria-label="Open menu"
+            >
+              <Menu size={22} />
+            </button>
+            <div>
+              <p className="text-lg font-semibold tracking-tight text-white md:text-xl">{pageTitle}</p>
+              <p className="text-[11px] uppercase tracking-[0.18em] text-gray-500 md:hidden">{suiteLabel}</p>
+            </div>
           </div>
+
           <button
             type="button"
-            onClick={() => setIsMobileSidebarOpen(true)}
-            className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-[#d4af37] transition hover:bg-white/10 hover:text-yellow-400"
-            aria-label="Open menu"
+            onClick={() => setIsProfileOpen(true)}
+            className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-[#d4af37]/30 bg-[#d4af37]/15 text-sm font-bold text-[#d4af37] transition hover:border-[#d4af37]/60 hover:bg-[#d4af37]/25"
+            aria-label="Open profile"
           >
-            <Menu size={22} />
+            {user?.profileImage ? (
+              <img src={user.profileImage} alt={user?.name || 'Profile'} className="h-full w-full object-cover" />
+            ) : (
+              userInitial
+            )}
           </button>
         </header>
 
@@ -52,16 +90,30 @@ function Layout() {
             type="button"
             aria-label="Close menu overlay"
             onClick={() => setIsMobileSidebarOpen(false)}
-            className="fixed inset-0 z-20 cursor-default bg-black/55 md:hidden"
+            className="fixed inset-0 z-30 cursor-default bg-black/60 backdrop-blur-sm md:hidden"
           />
         )}
 
-        <main className="relative z-10 w-full flex-1 overflow-y-auto p-4 md:p-6 md:pl-[354px] lg:p-8">
-          <div className="min-h-[calc(100vh-5rem)] rounded-2xl border border-white/10 bg-black/25 p-4 shadow-xl backdrop-blur-sm md:min-h-[calc(100vh-3rem)] md:p-6">
-            <Outlet />
-          </div>
+        <main className="w-full flex-1 overflow-y-auto p-4 md:p-8 lg:p-10">
+          <Outlet />
         </main>
       </div>
+
+      {isProfileOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6 backdrop-blur-md"
+          onClick={closeProfile}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="relative h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-white/10 bg-[#070707] shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <Profile onClose={closeProfile} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
