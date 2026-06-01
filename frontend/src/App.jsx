@@ -6,6 +6,7 @@ import Register from './pages/auth/Register';
 import Dashboard from './pages/customer/Dashboard';
 import Profile from './pages/customer/Profile';
 import BookAppointment from './pages/customer/BookAppointment';
+import History from './pages/customer/History';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import StaffDashboard from './pages/staff/StaffDashboard';
 import StaffProfile from './pages/staff/StaffProfile';
@@ -54,6 +55,7 @@ function App() {
             <Route path="/profile" element={<Profile />} />
             <Route path="/book" element={<BookAppointment />} />
             <Route path="/booking" element={<BookAppointment />} />
+            <Route path="/history" element={<History />} />
           </Route>
 
           {/* Admin routes */}  
@@ -71,7 +73,6 @@ function App() {
             <Route path="staff" element={<StaffPage />} />
             <Route path="services" element={<ServicesPage />} />
             <Route path="analytics" element={<PlaceholderPage title="Analytics" subtitle="Analytics dashboard will be available here." />} />
-            <Route path="settings" element={<SettingsPage />} />
           </Route>
 
           <Route 
@@ -97,6 +98,7 @@ function App() {
           />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+
       </BrowserRouter>
     </>
   );
