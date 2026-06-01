@@ -22,7 +22,10 @@ function Navbar() {
     location.pathname === '/dashboard' ||
     location.pathname === '/profile' ||
     location.pathname === '/book' ||
-    location.pathname === '/booking'
+    location.pathname === '/booking' ||
+    location.pathname === '/history' ||
+    location.pathname === '/rewards' ||
+    location.pathname === '/settings'
   ) {
     return null;
   }
