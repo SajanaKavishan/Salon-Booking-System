@@ -1,5 +1,5 @@
 import React from 'react';
-import { X } from 'lucide-react';
+import { Scissors } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { clearAuthStorage } from '../../utils/auth';
 
@@ -58,7 +58,7 @@ const staffSidebarItems = [
 
 const customerSidebarItems = [
   {
-    label: 'Dashboard',
+    label: 'Overview',
     to: '/dashboard',
     end: true,
     icon: 'M4 4h6v6H4V4Zm10 0h6v6h-6V4ZM4 14h6v6H4v-6Zm10 0h6v6h-6v-6Z'
@@ -66,18 +66,25 @@ const customerSidebarItems = [
   {
     label: 'Book Appointment',
     to: '/book',
-    icon: 'M12 5v14M5 12h14'
+    icon: 'M7 3v3M17 3v3M4.5 9h10.5M6 5h9a2 2 0 0 1 2 2v3M8 13h4M10 11v4M6 9h9a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V11a2 2 0 0 1 2-2Z'
   },
   {
-    label: 'My Profile',
-    to: '/profile',
-    icon: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4 20a8 8 0 1 1 16 0'
+    label: 'My Appointments',
+    to: '/history',
+    icon: 'M7 3v3M17 3v3M4.5 9h15M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z'
   }
 ];
 
-function Sidebar({ isOpen = false, onClose = () => {} }) {
+function Sidebar({ isOpen = false, onClose = () => { } }) {
   const navigate = useNavigate();
-  const userRole = localStorage.getItem('userRole');
+  let storedUser = null;
+  try {
+    storedUser = JSON.parse(localStorage.getItem('user'));
+  } catch {
+    storedUser = null;
+  }
+
+  const userRole = localStorage.getItem('userRole') || storedUser?.role;
   const sidebarItems = userRole === 'admin'
     ? adminSidebarItems
     : userRole === 'staff'
@@ -104,78 +111,78 @@ function Sidebar({ isOpen = false, onClose = () => {} }) {
     navigate(to);
   };
 
-  const shellClassName = [
-    'fixed inset-y-0 left-0 z-30 flex w-[290px] flex-col border-r border-white/10 bg-[#090909]/95 text-white shadow-2xl backdrop-blur-md transition-transform duration-300 ease-out md:w-[314px]',
-    isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
-    'md:flex'
-  ].join(' ');
-
   return (
-    <aside className={shellClassName} aria-label={panelLabel}>
-      <div className="flex items-start justify-between gap-4 px-5 py-5 md:px-6 md:py-9">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight md:text-4xl">
-            Salon<span className="text-[#d4af37]">DEES</span>
-          </h1>
-          <p className="mt-2 text-sm text-slate-400 md:text-base">{suiteLabel}</p>
+    <aside
+      className={`fixed inset-y-0 left-0 z-40 w-72 border-r border-white/10 bg-[#0d1117] text-white shadow-2xl shadow-black/30 transition-transform duration-300 ease-out md:w-64 md:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      aria-label={panelLabel}
+    >
+      <div className="flex h-full flex-col justify-between">
+        <div className="px-6 pb-6 pt-8">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#d4af37]/25 bg-[#d4af37]/10 text-[#d4af37]">
+                <Scissors size={20} strokeWidth={2.1} />
+              </div>
+              <div>
+                <h1 className="font-serif text-2xl font-semibold tracking-wide text-white">
+                  Salon<span className="text-[#D4AF37]">DEES</span>
+                </h1>
+                <p className="mt-2 text-sm text-neutral-500">{suiteLabel}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-10">
+        
+            <nav className="space-y-1">
+              {sidebarItems.map((item) => (
+                <NavLink
+                  key={item.label}
+                  to={item.to}
+                  end={item.end}
+                  onClick={() => onClose()}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${isActive
+                      ? 'bg-[#d4af37]/12 text-[#D4AF37] ring-1 ring-[#d4af37]/20'
+                      : 'text-neutral-400 hover:bg-white/5 hover:text-[#D4AF37]'
+                    }`
+                  }
+                >
+                  <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d={item.icon} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  {item.label}
+                </NavLink>
+              ))}
+            </nav>
+          </div>
         </div>
 
-        <button
-          type="button"
-          onClick={onClose}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-[#d4af37] transition hover:bg-white/10 hover:text-yellow-400 md:hidden"
-          aria-label="Close menu"
-        >
-          <X size={20} />
-        </button>
-      </div>
-
-      <nav className="flex-1 space-y-2 border-t border-white/5 px-3 py-4 md:space-y-3 md:py-5">
-        {sidebarItems.map((item) => (
-          <NavLink
-            key={item.label}
-            to={item.to}
-            end={item.end}
-            onClick={() => onClose()}
-            className={({ isActive }) =>
-              `flex items-center gap-4 rounded-lg px-4 py-3 text-base font-semibold transition md:px-5 md:py-4 md:text-lg ${
-                isActive
-                  ? 'bg-[#d4af37] text-black shadow-lg shadow-[#d4af37]/25'
-                  : 'text-slate-300 hover:bg-white/10 hover:text-[#d4af37]'
-              }`
-            }
-          >
-            <svg className="h-5 w-5 shrink-0 md:h-6 md:w-6" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d={item.icon} stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            {item.label}
-          </NavLink>
-        ))}
-      </nav>
-
-      <div className="space-y-2 border-t border-white/10 px-3 py-4 md:space-y-3 md:py-6">
-        {userRole === 'admin' && (
+        <div className="border-t border-neutral-800 px-6 py-6">
+          {userRole === 'admin' && (
+            <button
+              type="button"
+              onClick={() => handleNavigate('/admin/messages')}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-neutral-400 transition hover:bg-white/5 hover:text-[#D4AF37]"
+            >
+              <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M4 5h16v11H7l-3 3V5Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Messages
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => handleNavigate('/admin/messages')}
-            className="salon-button-ghost w-full justify-start gap-4 px-4 py-3 text-left text-base md:px-5 md:py-4 md:text-lg"
+            onClick={handleLogout}
+            className="mt-3 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-neutral-400 transition hover:bg-white/5 hover:text-[#D4AF37]"
           >
-            <svg className="h-5 w-5 shrink-0 md:h-6 md:w-6" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M4 5h16v11H7l-3 3V5Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M15 17l5-5-5-5M20 12H8M11 20H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            Messages
+            Sign Out
           </button>
-        )}
-        <button
-          type="button"
-          onClick={handleLogout}
-          className="salon-button-ghost w-full justify-start gap-4 px-4 py-3 text-left text-base md:px-5 md:py-4 md:text-lg"
-        >
-          <svg className="h-5 w-5 shrink-0 md:h-6 md:w-6" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M15 17l5-5-5-5M20 12H8M11 20H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          Logout
-        </button>
+        </div>
       </div>
     </aside>
   );
