@@ -30,9 +30,9 @@ function Profile({ onClose }) {
 
     const preferredStylist = user?.preferredStylist || 'Elena';
     setFormValues({
-      name: user?.name || 'Ravindu Dulakshan',
-      email: user?.email || 'ravindu@salondees.com',
-      phone: user?.phone || '+94 77 123 4567',
+      name: user?.name,
+      email: user?.email,
+      phone: user?.phone,
       preferredStylist
     });
     setStylistQuery(preferredStylist);
