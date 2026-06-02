@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Menu } from 'lucide-react';
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import Sidebar from '../../components/admin/Sidebar';
 import Profile from '../customer/Profile';
 
 function Layout() {
+  const location = useLocation();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [user, setUser] = useState(() => {
@@ -45,7 +46,21 @@ function Layout() {
     : role === 'staff'
       ? 'Staff Suite'
       : 'Customer Suite';
-  const pageTitle = role === 'customer' ? 'Customer Portal' : suiteLabel;
+  const pageTitle = (() => {
+    if (role !== 'customer') {
+      return suiteLabel;
+    }
+
+    if (location.pathname.startsWith('/booking') || location.pathname.startsWith('/book')) {
+      return 'Booking Wizard';
+    }
+
+    if (location.pathname.startsWith('/history')) {
+      return 'Dossier History';
+    }
+
+    return 'Customer Portal';
+  })();
   const userInitial = user?.name ? user.name.charAt(0).toUpperCase() : 'U';
 
   const closeProfile = () => setIsProfileOpen(false);
@@ -54,7 +69,7 @@ function Layout() {
     <div className="min-h-screen w-full bg-[#07090d]">
       <Sidebar isOpen={isMobileSidebarOpen} onClose={() => setIsMobileSidebarOpen(false)} />
 
-      <div className="flex min-h-screen w-full flex-col md:pl-64">
+      <div className="flex min-h-screen w-full flex-col md:pl-80">
         <header className="sticky top-0 z-20 flex h-[72px] items-center justify-between bg-[#090d14]/95 px-4 backdrop-blur-md md:px-8">
           <div className="flex items-center gap-3">
             <button

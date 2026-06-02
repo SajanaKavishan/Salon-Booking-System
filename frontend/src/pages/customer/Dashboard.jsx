@@ -1,145 +1,479 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'react-toastify';
-import { DashboardStatCard, GlassCard, GoldButton, SectionPanel, StatusBadge } from '../../components/admin/SystemUI';
+
+const HISTORY_STATUSES = ['Completed', 'Rejected', 'Cancelled', 'No-Show'];
+const UPCOMING_STATUSES = ['Pending', 'Approved'];
+const HERO_IMAGE_URL = '/heroBg.jpg';
+
+const formatServices = (services, fallback = 'Service not available') => {
+  if (!Array.isArray(services) || services.length === 0) return fallback;
+  return services.map((service) => service?.name || service).join(', ');
+};
+
+const formatDate = (date) => {
+  if (!date) return 'Date pending';
+
+  const parsedDate = new Date(date);
+  if (Number.isNaN(parsedDate.getTime())) return 'Date pending';
+
+  return parsedDate.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
+};
+
+const statusClassName = (status) => {
+  if (status === 'Approved') return 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300';
+  if (status === 'Pending') return 'border-amber-400/20 bg-amber-400/10 text-amber-300';
+  if (status === 'Cancelled' || status === 'Rejected' || status === 'No-Show') {
+    return 'border-rose-400/20 bg-rose-400/10 text-rose-300';
+  }
+  if (status === 'Completed') return 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300';
+  return 'border-white/10 bg-white/5 text-slate-300';
+};
+
+const timeToMinutes = (timeValue) => {
+  if (!timeValue || typeof timeValue !== 'string') return 0;
+
+  const [rawTime, modifier] = timeValue.trim().split(' ');
+  const [rawHours, rawMinutes] = rawTime.split(':');
+  let hours = Number(rawHours);
+  const minutes = Number(rawMinutes);
+
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return 0;
+  if (hours === 12) hours = 0;
+  if (modifier === 'PM') hours += 12;
+
+  return hours * 60 + minutes;
+};
+
+const canCancelAppointment = (appointment) => {
+  if (!appointment?.date || !appointment?.startTime) return false;
+
+  const [year, month, day] = appointment.date.split('-').map(Number);
+  const startMinutes = timeToMinutes(appointment.startTime);
+  const appointmentStart = new Date(year, month - 1, day, Math.floor(startMinutes / 60), startMinutes % 60);
+  const hoursUntilAppointment = (appointmentStart.getTime() - Date.now()) / (1000 * 60 * 60);
+
+  return hoursUntilAppointment >= 2;
+};
 
 function Dashboard() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [appointments, setAppointments] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [appointmentToCancel, setAppointmentToCancel] = useState(null);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
     const token = localStorage.getItem('token');
 
-    if (storedUser && token) {
-      const fetchAppointments = async () => {
-        try {
-          setUser(JSON.parse(storedUser));
-          const response = await axios.get('http://localhost:5000/api/appointments', {
-            headers: {
-              Authorization: `Bearer ${token}`
-            }
-          });
-          setAppointments(response.data);
-        } catch (error) {
-          console.error('Error fetching appointments:', error);
-          toast.error('Failed to load your appointments.');
-        }
-      };
-
-      fetchAppointments();
+    if (storedUser) {
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch {
+        setUser(null);
+      }
     }
+
+    if (!token) {
+      setIsLoading(false);
+      return;
+    }
+
+    const fetchAppointments = async () => {
+      try {
+        const response = await axios.get('http://localhost:5000/api/appointments', {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
+        setAppointments(Array.isArray(response.data) ? response.data : []);
+      } catch (error) {
+        console.error('Error fetching appointments:', error);
+        toast.error('Failed to load your appointments.');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchAppointments();
   }, []);
 
-  const upcomingAppointments = appointments.filter((appt) => appt.status === 'Pending' || appt.status === 'Approved');
-  const historyAppointments = appointments.filter((appt) => (
-    appt.status === 'Completed' ||
-    appt.status === 'Rejected' ||
-    appt.status === 'Cancelled' ||
-    appt.status === 'No-Show'
-  ) && !appt.isHiddenByCustomer);
-  const approvedCount = appointments.filter((appt) => appt.status === 'Approved').length;
-  const totalSpend = appointments.reduce((sum, appt) => sum + Number(appt.totalAmount || 0), 0);
-  const nextAppointment = upcomingAppointments
-    .slice()
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0];
+  useEffect(() => {
+    const handleProfileUpdated = (event) => {
+      setUser(event.detail || null);
+    };
 
-  const statCards = [
-    {
-      label: 'Upcoming Appointments',
-      value: upcomingAppointments.length,
-      trend: `${approvedCount} approved`,
-      icon: (
-        <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M7 3v3M17 3v3M4.5 9h15M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      )
-    },
-    {
-      label: 'Booking History',
-      value: historyAppointments.length,
-      trend: 'Recent visits',
-      icon: (
-        <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M12 8v5l3 2M22 12a10 10 0 1 1-3-7.2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      )
-    },
-    {
-      label: 'Total Spend',
-      value: `Rs. ${totalSpend}`,
-      trend: 'All bookings',
-      icon: (
-        <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M12 3v18M17 7.5c-.8-1.2-2.4-2-4.3-2-2.4 0-4.2 1.2-4.2 3s1.5 2.5 4.1 3.1c2.8.6 4.4 1.4 4.4 3.4s-1.9 3.5-4.7 3.5c-2.1 0-4-.8-5.3-2.2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      )
+    window.addEventListener('profileUpdated', handleProfileUpdated);
+    return () => window.removeEventListener('profileUpdated', handleProfileUpdated);
+  }, []);
+
+  const upcomingAppointments = useMemo(
+    () => appointments
+      .filter((appt) => UPCOMING_STATUSES.includes(appt.status))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+    [appointments]
+  );
+
+  const pastAppointments = useMemo(
+    () => appointments
+      .filter((appt) => HISTORY_STATUSES.includes(appt.status) && !appt.isHiddenByCustomer)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+    [appointments]
+  );
+
+  const totalSpend = useMemo(
+    () => appointments.reduce((sum, appt) => sum + Number(appt.totalAmount || 0), 0),
+    [appointments]
+  );
+
+  const nextAppointment = upcomingAppointments[0];
+  const historyAppointments = pastAppointments;
+  const totalAppointments = appointments.length;
+  const displayName = user?.name || 'there';
+  const firstName = displayName.split(' ')[0];
+  const handleRebook = (appointment) => {
+    navigate('/book', {
+      state: {
+        rebookAppointment: appointment,
+        startStep: 3
+      }
+    });
+  };
+
+  const handleConfirmCancel = async () => {
+    if (!appointmentToCancel?._id && !appointmentToCancel?.id) return;
+
+    setIsCancelling(true);
+
+    try {
+      const token = localStorage.getItem('token');
+      const appointmentId = appointmentToCancel._id || appointmentToCancel.id;
+
+      const response = await axios.delete(`http://localhost:5000/api/appointments/${appointmentId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      setAppointments((currentAppointments) => currentAppointments.map((appointment) => (
+        (appointment._id || appointment.id) === appointmentId
+          ? { ...appointment, ...(response.data?.appointment || {}), status: 'Cancelled' }
+          : appointment
+      )));
+      setAppointmentToCancel(null);
+      toast.success('Your premium session has been cancelled.');
+    } catch (error) {
+      console.error('Cancel Appointment Error:', error);
+      toast.error(error.response?.data?.message || 'Unable to cancel this appointment right now.');
+    } finally {
+      setIsCancelling(false);
     }
-  ];
+  };
 
   return (
-    <div className="salon-page bg-[url('/loginBg.jpg')]">
-      <div className="salon-page-overlay fixed inset-0"></div>
+    <div className="mx-auto min-h-screen w-full max-w-7xl bg-[#070707] text-white">
+      <section className="min-w-0">
+        <div className="relative mb-8 w-full overflow-hidden rounded-2xl border border-[#D4AF37]/20 bg-gradient-to-r from-[#0a0a0a] via-[#111111] to-[#1a170c] p-6 shadow-2xl shadow-black/30 sm:p-8">
+          <div
+            className="pointer-events-none absolute inset-0 opacity-30"
+            style={{
+              backgroundImage: 'radial-gradient(circle, rgba(212,175,55,0.45) 1px, transparent 1px)',
+              backgroundSize: '18px 18px',
+              maskImage: 'linear-gradient(90deg, black 0%, transparent 34%)',
+              WebkitMaskImage: 'linear-gradient(90deg, black 0%, transparent 34%)'
+            }}
+          ></div>
+          <div
+            className="pointer-events-none absolute inset-y-0 right-0 hidden w-[58%] bg-cover bg-center opacity-50 md:block"
+            style={{ backgroundImage: `url("${HERO_IMAGE_URL}")` }}
+          ></div>
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-[#0a0a0a]/95 via-45% to-[#0a0a0a]/42"></div>
+          <div
+            className="pointer-events-none absolute left-[26%] top-[-70%] h-[230%] w-[34rem] -rotate-[32deg] opacity-75"
+            style={{
+              backgroundImage: [
+                'linear-gradient(90deg, transparent 0%, rgba(212,175,55,0.08) 34%, rgba(212,175,55,0.14) 50%, rgba(212,175,55,0.06) 66%, transparent 100%)',
+                'radial-gradient(circle, rgba(212,175,55,0.5) 0.7px, transparent 1px)',
+                'radial-gradient(circle, rgba(255,231,150,0.28) 0.5px, transparent 1px)'
+              ].join(', '),
+              backgroundSize: '100% 100%, 9px 9px, 15px 15px',
+              backgroundPosition: '0 0, 0 0, 4px 7px',
+              filter: 'blur(0.25px)',
+              maskImage: 'linear-gradient(90deg, transparent 0%, black 28%, black 72%, transparent 100%)',
+              WebkitMaskImage: 'linear-gradient(90deg, transparent 0%, black 28%, black 72%, transparent 100%)'
+            }}
+          ></div>
+          <div
+            className="pointer-events-none absolute left-[38%] top-[-62%] h-[210%] w-[18rem] -rotate-[32deg] opacity-45"
+            style={{
+              backgroundImage: 'radial-gradient(circle, rgba(212,175,55,0.45) 0.55px, transparent 1px)',
+              backgroundSize: '7px 7px',
+              maskImage: 'linear-gradient(90deg, transparent 0%, black 36%, black 64%, transparent 100%)',
+              WebkitMaskImage: 'linear-gradient(90deg, transparent 0%, black 36%, black 64%, transparent 100%)'
+            }}
+          ></div>
 
-      <main className="relative z-10 min-h-screen py-10">
-        <div className="salon-shell max-w-6xl">
-          <SectionPanel accent className="mb-8 p-8">
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <h2 className="text-3xl font-serif text-white">
-                  Welcome back, <span className="text-[#d4af37]">{user ? user.name || user.email : 'Guest'}</span>
-                </h2>
-                <p className="mt-3 text-sm font-light text-gray-400">Manage upcoming visits, review your past bookings, and schedule your next appointment.</p>
+          <div className="relative flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <h1 className="font-serif text-3xl text-white">
+                Welcome back, <span className="text-[#D4AF37]">{firstName}</span> 
+              </h1>
+              <p className="mt-2 text-sm text-neutral-400">
+                Ready for your next premium grooming session?
+              </p>
+              <div className="mt-7 text-sm text-neutral-400">
+                {nextAppointment ? (
+                  <div>
+                    <p>Your next appointment is on</p>
+                    <p className="mt-3 inline-flex flex-wrap items-center gap-2 font-semibold text-[#D4AF37]">
+                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M7 3v3M17 3v3M4.5 9h15M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      <span>{formatDate(nextAppointment.date)}</span>
+                      <span className="h-1 w-1 rounded-full bg-[#D4AF37]"></span>
+                      <span>{nextAppointment.startTime || 'Time pending'}</span>
+                    </p>
+                  </div>
+                ) : (
+                  <p>No upcoming bookings yet.</p>
+                )}
               </div>
-              <GoldButton type="button" onClick={() => navigate('/book')} className="w-fit px-6 py-3">
-                + Book New
-              </GoldButton>
-            </div>
-          </SectionPanel>
-
-          <section className="mb-8 grid gap-6 lg:grid-cols-[1.35fr_0.85fr]">
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-              {statCards.map((card) => (
-                <DashboardStatCard
-                  key={card.label}
-                  label={card.label}
-                  value={card.value}
-                  trend={card.trend}
-                  icon={card.icon}
-                  className="p-6"
-                />
-              ))}
             </div>
 
-            <GlassCard className="p-6">
-              <p className="text-xs uppercase tracking-[0.16em] text-gray-500">Next Appointment</p>
-              {nextAppointment ? (
-                <div className="mt-4 space-y-3">
-                  <p className="text-xl font-serif text-[#d4af37]">
-                    {new Date(nextAppointment.date).toLocaleDateString()}
-                  </p>
-                  <p className="text-sm text-gray-300">
-                    {nextAppointment.startTime} {nextAppointment.endTime ? `- ${nextAppointment.endTime}` : ''}
-                  </p>
-                  <p className="text-sm font-medium text-white">
-                    {nextAppointment.services?.map((service) => service.name || service).join(', ') || 'Service not available'}
-                  </p>
-                  <StatusBadge status={nextAppointment.status} />
-                </div>
-              ) : (
-                <div className="mt-4">
-                  <p className="text-sm text-gray-400">No upcoming booking yet.</p>
-                  <GoldButton type="button" onClick={() => navigate('/book')} className="mt-4 px-4 py-2">
-                    Book Your Next Visit
-                  </GoldButton>
-                </div>
-              )}
-            </GlassCard>
-          </section>
+            <button
+              type="button"
+              onClick={() => navigate('/book')}
+              className="w-full rounded-lg bg-[#D4AF37] px-6 py-3 text-sm font-bold text-black shadow-lg shadow-[#D4AF37]/15 transition hover:bg-[#b8952e] sm:w-fit"
+            >
+              + Book New Appointment
+            </button>
+          </div>
         </div>
-      </main>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+          <div className="bg-[#111111] border-neutral-850 rounded-xl p-5 flex items-center gap-5">
+            <div className="w-12 h-12 rounded-lg bg-[#D4AF37]/10 text-[#D4AF37] flex items-center justify-center">
+              <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M12 3v18M17 7.5c-.8-1.2-2.4-2-4.3-2-2.4 0-4.2 1.2-4.2 3s1.5 2.5 4.1 3.1c2.8.6 4.4 1.4 4.4 3.4s-1.9 3.5-4.7 3.5c-2.1 0-4-.8-5.3-2.2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-500">Total Spend</p>
+              <p className="mt-2 text-2xl font-bold text-white">Rs. {isLoading ? '...' : totalSpend.toLocaleString()}</p>
+              <p className="mt-1 text-sm text-neutral-500">All appointment payments</p>
+            </div>
+          </div>
+
+          <div className="bg-[#111111] border-neutral-850 rounded-xl p-5 flex items-center gap-5">
+            <div className="w-12 h-12 rounded-lg bg-[#D4AF37]/10 text-[#D4AF37] flex items-center justify-center">
+              <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M9.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM21 20.5v-1.7a3.5 3.5 0 0 0-2.7-3.4M16 3.2a4 4 0 0 1 0 7.6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-500">Total Visits</p>
+              <p className="mt-2 text-2xl font-bold text-white">{isLoading ? '...' : historyAppointments.length}</p>
+              <p className="mt-1 text-sm text-neutral-500">Lifetime visits</p>
+            </div>
+          </div>
+
+          <div className="bg-[#111111] border-neutral-850 rounded-xl p-5 flex items-center gap-5">
+            <div className="w-12 h-12 rounded-lg bg-[#D4AF37]/10 text-[#D4AF37] flex items-center justify-center">
+              <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-500">Appointments</p>
+              <p className="mt-2 text-2xl font-bold text-white">{isLoading ? '...' : totalAppointments}</p>
+              <p className="mt-1 text-sm text-neutral-500">All time bookings</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-10">
+          <h2 className="text-xl font-bold text-white">Upcoming Appointments</h2>
+
+          <div className="mt-5 space-y-4">
+            {isLoading ? (
+              <div className="h-36 animate-pulse rounded-xl border border-white/10 bg-white/[0.04]"></div>
+            ) : upcomingAppointments.length > 0 ? (
+              upcomingAppointments.slice(0, 2).map((appointment) => (
+                <article
+                  key={appointment._id || appointment.id}
+                  className="rounded-xl border border-white/10 border-l-[#d4af37] border-l-4 bg-[#0d1117] p-5 shadow-sm"
+                >
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <h3 className="text-lg font-bold text-white">{formatServices(appointment.services)}</h3>
+                      <div className="mt-4 grid gap-3 text-sm text-slate-400 sm:grid-cols-3">
+                        <span className="flex items-center gap-2">
+                          <svg className="h-4 w-4 text-slate-500" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4 20a8 8 0 0 1 16 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                          </svg>
+                          {appointment.stylist?.name || 'Stylist pending'}
+                        </span>
+                        <span className="flex items-center gap-2">
+                          <svg className="h-4 w-4 text-slate-500" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path d="M7 3v3M17 3v3M4.5 9h15M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                          </svg>
+                          {formatDate(appointment.date)}
+                        </span>
+                        <span className="flex items-center gap-2">
+                          <svg className="h-4 w-4 text-slate-500" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path d="M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                          </svg>
+                          {appointment.startTime || 'Time pending'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3">
+                      {(() => {
+                        const isCancellable = canCancelAppointment(appointment);
+
+                        return (
+                          <>
+                      <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusClassName(appointment.status)}`}>
+                        {appointment.status}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => navigate('/book')}
+                        className="rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-semibold text-white transition hover:border-[#d4af37]/40 hover:text-[#d4af37]"
+                      >
+                        Reschedule
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAppointmentToCancel(appointment)}
+                        disabled={!isCancellable}
+                        title={isCancellable ? 'Cancel appointment' : 'Appointments can only be cancelled at least 2 hours before start time.'}
+                        className="rounded-lg px-3 py-2 text-sm font-semibold text-red-300 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:text-white/25 disabled:hover:bg-transparent"
+                      >
+                        Cancel
+                      </button>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                </article>
+              ))
+            ) : (
+              <div className="rounded-xl border border-dashed border-white/15 bg-[#0d1117] p-8 text-center">
+                <p className="font-semibold text-white">No upcoming appointments</p>
+                <p className="mt-2 text-sm text-slate-500">Your next booking will show here.</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-10">
+          <h2 className="text-xl font-bold text-white">Past Appointments</h2>
+
+          <div className="mt-5 space-y-4">
+            {isLoading ? (
+              [1, 2].map((row) => (
+                <div key={row} className="h-24 animate-pulse rounded-xl border border-white/10 bg-white/[0.04]"></div>
+              ))
+            ) : pastAppointments.length > 0 ? (
+              pastAppointments.slice(0, 3).map((appointment) => (
+                <article
+                  key={appointment._id || appointment.id}
+                  className="flex flex-col gap-4 rounded-xl border border-white/10 bg-[#0d1117] p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div>
+                    <h3 className="text-lg font-semibold text-white">{formatServices(appointment.services)}</h3>
+                    <p className="mt-2 text-sm text-slate-400">
+                      {formatDate(appointment.date)} &bull; {appointment.stylist?.name || appointment.status}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleRebook(appointment)}
+                    className="w-fit rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-semibold text-white transition hover:border-[#d4af37]/40 hover:text-[#d4af37]"
+                  >
+                    Rebook
+                  </button>
+                </article>
+              ))
+            ) : (
+              <div className="rounded-xl border border-dashed border-white/15 bg-[#0d1117] p-6 text-sm text-slate-500">
+                Completed appointments will appear here.
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+
+      <AnimatePresence>
+        {appointmentToCancel && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 backdrop-blur-md"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => {
+              if (!isCancelling) setAppointmentToCancel(null);
+            }}
+          >
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="cancel-session-title"
+              className="w-full max-w-md border border-[#D4AF37]/35 bg-[#070707] p-6 shadow-2xl shadow-black/60 sm:p-7"
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.28, ease: 'easeOut' }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <p className="text-[0.65rem] uppercase tracking-[0.38em] text-[#D4AF37]">Confirmation</p>
+              <h3 id="cancel-session-title" className="mt-4 font-serif text-3xl text-white">
+                Cancel Premium Session?
+              </h3>
+              <p className="mt-4 text-sm leading-6 text-white/62">
+                This action will release your reserved luxury time slot. Are you certain you wish to proceed?
+              </p>
+
+              <div className="mt-7 rounded-xl border border-white/8 bg-white/[0.025] p-4">
+                <p className="text-sm font-semibold text-white">{formatServices(appointmentToCancel.services)}</p>
+                <p className="mt-2 text-xs uppercase tracking-[0.22em] text-white/35">
+                  {formatDate(appointmentToCancel.date)} • {appointmentToCancel.startTime || 'Time pending'}
+                </p>
+              </div>
+
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  disabled={isCancelling}
+                  onClick={() => setAppointmentToCancel(null)}
+                  className="rounded-full border border-white/15 px-5 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-white/70 transition hover:border-[#D4AF37]/45 hover:text-[#D4AF37] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  No, Retain Booking
+                </button>
+                <button
+                  type="button"
+                  disabled={isCancelling}
+                  onClick={handleConfirmCancel}
+                  className="rounded-full border border-red-400/30 bg-red-500/15 px-5 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-red-100 transition hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isCancelling ? 'Cancelling...' : 'Yes, Cancel Session'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
