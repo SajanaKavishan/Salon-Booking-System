@@ -79,7 +79,7 @@ const createAppointment = async (req, res) => {
             const existingAppointments = await Appointment.find({
                 date: date,
                 stylist: stylistName,
-                status: {$ne: 'Rejected'} // Only consider appointments that are not rejected when checking for overlaps
+                status: { $nin: ['Rejected', 'Cancelled'] }
             });
 
             let hasOverlap = false;
@@ -205,7 +205,7 @@ const getStaffAppointments = async (req, res) => {
     }
 };
 
-// @desc    Delete an appointment
+// @desc    Cancel an appointment
 // @route   DELETE /api/appointments/:id
 // @access  Private
 const deleteAppointment = async (req, res) => {
@@ -244,11 +244,17 @@ const deleteAppointment = async (req, res) => {
             });
         }
 
-        await appointment.deleteOne();
+        if (['Cancelled', 'Rejected', 'Completed', 'No-Show'].includes(appointment.status)) {
+            return res.status(400).json({ message: `This appointment is already ${appointment.status.toLowerCase()}.` });
+        }
 
-        res.status(200).json({ 
-            id: req.params.id, 
-            message: "Appointment deleted successfully!" 
+        appointment.status = 'Cancelled';
+        const updatedAppointment = await appointment.save();
+
+        res.status(200).json({
+            id: req.params.id,
+            appointment: updatedAppointment,
+            message: "Appointment cancelled successfully!"
         });
 
     } catch (error) {
