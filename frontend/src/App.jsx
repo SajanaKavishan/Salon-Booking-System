@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import Home from './pages/auth/Home';
 import Login from './pages/auth/Login';
@@ -33,6 +33,14 @@ function PlaceholderPage({ title, subtitle }) {
 }
 
 function App() {
+  const userProfile = useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem('userProfile')) || null;
+    } catch {
+      return null;
+    }
+  }, []);
+
   return (
     <>
       <ToastContainer position="top-right" autoClose={3000}  />
@@ -53,8 +61,8 @@ function App() {
           >
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/profile" element={<Profile />} />
-            <Route path="/book" element={<BookAppointment />} />
-            <Route path="/booking" element={<BookAppointment />} />
+            <Route path="/book" element={<BookAppointment userProfile={userProfile} />} />
+            <Route path="/booking" element={<BookAppointment userProfile={userProfile} />} />
             <Route path="/history" element={<History />} />
           </Route>
 
