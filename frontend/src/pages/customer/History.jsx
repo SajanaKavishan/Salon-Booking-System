@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
+import { useAppointments } from '../../context/AppointmentsContext';
 
 const HISTORY_STATUSES = ['Completed', 'Rejected', 'Cancelled', 'No-Show'];
 const HERO_IMAGE_URL = '/heroBg.jpg';
@@ -32,7 +33,7 @@ const statusClassName = (status) => {
 };
 
 function History() {
-  const [appointments, setAppointments] = useState([]);
+  const { appointments, setAppointments } = useAppointments();
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [activeFilter, setActiveFilter] = useState('');
@@ -52,11 +53,18 @@ function History() {
             Authorization: `Bearer ${token}`
           }
         });
-        setAppointments(Array.isArray(response.data) ? response.data : []);
+        const apiAppointments = Array.isArray(response.data) ? response.data : [];
+        
+        // Merge API appointments with context appointments (avoid duplicates)
+        const appointmentIds = new Set(apiAppointments.map((a) => a._id || a.id));
+        const contextOnlyAppointments = appointments.filter((a) => !appointmentIds.has(a._id || a.id));
+        const mergedAppointments = [...apiAppointments, ...contextOnlyAppointments];
+        
+        setAppointments(mergedAppointments);
       } catch (error) {
         console.error('Error fetching history:', error);
         toast.error('Failed to load your history.');
-        setErrorMessage('Unable to load history right now.');
+        // If API fails, we still have context appointments available
       } finally {
         setIsLoading(false);
       }

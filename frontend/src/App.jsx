@@ -22,6 +22,7 @@ import ClientsPage from './pages/admin/ClientsPage';
 import StaffPage from './pages/admin/StaffPage';
 import ServicesPage from './pages/admin/ServicesPage';
 import SettingsPage from './pages/admin/SettingsPage';
+import { AppointmentsProvider } from './context/AppointmentsContext';
 
 function PlaceholderPage({ title, subtitle }) {
   return (
@@ -44,70 +45,72 @@ function App() {
   return (
     <>
       <ToastContainer position="top-right" autoClose={3000}  />
-      <BrowserRouter>
-        <Navbar />
+      <AppointmentsProvider>
+        <BrowserRouter>
+          <Navbar />
 
-        <Routes>
-          {/* First, show the home page */}
-          <Route path="/" element={<Home />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route
-            element={
-              <CustomerRoute>
-                <Layout />
-              </CustomerRoute>
-            }
-          >
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/book" element={<BookAppointment userProfile={userProfile} />} />
-            <Route path="/booking" element={<BookAppointment userProfile={userProfile} />} />
-            <Route path="/history" element={<History />} />
-          </Route>
+          <Routes>
+            {/* First, show the home page */}
+            <Route path="/" element={<Home />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route
+              element={
+                <CustomerRoute>
+                  <Layout />
+                </CustomerRoute>
+              }
+            >
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/profile" element={<Profile />} />
+              <Route path="/book" element={<BookAppointment userProfile={userProfile} />} />
+              <Route path="/booking" element={<BookAppointment userProfile={userProfile} />} />
+              <Route path="/history" element={<History />} />
+            </Route>
 
-          {/* Admin routes */}  
-          <Route 
-            path="/admin" 
-            element={
-              <ProtectedRoute allowedRoles={['admin']}>
-                <Layout />
-              </ProtectedRoute>
-            } 
-          >
-            <Route index element={<AdminDashboard />} />
-            <Route path="appointments" element={<AppointmentsPage />} />
-            <Route path="clients" element={<ClientsPage />} />
-            <Route path="staff" element={<StaffPage />} />
-            <Route path="services" element={<ServicesPage />} />
-            <Route path="analytics" element={<PlaceholderPage title="Analytics" subtitle="Analytics dashboard will be available here." />} />
-          </Route>
+            {/* Admin routes */}  
+            <Route 
+              path="/admin" 
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <Layout />
+                </ProtectedRoute>
+              } 
+            >
+              <Route index element={<AdminDashboard />} />
+              <Route path="appointments" element={<AppointmentsPage />} />
+              <Route path="clients" element={<ClientsPage />} />
+              <Route path="staff" element={<StaffPage />} />
+              <Route path="services" element={<ServicesPage />} />
+              <Route path="analytics" element={<PlaceholderPage title="Analytics" subtitle="Analytics dashboard will be available here." />} />
+            </Route>
 
-          <Route 
-            path="/staff" 
-            element={
-              <ProtectedRoute allowedRoles={['staff']}>
-                <Layout />
-              </ProtectedRoute>
-            } 
-          >
-            <Route index element={<Navigate to="dashboard" replace />} />
-            <Route path="dashboard" element={<StaffDashboard />} />
-            <Route path="appointments" element={<AppointmentsPage />} />
-            <Route path="profile" element={<StaffProfile />} />
-          </Route>
-          <Route 
-            path="/admin/messages" 
-            element={
-              <ProtectedRoute allowedRoles={['admin']}>
-                <AdminMessages />
-              </ProtectedRoute>
-            } 
-          />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+            <Route 
+              path="/staff" 
+              element={
+                <ProtectedRoute allowedRoles={['staff']}>
+                  <Layout />
+                </ProtectedRoute>
+              } 
+            >
+              <Route index element={<Navigate to="dashboard" replace />} />
+              <Route path="dashboard" element={<StaffDashboard />} />
+              <Route path="appointments" element={<AppointmentsPage />} />
+              <Route path="profile" element={<StaffProfile />} />
+            </Route>
+            <Route 
+              path="/admin/messages" 
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminMessages />
+                </ProtectedRoute>
+              } 
+            />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
 
-      </BrowserRouter>
+        </BrowserRouter>
+      </AppointmentsProvider>
     </>
   );
 }

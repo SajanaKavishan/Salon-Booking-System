@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'react-toastify';
+import { useAppointments } from '../../context/AppointmentsContext';
 
 const HISTORY_STATUSES = ['Completed', 'Rejected', 'Cancelled', 'No-Show'];
 const UPCOMING_STATUSES = ['Pending', 'Approved'];
@@ -64,8 +65,8 @@ const canCancelAppointment = (appointment) => {
 
 function Dashboard() {
   const navigate = useNavigate();
+  const { appointments, setAppointments } = useAppointments();
   const [user, setUser] = useState(null);
-  const [appointments, setAppointments] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [appointmentToCancel, setAppointmentToCancel] = useState(null);
   const [isCancelling, setIsCancelling] = useState(false);
@@ -94,10 +95,18 @@ function Dashboard() {
             Authorization: `Bearer ${token}`
           }
         });
-        setAppointments(Array.isArray(response.data) ? response.data : []);
+        const apiAppointments = Array.isArray(response.data) ? response.data : [];
+        
+        // Merge API appointments with context appointments (avoid duplicates)
+        const appointmentIds = new Set(apiAppointments.map((a) => a._id || a.id));
+        const contextOnlyAppointments = appointments.filter((a) => !appointmentIds.has(a._id || a.id));
+        const mergedAppointments = [...apiAppointments, ...contextOnlyAppointments];
+        
+        setAppointments(mergedAppointments);
       } catch (error) {
         console.error('Error fetching appointments:', error);
         toast.error('Failed to load your appointments.');
+        // If API fails, we still have context appointments available
       } finally {
         setIsLoading(false);
       }
@@ -439,10 +448,10 @@ function Dashboard() {
             >
               <p className="text-[0.65rem] uppercase tracking-[0.38em] text-[#D4AF37]">Confirmation</p>
               <h3 id="cancel-session-title" className="mt-4 font-serif text-3xl text-white">
-                Cancel Premium Session?
+                Cancel Session?
               </h3>
               <p className="mt-4 text-sm leading-6 text-white/62">
-                This action will release your reserved luxury time slot. Are you certain you wish to proceed?
+                This action will release your reserved time slot. Are you certain you wish to proceed?
               </p>
 
               <div className="mt-7 rounded-xl border border-white/8 bg-white/[0.025] p-4">

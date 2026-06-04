@@ -5,6 +5,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import Spinner from '../../components/common/Spinner';
 import { useSalonSettings } from '../../hooks/useSalonSettings';
+import { useAppointments } from '../../context/AppointmentsContext';
 
 const ANY_STYLIST = '__ANY_STYLIST__';
 
@@ -36,6 +37,7 @@ function BookAppointment({ userProfile, customerData }) {
   const { settings } = useSalonSettings();
   const navigate = useNavigate();
   const location = useLocation();
+  const { addAppointment } = useAppointments();
 
   const profile = userProfile || customerData || {};
   const preferredStylistName = typeof profile.preferredStylist === 'string'
@@ -395,7 +397,7 @@ function BookAppointment({ userProfile, customerData }) {
           stylist: stylistId
         };
 
-        await axios.post(
+        const response = await axios.post(
           'http://localhost:5000/api/appointments',
           bookingData,
           {
@@ -405,13 +407,39 @@ function BookAppointment({ userProfile, customerData }) {
           }
         );
 
+        // Construct the appointment object from response
+        const createdAppointment = response.data?.appointment || response.data || {};
+        
+        // Ensure the appointment has all required fields
+        const appointmentToAdd = {
+          _id: createdAppointment._id || createdAppointment.id || `appt-${Date.now()}`,
+          id: createdAppointment._id || createdAppointment.id || `appt-${Date.now()}`,
+          date: createdAppointment.date || date,
+          startTime: createdAppointment.startTime || time,
+          endTime: createdAppointment.endTime || '',
+          services: createdAppointment.services || selectedServices.map((id) => {
+            const service = servicesList.find((s) => s._id === id);
+            return service ? { _id: service._id, name: service.name, price: service.price, duration: service.duration } : { _id: id, name: 'Service' };
+          }),
+          stylist: createdAppointment.stylist || (stylistId ? stylistRecord : null) || { _id: stylistId, name: 'Any Available' },
+          status: createdAppointment.status || 'Pending',
+          totalAmount: createdAppointment.totalAmount || 0,
+          isHiddenByCustomer: false
+        };
+
+        // Add appointment to global context
+        addAppointment(appointmentToAdd);
+
         toast.success('Great! Your appointment has been booked successfully.');
+        
+        // Reset wizard state
         setDate('');
         setTime('');
         setSelectedServices([]);
         setStylist('');
         setHasUserSelectedStylist(false);
         setStep(1);
+        
         navigate('/dashboard');
       } catch (error) {
         console.error('Booking Error:', error);

@@ -51,6 +51,11 @@ function Layout() {
       return suiteLabel;
     }
 
+    // Dashboard and root map to Customer Portal
+    if (location.pathname === '/' || location.pathname.startsWith('/dashboard')) {
+      return 'Customer Portal';
+    }
+
     if (location.pathname.startsWith('/booking') || location.pathname.startsWith('/book')) {
       return 'Booking Wizard';
     }
