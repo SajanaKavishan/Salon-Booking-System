@@ -114,7 +114,6 @@ function History() {
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-[#0a0a0a]/95 via-45% to-[#0a0a0a]/42"></div>
 
           <div className="relative flex flex-col gap-4">
-            <p className="text-xs uppercase tracking-[0.3em] text-white/40">Booking history</p>
             <h1 className="text-2xl font-serif text-white sm:text-3xl">Your recent visits & outcomes</h1>
             <p className="text-sm text-white/60">
               Review completed services, track totals, and revisit your favorite sessions.
@@ -130,9 +129,9 @@ function History() {
               </svg>
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-500">Total visits</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-400">Total visits</p>
               <p className="mt-2 text-2xl font-bold text-white">{isLoading ? '...' : historyAppointments.length}</p>
-              <p className="mt-1 text-sm text-neutral-500">Your completed and closed sessions</p>
+              <p className="mt-1 text-sm text-neutral-400">Your completed and closed sessions</p>
             </div>
           </div>
           <div className="bg-[#111111] border-neutral-850 rounded-xl p-5 flex items-center gap-5">
@@ -143,9 +142,9 @@ function History() {
               </svg>
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-500">Completed</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-400">Completed</p>
               <p className="mt-2 text-2xl font-bold text-white">{isLoading ? '...' : completedCount}</p>
-              <p className="mt-1 text-sm text-neutral-500">Successful visits</p>
+              <p className="mt-1 text-sm text-neutral-400">Successful visits</p>
             </div>
           </div>
           <div className="bg-[#111111] border-neutral-850 rounded-xl p-5 flex items-center gap-5">
@@ -156,9 +155,9 @@ function History() {
               </svg>
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-500">Cancelled</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-400">Cancelled</p>
               <p className="mt-2 text-2xl font-bold text-white">{isLoading ? '...' : cancelledCount}</p>
-              <p className="mt-1 text-sm text-neutral-500">Closed without service</p>
+              <p className="mt-1 text-sm text-neutral-400">Closed without service</p>
             </div>
           </div>
         </section>

@@ -12,9 +12,9 @@ const appointmentSchema = new mongoose.Schema({
     required: true 
     }], // This is an array of ObjectIds that reference the Service model, allowing an appointment to include multiple services.
     stylist: {
-        type: String,
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Staff',
         required: [true, 'Please enter the stylist name'],
-        default: 'Any Available Stylist', // Default to "Any Available Stylist" if not specified
     },
     date: {
         type: String,

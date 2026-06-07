@@ -161,8 +161,11 @@ const createAppointment = async (req, res) => {
 // @access  Private
 const getMyAppointments = async (req, res) => {
     try {
-        // Using req.user._id to find appointments that belong to the currently logged-in user. This ensures that users can only see their own appointments when they access this route. The appointments are sorted by creation date in descending order, so the most recent appointments will appear first in the response.
-        const appointments = await Appointment.find({ user: req.user._id }).populate('services', 'name price').sort({ createdAt: -1 });
+        const appointments = await Appointment.find({ user: req.user._id })
+            .populate('services', 'name price')
+            .populate('stylist', 'name')
+            .sort({ createdAt: -1 });
+            
         res.status(200).json(appointments);
     } catch (error) {
         console.error("Get My Appointments Error:", error);
@@ -268,7 +271,16 @@ const deleteAppointment = async (req, res) => {
 // @access  Private/Admin
 const updateAppointmentStatus = async (req, res) => {
     try {
-        const { status } = req.body; 
+        const { status } = req.body;
+        
+        // Validate status value
+        const validStatuses = ['Pending', 'Approved', 'Rejected', 'Cancelled', 'Completed', 'No-Show'];
+        if (!status || !validStatuses.includes(status)) {
+            return res.status(400).json({ 
+                message: `Invalid status. Must be one of: ${validStatuses.join(', ')}` 
+            });
+        }
+        
         const settings = await ensureSettingsDocument();
         const salonName = settings?.salonName || defaultSettings.salonName;
         const supportEmail = settings?.supportEmail || defaultSettings.supportEmail;
@@ -287,14 +299,18 @@ const updateAppointmentStatus = async (req, res) => {
         if (settings.customerEmails && appointment.user && appointment.user.email) {
             const emailSubject = `Appointment ${status} - ${salonName}`;
 
-            const serviceNames = appointment.services.map(s => s.name).join(', ');
+            // Safely get service names - filter out any null/undefined services
+            const serviceNames = (appointment.services && appointment.services.length > 0)
+                ? appointment.services.filter(s => s && s.name).map(s => s.name).join(', ')
+                : 'Not specified';
+            
             const statusColor = status === 'Approved' ? '#27ae60' : status === 'Rejected' ? '#e74c3c' : '#f39c12';
             const rows = [
                 ['Services', serviceNames],
-                ['Date', appointment.date],
-                ['Time', `${appointment.startTime} - ${appointment.endTime}`],
-                ['Duration', `${appointment.totalDuration} minutes`],
-                ['Total Amount', `Rs. ${appointment.totalAmount.toFixed(2)}`]
+                ['Date', appointment.date || 'Not specified'],
+                ['Time', `${appointment.startTime || 'N/A'} - ${appointment.endTime || 'N/A'}`],
+                ['Duration', `${appointment.totalDuration || 0} minutes`],
+                ['Total Amount', `Rs. ${(appointment.totalAmount || 0).toFixed(2)}`]
             ];
 
             const emailMessage = settings.darkReceipts
@@ -340,11 +356,16 @@ const updateAppointmentStatus = async (req, res) => {
                 `;
 
             // Send data to sendEmail utility function to send the email notification to the user about the status update of their appointment. The email includes the appointment details and a message indicating the new status of the appointment.
-            await sendEmail({
-                email: appointment.user.email,
-                subject: emailSubject,
-                message: emailMessage
-            });
+            try {
+                await sendEmail({
+                    email: appointment.user.email,
+                    subject: emailSubject,
+                    message: emailMessage
+                });
+            } catch (emailError) {
+                // Log email error but don't fail the appointment status update
+                console.warn("Email notification failed, but appointment status was updated:", emailError.message);
+            }
         }
 
         res.status(200).json({ 
@@ -353,8 +374,12 @@ const updateAppointmentStatus = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Update Status Error:", error);
-        res.status(500).json({ message: "Server Error: Could not update appointment status." });
+        console.error("Update Status Error:", error.message);
+        console.error("Full Error Stack:", error);
+        res.status(500).json({ 
+            message: "Server Error: Could not update appointment status.",
+            error: error.message 
+        });
     }
 };
 
@@ -408,8 +433,12 @@ const updateAppointmentStatusByStaff = async (req, res) => {
             appointment: updatedAppointment
         });
     } catch (error) {
-        console.error('Staff Status Update Error:', error);
-        res.status(500).json({ message: 'Server Error: Could not update appointment status.' });
+        console.error('Staff Status Update Error:', error.message);
+        console.error('Full Error Stack:', error);
+        res.status(500).json({ 
+            message: 'Server Error: Could not update appointment status.',
+            error: error.message 
+        });
     }
 };
 

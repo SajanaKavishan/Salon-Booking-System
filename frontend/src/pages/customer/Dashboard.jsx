@@ -52,10 +52,36 @@ const timeToMinutes = (timeValue) => {
   return hours * 60 + minutes;
 };
 
+const getStylistDisplayName = (appointment) => {
+  // Use optional chaining for safe property access
+  const stylistName = appointment?.stylistName || appointment?.stylist;
+
+  // If it's a hex ID (24-char MongoDB ObjectId), it slipped through - show fallback
+  if (typeof stylistName === 'string' && /^[0-9a-fA-F]{24}$/.test(stylistName)) {
+    return 'Any Available Artist';
+  }
+
+  // If stylist name is a string, return it directly
+  if (typeof stylistName === 'string' && stylistName.trim()) {
+    return stylistName;
+  }
+
+  // If stylist is an object with a name property
+  if (typeof stylistName === 'object' && stylistName?.name) {
+    return stylistName.name;
+  }
+
+  // If no stylist assigned, show "Any Available Artist"
+  return 'Any Available Artist';
+};
+
 const canCancelAppointment = (appointment) => {
   if (!appointment?.date || !appointment?.startTime) return false;
 
-  const [year, month, day] = appointment.date.split('-').map(Number);
+  // ISO string එකේ date එක විතරක් වෙන් කරලා ගන්නවා
+  const cleanDate = appointment.date.split('T')[0];
+  const [year, month, day] = cleanDate.split('-').map(Number);
+
   const startMinutes = timeToMinutes(appointment.startTime);
   const appointmentStart = new Date(year, month - 1, day, Math.floor(startMinutes / 60), startMinutes % 60);
   const hoursUntilAppointment = (appointmentStart.getTime() - Date.now()) / (1000 * 60 * 60);
@@ -96,12 +122,12 @@ function Dashboard() {
           }
         });
         const apiAppointments = Array.isArray(response.data) ? response.data : [];
-        
+
         // Merge API appointments with context appointments (avoid duplicates)
         const appointmentIds = new Set(apiAppointments.map((a) => a._id || a.id));
         const contextOnlyAppointments = appointments.filter((a) => !appointmentIds.has(a._id || a.id));
         const mergedAppointments = [...apiAppointments, ...contextOnlyAppointments];
-        
+
         setAppointments(mergedAppointments);
       } catch (error) {
         console.error('Error fetching appointments:', error);
@@ -113,7 +139,7 @@ function Dashboard() {
     };
 
     fetchAppointments();
-  }, []);
+  }, []); 
 
   useEffect(() => {
     const handleProfileUpdated = (event) => {
@@ -126,21 +152,28 @@ function Dashboard() {
 
   const upcomingAppointments = useMemo(
     () => appointments
-      .filter((appt) => UPCOMING_STATUSES.includes(appt.status))
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+      .filter((appt) => UPCOMING_STATUSES.includes(appt?.status))
+      .sort((a, b) => new Date(a?.date).getTime() - new Date(b?.date).getTime()),
     [appointments]
   );
 
   const pastAppointments = useMemo(
     () => appointments
-      .filter((appt) => HISTORY_STATUSES.includes(appt.status) && !appt.isHiddenByCustomer)
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+      .filter((appt) => HISTORY_STATUSES.includes(appt?.status) && !appt?.isHiddenByCustomer)
+      .sort((a, b) => new Date(b?.date).getTime() - new Date(a?.date).getTime()),
     [appointments]
   );
 
-  const totalSpend = useMemo(
-    () => appointments.reduce((sum, appt) => sum + Number(appt.totalAmount || 0), 0),
+  // Only count COMPLETED appointments for Total Visits metric
+  const completedAppointments = useMemo(
+    () => appointments.filter((appt) => appt?.status === 'Completed'),
     [appointments]
+  );
+
+  // Only sum prices of COMPLETED appointments for Total Spend metric
+  const totalSpend = useMemo(
+    () => completedAppointments.reduce((sum, appt) => sum + Number(appt?.totalAmount || 0), 0),
+    [completedAppointments]
   );
 
   const nextAppointment = upcomingAppointments[0];
@@ -233,7 +266,7 @@ function Dashboard() {
           <div className="relative flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <h1 className="font-serif text-3xl text-white">
-                Welcome back, <span className="text-[#D4AF37]">{firstName}</span> 
+                Welcome back, <span className="text-[#D4AF37]">{firstName}</span>
               </h1>
               <p className="mt-2 text-sm text-neutral-400">
                 Ready for your next premium grooming session?
@@ -275,9 +308,9 @@ function Dashboard() {
               </svg>
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-500">Total Spend</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-400">Total Spend</p>
               <p className="mt-2 text-2xl font-bold text-white">Rs. {isLoading ? '...' : totalSpend.toLocaleString()}</p>
-              <p className="mt-1 text-sm text-neutral-500">All appointment payments</p>
+              <p className="mt-1 text-sm text-neutral-400">All appointment payments</p>
             </div>
           </div>
 
@@ -288,9 +321,9 @@ function Dashboard() {
               </svg>
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-500">Total Visits</p>
-              <p className="mt-2 text-2xl font-bold text-white">{isLoading ? '...' : historyAppointments.length}</p>
-              <p className="mt-1 text-sm text-neutral-500">Lifetime visits</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-400">Total Visits</p>
+              <p className="mt-2 text-2xl font-bold text-white">{isLoading ? '...' : completedAppointments.length}</p>
+              <p className="mt-1 text-sm text-neutral-400">Completed visits</p>
             </div>
           </div>
 
@@ -301,9 +334,9 @@ function Dashboard() {
               </svg>
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-500">Appointments</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-400">Appointments</p>
               <p className="mt-2 text-2xl font-bold text-white">{isLoading ? '...' : totalAppointments}</p>
-              <p className="mt-1 text-sm text-neutral-500">All time bookings</p>
+              <p className="mt-1 text-sm text-neutral-400">All time bookings</p>
             </div>
           </div>
         </div>
@@ -328,7 +361,7 @@ function Dashboard() {
                           <svg className="h-4 w-4 text-slate-500" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                             <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4 20a8 8 0 0 1 16 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
                           </svg>
-                          {appointment.stylist?.name || 'Stylist pending'}
+                          {getStylistDisplayName(appointment) || 'Any Available Artist'}
                         </span>
                         <span className="flex items-center gap-2">
                           <svg className="h-4 w-4 text-slate-500" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -351,25 +384,25 @@ function Dashboard() {
 
                         return (
                           <>
-                      <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusClassName(appointment.status)}`}>
-                        {appointment.status}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => navigate('/book')}
-                        className="rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-semibold text-white transition hover:border-[#d4af37]/40 hover:text-[#d4af37]"
-                      >
-                        Reschedule
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAppointmentToCancel(appointment)}
-                        disabled={!isCancellable}
-                        title={isCancellable ? 'Cancel appointment' : 'Appointments can only be cancelled at least 2 hours before start time.'}
-                        className="rounded-lg px-3 py-2 text-sm font-semibold text-red-300 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:text-white/25 disabled:hover:bg-transparent"
-                      >
-                        Cancel
-                      </button>
+                            <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusClassName(appointment.status)}`}>
+                              {appointment.status}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => navigate('/book')}
+                              className="rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-semibold text-white transition hover:border-[#d4af37]/40 hover:text-[#d4af37]"
+                            >
+                              Reschedule
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setAppointmentToCancel(appointment)}
+                              disabled={!isCancellable}
+                              title={isCancellable ? 'Cancel appointment' : 'Appointments can only be cancelled at least 2 hours before start time.'}
+                              className="rounded-lg px-3 py-2 text-sm font-semibold text-red-300 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:text-white/25 disabled:hover:bg-transparent"
+                            >
+                              Cancel
+                            </button>
                           </>
                         );
                       })()}
@@ -403,7 +436,7 @@ function Dashboard() {
                   <div>
                     <h3 className="text-lg font-semibold text-white">{formatServices(appointment.services)}</h3>
                     <p className="mt-2 text-sm text-slate-400">
-                      {formatDate(appointment.date)} &bull; {appointment.stylist?.name || appointment.status}
+                      {formatDate(appointment.date)} &bull; {getStylistDisplayName(appointment)} &bull; <span className="font-medium">{appointment.status}</span>
                     </p>
                   </div>
                   <button

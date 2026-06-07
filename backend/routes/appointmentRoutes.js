@@ -65,7 +65,7 @@ router.get('/booked-times', async (req, res) => {
     const appointments = await Appointment.find({ 
       date: date, 
       stylist: stylistId,
-      status: { $ne: 'Rejected' } 
+      status: { $nin: ['Rejected', 'Cancelled'] } 
     });
 
     let blockedSlots = [];

@@ -12,6 +12,7 @@ const ANY_STYLIST = '__ANY_STYLIST__';
 function BookAppointment({ userProfile, customerData }) {
   const [step, setStep] = useState(1);
   const [hasHydratedRebook, setHasHydratedRebook] = useState(false);
+  const [isUserProfileHydrated, setIsUserProfileHydrated] = useState(false);
   const [currentDateTime, setCurrentDateTime] = useState(() => new Date());
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
@@ -19,8 +20,10 @@ function BookAppointment({ userProfile, customerData }) {
   const [stylist, setStylist] = useState('');
   const [stylistSearch, setStylistSearch] = useState('');
   const [hasUserSelectedStylist, setHasUserSelectedStylist] = useState(false);
-  const [isPhoneModalOpen, setIsPhoneModalOpen] = useState(false);
-  const [missingPhone, setMissingPhone] = useState('');
+  const [isPhoneVerificationModalOpen, setIsPhoneVerificationModalOpen] = useState(false);
+  const [phoneVerificationStep, setPhoneVerificationStep] = useState('confirm'); // 'confirm' or 'edit'
+  const [phoneVerificationInput, setPhoneVerificationInput] = useState('');
+  const [isPhoneVerificationLoading, setIsPhoneVerificationLoading] = useState(false);
   const [user, setUser] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('user')) || null;
@@ -43,6 +46,29 @@ function BookAppointment({ userProfile, customerData }) {
   const preferredStylistName = typeof profile.preferredStylist === 'string'
     ? profile.preferredStylist.trim()
     : '';
+
+  // Helper to resolve stylist display name from hex ID or direct name
+  const resolveStylistName = (stylistValue) => {
+    if (!stylistValue) return 'Any Available Artist';
+    
+    // If it's a hex ID (24-char MongoDB ObjectId), look it up in stylistsList
+    if (typeof stylistValue === 'string' && /^[0-9a-fA-F]{24}$/.test(stylistValue)) {
+      const stylistObj = stylistsList.find((s) => s._id === stylistValue);
+      return stylistObj?.name || 'Any Available Artist';
+    }
+    
+    // If it's already a string name, return it
+    if (typeof stylistValue === 'string') {
+      return stylistValue.trim() || 'Any Available Artist';
+    }
+    
+    // If it's an object with a name, return the name
+    if (typeof stylistValue === 'object' && stylistValue?.name) {
+      return stylistValue.name;
+    }
+    
+    return 'Any Available Artist';
+  };
 
   const fallbackAvatar = (
     <svg viewBox="0 0 64 64" aria-hidden="true" className="h-9 w-9 text-[#D4AF37]">
@@ -103,6 +129,35 @@ function BookAppointment({ userProfile, customerData }) {
       };
 
       fetchOptions();
+    }, []);
+
+    // Hydrate user profile from backend on component mount
+    useEffect(() => {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setIsUserProfileHydrated(true);
+        return;
+      }
+
+      const hydrateUserProfile = async () => {
+        try {
+          const response = await axios.get('http://localhost:5000/api/users/profile', {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          const profileData = response.data || {};
+          setUser({
+            ...user,
+            ...profileData,
+            phone: profileData?.phone || profileData?.mobile || profileData?.phoneNumber || user?.phone || ''
+          });
+        } catch (error) {
+          console.error('Error hydrating user profile:', error);
+        } finally {
+          setIsUserProfileHydrated(true);
+        }
+      };
+
+      hydrateUserProfile();
     }, []);
 
     useEffect(() => {
@@ -363,7 +418,7 @@ function BookAppointment({ userProfile, customerData }) {
       });
     };
 
-    const handleBooking = async () => {
+    const handleBooking = async (customerMobileNumber = '') => {
       if (selectedServices.length === 0) {
         toast.error('Please select at least one service.');
         return;
@@ -389,12 +444,17 @@ function BookAppointment({ userProfile, customerData }) {
 
         const stylistRecord = stylistsList.find((item) => item._id === stylist);
         const stylistId = stylist === ANY_STYLIST ? '' : stylistRecord?._id || '';
+        // Ensure stylist name is always human-readable (not hex ID)
+        const stylistName = stylist === ANY_STYLIST 
+          ? 'Any Available Artist' 
+          : (stylistRecord?.name || 'Any Available Artist');
 
         const bookingData = {
           date,
           startTime: time,
           services: selectedServices,
-          stylist: stylistId
+          stylist: stylistId,
+          customerMobile: customerMobileNumber || user?.phone || ''
         };
 
         const response = await axios.post(
@@ -412,18 +472,18 @@ function BookAppointment({ userProfile, customerData }) {
         
         // Ensure the appointment has all required fields
         const appointmentToAdd = {
-          _id: createdAppointment._id || createdAppointment.id || `appt-${Date.now()}`,
-          id: createdAppointment._id || createdAppointment.id || `appt-${Date.now()}`,
-          date: createdAppointment.date || date,
-          startTime: createdAppointment.startTime || time,
-          endTime: createdAppointment.endTime || '',
-          services: createdAppointment.services || selectedServices.map((id) => {
+          _id: createdAppointment?._id || createdAppointment?.id || `appt-${Date.now()}`,
+          id: createdAppointment?._id || createdAppointment?.id || `appt-${Date.now()}`,
+          date: createdAppointment?.date || date,
+          startTime: createdAppointment?.startTime || time,
+          endTime: createdAppointment?.endTime || '',
+          services: createdAppointment?.services || selectedServices.map((id) => {
             const service = servicesList.find((s) => s._id === id);
             return service ? { _id: service._id, name: service.name, price: service.price, duration: service.duration } : { _id: id, name: 'Service' };
           }),
-          stylist: createdAppointment.stylist || (stylistId ? stylistRecord : null) || { _id: stylistId, name: 'Any Available' },
-          status: createdAppointment.status || 'Pending',
-          totalAmount: createdAppointment.totalAmount || 0,
+          stylistName: stylistName,
+          status: createdAppointment?.status || 'Pending',
+          totalAmount: createdAppointment?.totalAmount || 0,
           isHiddenByCustomer: false
         };
 
@@ -450,26 +510,51 @@ function BookAppointment({ userProfile, customerData }) {
     };
 
     const handleConfirmBookingClick = () => {
-      if (!user?.phone || !String(user.phone).trim()) {
-        setMissingPhone('');
-        setIsPhoneModalOpen(true);
+      // Wait for user profile to hydrate before opening verification modal
+      if (!isUserProfileHydrated) {
+        toast.error('Loading your profile. Please try again.');
         return;
       }
-
-      handleBooking();
+      
+      // Get current phone from user profile
+      const currentPhone = user?.phone || user?.mobile || user?.phoneNumber || '';
+      
+      // Show phone verification modal
+      setPhoneVerificationStep('confirm');
+      setPhoneVerificationInput('');
+      setIsPhoneVerificationModalOpen(true);
     };
 
-    const handleSavePhoneAndBook = async () => {
-      if (!missingPhone.trim()) {
+    const handlePhoneVerificationYes = () => {
+      // User confirmed their phone number - proceed with booking
+      const currentPhone = user?.phone || user?.mobile || user?.phoneNumber || '';
+      setIsPhoneVerificationModalOpen(false);
+      handleBooking(currentPhone);
+    };
+
+    const handlePhoneVerificationNo = () => {
+      // User wants to update phone - show input field
+      setPhoneVerificationStep('edit');
+      setPhoneVerificationInput('');
+    };
+
+    const handlePhoneVerificationSaveAndBook = async () => {
+      const newPhone = phoneVerificationInput.trim();
+      
+      if (!newPhone) {
         toast.error('Please enter your phone number.');
         return;
       }
 
+      setIsPhoneVerificationLoading(true);
+
       try {
         const token = localStorage.getItem('token');
+        
+        // Update user profile with new phone number
         const response = await axios.put(
           'http://localhost:5000/api/users/profile',
-          { phone: missingPhone.trim() },
+          { phone: newPhone },
           {
             headers: {
               Authorization: `Bearer ${token}`
@@ -477,21 +562,25 @@ function BookAppointment({ userProfile, customerData }) {
           }
         );
 
+        // Update local user state
         const updatedUser = {
-          ...(user || {}),
+          ...user,
           ...(response.data || {}),
-          phone: response.data?.phone || missingPhone.trim()
+          phone: response.data?.phone || newPhone
         };
 
         setUser(updatedUser);
         localStorage.setItem('user', JSON.stringify(updatedUser));
-        setIsPhoneModalOpen(false);
-        setMissingPhone('');
-        toast.success('Phone number saved successfully.');
-        handleBooking();
+        toast.success('Phone number updated successfully.');
+        
+        // Close modal and proceed with booking using new phone
+        setIsPhoneVerificationModalOpen(false);
+        handleBooking(newPhone);
       } catch (error) {
-        console.error('Save Phone Error:', error);
-        toast.error(error.response?.data?.message || 'Failed to save phone number.');
+        console.error('Update Phone Error:', error);
+        toast.error(error.response?.data?.message || 'Failed to update phone number.');
+      } finally {
+        setIsPhoneVerificationLoading(false);
       }
     };
 
@@ -918,42 +1007,87 @@ function BookAppointment({ userProfile, customerData }) {
           </div>
         </div>
 
-        {isPhoneModalOpen && (
+        {isPhoneVerificationModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 px-4 backdrop-blur-sm">
-            <div className="w-full max-w-sm rounded-[1.75rem] border border-[#D4AF37]/30 bg-[#0b0b0b] p-6 shadow-2xl">
-              <h3 className="font-brand text-xl text-[#D4AF37]">Phone Number Required</h3>
-              <p className="mt-2 text-sm leading-6 text-white/70">
-                Please provide a contact number so our staff can reach you if needed.
-              </p>
+            <motion.div 
+              className="w-full max-w-md rounded-[1.75rem] border border-[#D4AF37]/30 bg-[#0b0b0b] p-6 shadow-2xl"
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+            >
+              {phoneVerificationStep === 'confirm' ? (
+                <>
+                  <h3 className="font-brand text-xl text-[#D4AF37]">Verify Your Contact Number</h3>
+                  <p className="mt-3 text-sm leading-6 text-white/70">
+                    Is your registered mobile number still working?
+                  </p>
 
-              <input
-                type="text"
-                value={missingPhone}
-                onChange={(event) => setMissingPhone(event.target.value)}
-                placeholder="Enter phone number"
-                className="mt-5 w-full border-b border-white/15 bg-transparent pb-3 text-sm text-white placeholder:text-white/30 focus:border-[#D4AF37] focus:outline-none"
-              />
+                  <div className="mt-6 rounded-lg border border-white/10 bg-neutral-950/50 p-4">
+                    <p className="text-xs uppercase tracking-[0.2em] text-white/40">Your Registered Number</p>
+                    <p className="mt-3 text-lg font-semibold text-[#D4AF37]">
+                      {user?.phone || user?.mobile || user?.phoneNumber || 'No number on file'}
+                    </p>
+                  </div>
 
-              <div className="mt-7 flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsPhoneModalOpen(false);
-                    setMissingPhone('');
-                  }}
-                  className="text-xs uppercase tracking-[0.3em] text-neutral-300 transition hover:text-white"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSavePhoneAndBook}
-                  className="rounded-full bg-[#D4AF37] px-5 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-black transition hover:scale-[1.02]"
-                >
-                  Save & Continue
-                </button>
-              </div>
-            </div>
+                  <div className="mt-7 flex gap-3">
+                    <button
+                      type="button"
+                      onClick={handlePhoneVerificationNo}
+                      disabled={isPhoneVerificationLoading}
+                      className="flex-1 rounded-full border border-white/15 px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-white transition hover:border-white/30 hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      No, Update It
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handlePhoneVerificationYes}
+                      disabled={isPhoneVerificationLoading}
+                      className="flex-1 rounded-full bg-[#D4AF37] px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-black transition hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isPhoneVerificationLoading ? 'Processing...' : 'Yes, Continue'}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h3 className="font-brand text-xl text-[#D4AF37]">Update Mobile Number</h3>
+                  <p className="mt-3 text-sm leading-6 text-white/70">
+                    Please enter your current working mobile number so our staff can contact you.
+                  </p>
+
+                  <input
+                    type="tel"
+                    value={phoneVerificationInput}
+                    onChange={(e) => setPhoneVerificationInput(e.target.value)}
+                    placeholder="Enter your phone number"
+                    disabled={isPhoneVerificationLoading}
+                    className="mt-6 w-full border-b border-white/15 bg-transparent pb-3 text-sm text-white placeholder:text-white/30 focus:border-[#D4AF37] focus:outline-none disabled:opacity-50"
+                  />
+
+                  <div className="mt-8 flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPhoneVerificationStep('confirm');
+                        setPhoneVerificationInput('');
+                      }}
+                      disabled={isPhoneVerificationLoading}
+                      className="flex-1 rounded-full border border-white/15 px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-white transition hover:border-white/30 hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handlePhoneVerificationSaveAndBook}
+                      disabled={isPhoneVerificationLoading || !phoneVerificationInput.trim()}
+                      className="flex-1 rounded-full bg-[#D4AF37] px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-black transition hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isPhoneVerificationLoading ? 'Updating...' : 'Save & Confirm'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </motion.div>
           </div>
         )}
       </div>

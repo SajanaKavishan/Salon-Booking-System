@@ -59,6 +59,7 @@ app.use('/api/appointments', ensureMongoConnection, require('./routes/appointmen
 app.use('/api/services', ensureMongoConnection, require('./routes/serviceRoutes')); // Service management routes
 app.use('/api/staff', ensureMongoConnection, require('./routes/staffRoutes')); // Staff management routes
 app.use('/api/messages', ensureMongoConnection, require('./routes/messageRoutes')); // Contact form message handling routes
+app.use('/api/notifications', ensureMongoConnection, require('./routes/notificationRoutes')); // Notification handling routes
 app.use('/api/settings', ensureMongoConnection, require('./routes/settingsRoutes')); // Salon settings routes
 app.post('/api/login', async (req, res) => { // User login route to authenticate users and provide JWT tokens for session management
     try {
