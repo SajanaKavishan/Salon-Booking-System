@@ -60,12 +60,10 @@ function Home() {
     }
   };
 
-  // Function to handle changes in the contact form inputs
   const handleMessageChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // Function to handle contact form submission
   const handleMessageSubmit = async (e) => {
     e.preventDefault();
     setSubmitStatus('Sending...');
@@ -75,27 +73,10 @@ function Home() {
       setSubmitStatus('Success! We will get back to you soon.');
       setFormData({ name: '', email: '', message: '' });
 
-      // Clear the status message after a few seconds
       setTimeout(() => setSubmitStatus(''), 3000);
     } catch (error) {
       console.error('Error sending message:', error);
       setSubmitStatus('Failed to send. Please try again.');
-    }
-  };
-
-  // Ref for the services slider
-  const sliderRef = useRef(null);
-
-  // Functions to handle sliding left and right in the services section
-  const slideLeft = () => {
-    if (sliderRef.current) {
-      sliderRef.current.scrollBy({ left: -400, behavior: 'smooth' });
-    }
-  };
-
-  const slideRight = () => {
-    if (sliderRef.current) {
-      sliderRef.current.scrollBy({ left: 400, behavior: 'smooth' });
     }
   };
 
@@ -116,6 +97,35 @@ function Home() {
     }
   };
 
+  const infoCardsContainerVariants = {
+    hidden: { opacity: 0, y: 30 },
+    show: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        type: 'spring',
+        stiffness: 60,
+        damping: 15,
+        when: 'beforeChildren',
+        staggerChildren: 0.12,
+        delayChildren: 0.3
+      }
+    }
+  };
+
+  const infoCardVariants = {
+    hidden: { opacity: 0, y: 20, scale: 0.97 },
+    show: {
+      opacity: 1,
+      y: 0,
+      scale: 1,
+      transition: {
+        type: 'spring',
+        stiffness: 80,
+        damping: 15
+      }
+    }
+  };
 
   return (
     <motion.div
@@ -129,7 +139,8 @@ function Home() {
       <div className="pointer-events-none absolute right-[-10%] top-[20%] h-[300px] w-[300px] rounded-full bg-primary/10 blur-[120px]" />
       <div className="pointer-events-none absolute bottom-[10%] left-[20%] h-[320px] w-[320px] rounded-full bg-primary/10 blur-[140px]" />
 
-      <section id="home" className="relative min-h-screen flex w-full max-w-full items-center justify-center overflow-hidden px-6 py-16 pt-36 sm:pt-28">
+      {/* Hero Section: Mobile pb-16 කරලා ඉඩ ඉතුරු කළා */}
+      <section id="home" className="relative min-h-screen flex w-full max-w-full items-center justify-center overflow-hidden px-6 pt-32 pb-16 sm:pt-28 sm:pb-44 md:pb-52">
         <div className="absolute inset-0 z-0">
           <div className="absolute inset-0 bg-[#0a0a0a]/85" />
           <img
@@ -192,10 +203,11 @@ function Home() {
         </motion.div>
       </section>
 
-      <section className="relative z-20 -mt-10 px-6">
+      {/* Info Cards Section: -mt-28 දාලා Mobile වලදී තවත් උඩට ගත්තා */}
+      <section className="relative z-20 -mt-28 sm:-mt-28 md:-mt-36 lg:-mt-44 px-6">
         <motion.div
-          className="salon-shell max-w-6xl mx-auto grid gap-4 md:grid-cols-3"
-          variants={containerVariants}
+          className="salon-shell max-w-6xl mx-auto grid gap-5 md:grid-cols-3"
+          variants={infoCardsContainerVariants}
           initial="hidden"
           animate="show"
         >
@@ -203,35 +215,40 @@ function Home() {
             {
               icon: Clock,
               label: 'Hours',
-              value: 'Mon - Sat: 9:00 AM - 10:00 PM'
+              value: 'Mon - Sat: 9:00 AM - 10:00 PM',
+              hideOnMobile: true
             },
             {
               icon: MapPin,
               label: 'Location',
-              value: settings.address || 'Pothuhera'
+              value: settings.address || 'Pothuhera',
+              hideOnMobile: true
             },
             {
               icon: Star,
               label: 'Ratings',
-              value: '4.9 / 5 based on client reviews'
+              value: '4.9 / 5 based on client reviews',
+              hideOnMobile: false
             }
           ].map((item) => {
             const Icon = item.icon;
             return (
               <motion.div
                 key={item.label}
-                className="group lux-card lux-card-hover backdrop-blur-xl bg-card/40 border-white/[0.04] relative overflow-hidden p-6"
-                variants={itemVariants}
-                whileHover={{ y: -4, transition: { duration: 0.2 } }}
+                className={`group lux-card lux-card-hover backdrop-blur-xl bg-card/40 border border-white/[0.04] relative overflow-hidden p-6 rounded-2xl shadow-2xl ${
+                  item.hideOnMobile ? 'hidden md:block' : 'block'
+                }`}
+                variants={infoCardVariants}
+                whileHover={{ y: -6, transition: { duration: 0.2 } }}
               >
                 <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100 bg-gradient-to-br from-white/12 via-white/0 to-transparent" />
                 <div className="relative flex items-start gap-4">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-primary">
+                  <div className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-primary shrink-0">
                     <Icon className="h-5 w-5" />
                   </div>
                   <div>
                     <p className="text-neutral-500 text-xs uppercase tracking-wider">{item.label}</p>
-                    <p className="mt-2 text-white font-sans font-semibold">{item.value}</p>
+                    <p className="mt-2 text-white font-sans font-semibold text-sm sm:text-base leading-snug">{item.value}</p>
                   </div>
                 </div>
               </motion.div>
@@ -240,6 +257,7 @@ function Home() {
         </motion.div>
       </section>
 
+      {/* Signature Rituals (Services) Section */}
       <motion.section
         id="services"
         className="relative py-24 px-6 lg:px-12"
@@ -255,10 +273,10 @@ function Home() {
           </div>
 
           <div className="mt-14 grid gap-6 md:grid-cols-3">
-            {(loading ? [] : services.slice(0, 3)).map((service) => (
+            {services.slice(0, 3).map((service) => (
               <motion.div
                 key={service._id}
-                className="group lux-card lux-card-hover backdrop-blur-xl bg-card/40 border-white/[0.04] relative overflow-hidden p-6"
+                className="group lux-card lux-card-hover backdrop-blur-xl bg-card/40 border border-white/[0.04] relative overflow-hidden p-6 rounded-2xl"
                 variants={itemVariants}
                 whileHover={{ y: -10, transition: { duration: 0.2 } }}
               >
@@ -280,6 +298,7 @@ function Home() {
         </div>
       </motion.section>
 
+      {/* About Section */}
       <motion.section
         id="about"
         className="py-24 px-6 lg:px-12"
@@ -289,7 +308,6 @@ function Home() {
         transition={{ duration: 0.6, ease: 'easeOut' }}
       >
         <div className="max-w-6xl mx-auto grid gap-12 md:grid-cols-2 items-center">
-
           <div className="relative overflow-hidden rounded-2xl border border-white/10 shadow-2xl">
             <img
               src="/salonInterior.jpg"
@@ -319,11 +337,10 @@ function Home() {
               ))}
             </div>
           </div>
-
         </div>
       </motion.section>
 
-
+      {/* Owner Section */}
       <motion.section
         id="owner"
         className="relative py-24 px-6 lg:px-12 border-t border-white/5 overflow-hidden"
@@ -335,7 +352,6 @@ function Home() {
         <div className="absolute top-1/2 left-0 -translate-y-1/2 bg-primary/5 blur-[120px] rounded-full w-[300px] h-[300px] pointer-events-none" />
 
         <div className="max-w-6xl mx-auto grid gap-12 md:grid-cols-2 items-center relative z-10">
-
           <div>
             <span className="tracking-[0.2em] text-xs uppercase text-primary font-medium">Meet The Visionary</span>
             <h2 className="mt-4 text-4xl md:text-5xl font-serif text-white tracking-tight">Dileep Malshan</h2>
@@ -364,10 +380,10 @@ function Home() {
               className="rounded-lg shadow-2xl object-cover aspect-[4/5] w-full max-w-md brightness-105 transition-all duration-700 border border-white/10"
             />
           </div>
-
         </div>
       </motion.section>
 
+      {/* Gallery Section */}
       <motion.section
         id="gallery"
         className="py-24 px-6 lg:px-12 border-t border-white/5"
@@ -408,6 +424,7 @@ function Home() {
         </div>
       </motion.section>
 
+      {/* Contact Section */}
       <motion.section
         id="contact"
         className="py-24 px-6 lg:px-12 border-t border-white/5"
@@ -438,7 +455,7 @@ function Home() {
             </div>
           </div>
 
-          <div className="group lux-card lux-card-hover backdrop-blur-xl bg-card/40 border-white/[0.04] relative overflow-hidden p-8">
+          <div className="group lux-card lux-card-hover backdrop-blur-xl bg-card/40 border border-white/[0.04] relative overflow-hidden p-8 rounded-2xl">
             <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100 bg-gradient-to-br from-white/12 via-white/0 to-transparent" />
             <div className="relative">
               <h3 className="text-2xl font-serif text-white">Send a Message</h3>
@@ -502,5 +519,3 @@ function Home() {
 }
 
 export default Home;
-
-
