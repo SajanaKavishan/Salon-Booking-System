@@ -1,32 +1,32 @@
-import React, { useEffect, useRef, useState } from 'react';
-import axios from 'axios';
-import { toast } from 'react-toastify';
-import { FaEye, FaEyeSlash } from 'react-icons/fa';
-import { GlassCard, GoldButton } from './SystemUI';
+import React, { useEffect, useRef, useState } from "react";
+import axios from "axios";
+import { toast } from "react-toastify";
+import { FaEye, FaEyeSlash } from "react-icons/fa";
+import { GlassCard, GoldButton } from "./SystemUI";
 
 function StaffManager() {
-  const fieldClassName = 'w-full bg-black/50 border border-gray-700 rounded-lg p-3 text-white focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] outline-none transition-all';
+  const fieldClassName = "w-full bg-black/50 border border-gray-700 rounded-lg p-3 text-white focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] outline-none transition-all";
   const [staffList, setStaffList] = useState([]);
-  const [formData, setFormData] = useState({ name: '', email: '', password: '', specialty: '', workingHours: '', offDays: '' });
+  const [formData, setFormData] = useState({ name: "", email: "", password: "", specialty: "", offDays: "", workingHours: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
-  const [imagePreview, setImagePreview] = useState('');
+  const [imagePreview, setImagePreview] = useState("");
   const fileInputRef = useRef(null);
   const [activeMenuId, setActiveMenuId] = useState(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
-  const [editData, setEditData] = useState({ name: '', specialty: '', workingHours: '', offDays: '' });
+  const [editData, setEditData] = useState({ name: "", specialty: "" });
   const [editingId, setEditingId] = useState(null);
 
   useEffect(() => {
     let isActive = true;
     axios
-      .get('http://localhost:5000/api/staff')
+      .get("http://localhost:5000/api/staff")
       .then((response) => {
         if (isActive) setStaffList(response.data);
       })
-      .catch((error) => toast.error(error.response?.data?.message || 'Failed to load staff list'));
+      .catch((error) => toast.error(error.response?.data?.message || "Failed to load staff list"));
     return () => { isActive = false; };
   }, []);
 
@@ -36,9 +36,7 @@ function StaffManager() {
     }
   }, [imagePreview]);
 
-  const specialtyOptions = ['Hair Stylist', 'Colorist', 'Beautician', 'Massage Therapist', 'All-Rounder'];
-  const shiftOptions = ['09:00 AM - 05:00 PM', '10:00 AM - 06:00 PM', '08:00 AM - 02:00 PM', '02:00 PM - 08:00 PM'];
-  const offDayOptions = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  const specialtyOptions = ["Hair Stylist", "Colorist", "Beautician", "Massage Therapist", "All-Rounder"];
 
   const handleInputChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -47,12 +45,12 @@ function StaffManager() {
   const handleImageChange = (file) => {
     if (!file) {
       setSelectedImage(null);
-      setImagePreview('');
+      setImagePreview("");
       return;
     }
 
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please select an image file.');
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file.");
       return;
     }
 
@@ -82,9 +80,9 @@ function StaffManager() {
       URL.revokeObjectURL(imagePreview);
     }
     setSelectedImage(null);
-    setImagePreview('');
+    setImagePreview("");
     if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+      fileInputRef.current.value = "";
     }
   };
 
@@ -95,11 +93,11 @@ function StaffManager() {
   const handleAddStaff = async (e) => {
     e.preventDefault();
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem("token");
       const authHeaders = token ? { headers: { Authorization: `Bearer ${token}` } } : undefined;
 
-      await axios.post(
-        'http://localhost:5000/api/users/register-staff',
+      const registerResponse = await axios.post(
+        "http://localhost:5000/api/users/register-staff",
         {
           name: formData.name,
           email: formData.email,
@@ -109,21 +107,31 @@ function StaffManager() {
       );
 
       const payload = new FormData();
-      payload.append('name', formData.name);
-      payload.append('specialty', formData.specialty);
-      payload.append('workingHours', formData.workingHours);
-      payload.append('offDays', formData.offDays);
-      if (selectedImage) {
-        payload.append('image', selectedImage);
+      if (registerResponse.data?._id) {
+        payload.append("userId", registerResponse.data._id);
+      }
+      payload.append("name", formData.name);
+      payload.append("specialty", formData.specialty);
+      if (formData.offDays) {
+        // Convert offDays array to JSON string before appending to FormData
+        payload.append("offDays", JSON.stringify(formData.offDays));
       }
 
-      const response = await axios.post('http://localhost:5000/api/staff', payload);
+      if (selectedImage) {
+        payload.append("image", selectedImage);
+      }
+
+      if (formData.workingHours) {
+        payload.append("workingHours", formData.workingHours);
+      }
+
+      const response = await axios.post("http://localhost:5000/api/staff", payload);
       setStaffList((currentStaff) => [...currentStaff, response.data]);
-      setFormData({ name: '', email: '', password: '', specialty: '', workingHours: '', offDays: '' });
+      setFormData({ name: "", email: "", password: "", specialty: "", offDays: "" });
       clearSelectedImage();
-      toast.success('Staff member added successfully!');
+      toast.success("Staff member added successfully!");
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to add staff');
+      toast.error(error.response?.data?.message || "Failed to add staff");
     }
   };
 
@@ -133,10 +141,10 @@ function StaffManager() {
     try {
       await axios.delete(`http://localhost:5000/api/staff/${itemToDelete}`);
       setStaffList((currentStaff) => currentStaff.filter((staff) => staff._id !== itemToDelete));
-      toast.success('Staff member removed!');
+      toast.success("Staff member removed!");
       setActiveMenuId(null);
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to remove staff');
+      toast.error(error.response?.data?.message || "Failed to remove staff");
     } finally {
       setIsDeleteModalOpen(false);
       setItemToDelete(null);
@@ -147,8 +155,6 @@ function StaffManager() {
     setEditData({
       name: staff.name,
       specialty: staff.specialty,
-      workingHours: staff.workingHours,
-      offDays: staff.offDays
     });
     setEditingId(staff._id);
     setIsEditModalOpen(true);
@@ -161,9 +167,9 @@ function StaffManager() {
       const response = await axios.put(`http://localhost:5000/api/staff/${editingId}`, editData);
       setStaffList((currentStaff) => currentStaff.map((staff) => (staff._id === editingId ? response.data : staff)));
       setIsEditModalOpen(false);
-      toast.success('Staff updated successfully!');
+      toast.success("Staff updated successfully!");
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to update staff');
+      toast.error(error.response?.data?.message || "Failed to update staff");
     }
   };
 
@@ -175,7 +181,7 @@ function StaffManager() {
           <input type="email" name="email" placeholder="Email Address" value={formData.email} onChange={handleInputChange} required className={fieldClassName} autoComplete="email" />
           <div className="relative">
             <input
-              type={showPassword ? 'text' : 'password'}
+              type={showPassword ? "text" : "password"}
               name="password"
               placeholder="Temporary Password"
               value={formData.password}
@@ -188,7 +194,7 @@ function StaffManager() {
               type="button"
               onClick={() => setShowPassword((prev) => !prev)}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-[#d4af37] transition-colors hover:text-yellow-400"
-              aria-label={showPassword ? 'Hide temporary password' : 'Show temporary password'}
+              aria-label={showPassword ? "Hide temporary password" : "Show temporary password"}
             >
               {showPassword ? <FaEyeSlash size={18} /> : <FaEye size={18} />}
             </button>
@@ -199,18 +205,33 @@ function StaffManager() {
               <option key={option} value={option} className="bg-[#111111]">{option}</option>
             ))}
           </select>
+
           <select name="workingHours" value={formData.workingHours} onChange={handleInputChange} required className={fieldClassName}>
-            <option value="" disabled className="bg-[#111111] text-gray-500">Select Shift</option>
-            {shiftOptions.map((option) => (
-              <option key={option} value={option} className="bg-[#111111]">{option}</option>
-            ))}
+            <option value="" disabled className="bg-[#111111] text-gray-500">Select Working Hours</option>
+            <option value="09:00 AM - 05:00 PM" className="bg-[#111111]">09:00 AM - 05:00 PM</option>
+            <option value="10:00 AM - 06:00 PM" className="bg-[#111111]">10:00 AM - 06:00 PM</option>
+            <option value="11:00 AM - 07:00 PM" className="bg-[#111111]">11:00 AM - 07:00 PM</option>
+            <option value="12:00 PM - 08:00 PM" className="bg-[#111111]">12:00 PM - 08:00 PM</option>
           </select>
-          <select name="offDays" value={formData.offDays} onChange={handleInputChange} required className={fieldClassName}>
-            <option value="" disabled className="bg-[#111111] text-gray-500">Select Off Day</option>
-            {offDayOptions.map((option) => (
-              <option key={option} value={option} className="bg-[#111111]">{option}</option>
-            ))}
-          </select>
+
+          <div className="flex-1">
+            <label className="block text-xs font-medium text-gray-400 mb-1">Weekly Off Day (Optional)</label>
+            <select
+              name="offDays"
+              value={formData.offDays}
+              onChange={(e) => setFormData({ ...formData, offDays: e.target.value })}
+              className="w-full px-4 py-2.5 rounded-lg border border-gray-800 bg-[#121212] text-white focus:outline-none focus:border-[#d4af37] transition-colors text-sm"
+            >
+              <option value="">No Regular Off Day</option>
+              <option value="Monday">Monday</option>
+              <option value="Tuesday">Tuesday</option>
+              <option value="Wednesday">Wednesday</option>
+              <option value="Thursday">Thursday</option>
+              <option value="Friday">Friday</option>
+              <option value="Saturday">Saturday</option>
+              <option value="Sunday">Sunday</option>
+            </select>
+          </div>
 
           <div className="md:col-span-2 xl:col-span-3">
             <div
@@ -280,8 +301,6 @@ function StaffManager() {
               <tr className="bg-black/30 text-[#d4af37]">
                 <th className="salon-table-th border-b border-white/10">Name</th>
                 <th className="salon-table-th border-b border-white/10">Specialty</th>
-                <th className="salon-table-th border-b border-white/10">Working Hours</th>
-                <th className="salon-table-th border-b border-white/10">Off Days</th>
                 <th className="salon-table-th border-b border-white/10 text-center">Action</th>
               </tr>
             </thead>
@@ -292,8 +311,6 @@ function StaffManager() {
                     <div className="font-medium text-gray-200">{staff.name}</div>
                   </td>
                   <td className="salon-table-td text-gray-300">{staff.specialty}</td>
-                  <td className="salon-table-td text-gray-300">{staff.workingHours}</td>
-                  <td className="salon-table-td font-medium text-red-400/90">{staff.offDays}</td>
                   <td className="salon-table-td text-center">
                     {activeMenuId === staff._id ? (
                       <div className="flex items-center justify-center gap-2">
@@ -324,7 +341,7 @@ function StaffManager() {
               ))}
               {staffList.length === 0 && (
                 <tr>
-                  <td colSpan="5" className="bg-[#0a0a0a]/30 p-10 text-center font-light text-gray-500">
+                  <td colSpan="3" className="bg-[#0a0a0a]/30 p-10 text-center font-light text-gray-500">
                     No staff members found.
                   </td>
                 </tr>
@@ -345,16 +362,6 @@ function StaffManager() {
               <input type="text" name="name" placeholder="Name" value={editData.name} onChange={handleEditInputChange} required className={fieldClassName} />
               <select name="specialty" value={editData.specialty} onChange={handleEditInputChange} required className={fieldClassName}>
                 {specialtyOptions.map((option) => (
-                  <option key={option} value={option} className="bg-[#111111]">{option}</option>
-                ))}
-              </select>
-              <select name="workingHours" value={editData.workingHours} onChange={handleEditInputChange} required className={fieldClassName}>
-                {shiftOptions.map((option) => (
-                  <option key={option} value={option} className="bg-[#111111]">{option}</option>
-                ))}
-              </select>
-              <select name="offDays" value={editData.offDays} onChange={handleEditInputChange} required className={fieldClassName}>
-                {offDayOptions.map((option) => (
                   <option key={option} value={option} className="bg-[#111111]">{option}</option>
                 ))}
               </select>

@@ -55,7 +55,7 @@ function Login() {
         email: email.trim(),
         password,
       });
-      const { token, role = 'customer', name, email: responseEmail, _id: id } = response.data;
+      const { token, role = 'customer', name, email: responseEmail, _id: id, phone = '', preferredStylist = '', profileImage = '' } = response.data;
 
       localStorage.setItem('token', token);
       localStorage.setItem('userRole', role);
@@ -66,6 +66,9 @@ function Login() {
           id,
           name,
           email: responseEmail || email.trim(),
+          phone,
+          preferredStylist,
+          profileImage,
           role,
         })
       );
@@ -96,6 +99,9 @@ function Login() {
             id: response.data._id,
             name: response.data.name,
             email: response.data.email,
+            phone: response.data.phone || '',
+            preferredStylist: response.data.preferredStylist || '',
+            profileImage: response.data.profileImage || '',
             role: response.data.role,
           })
         );

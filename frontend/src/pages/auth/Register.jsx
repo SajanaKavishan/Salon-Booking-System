@@ -55,7 +55,9 @@ function Register() {
           name: response.data.name,
           email: response.data.email,
           phone: response.data.phone,
-          role: response.data.role,
+          preferredStylist: response.data.preferredStylist || '',
+          profileImage: response.data.profileImage || '',
+          role: response.data.role || 'customer',
         })
       );
 

@@ -1,10 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import axios from 'axios';
 
-const DEFAULT_STYLISTS = ['Elena', 'Alex', 'Jordan', 'Taylor'];
+const DEFAULT_STYLISTS = ['Dileep Malshan'];
+
 const BACKEND_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
 
 function Profile({ onClose }) {
   const photoInputRef = useRef(null);
+
   const [user, setUser] = useState(() => {
     try {
       const storedUser = localStorage.getItem('user');
@@ -13,35 +16,29 @@ function Profile({ onClose }) {
       return {};
     }
   });
+
   const [isEditing, setIsEditing] = useState(false);
   const [stylists, setStylists] = useState(DEFAULT_STYLISTS);
   const [profileImage, setProfileImage] = useState(user?.profileImage || '');
+
   const [formValues, setFormValues] = useState(() => ({
-    name: user?.name || 'Ravindu Dulakshan',
-    email: user?.email || 'ravindu@salondees.com',
-    phone: user?.phone || '+94 77 123 4567',
-    preferredStylist: user?.preferredStylist || 'Elena'
+    name: user?.name || '',
+    email: user?.email || '',
+    phone: user?.phone || '',
+    preferredStylist: user?.preferredStylist || ''
   }));
+
   const [stylistQuery, setStylistQuery] = useState(formValues.preferredStylist);
   const [isStylistOpen, setIsStylistOpen] = useState(false);
 
-  useEffect(() => {
-    if (isEditing) return;
+  // State for password change modal
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [passwordValues, setPasswordValues] = useState({
+    newPassword: '',
+    confirmPassword: ''
+  });
 
-    const preferredStylist = user?.preferredStylist || 'Elena';
-    setFormValues({
-      name: user?.name,
-      email: user?.email,
-      phone: user?.phone,
-      preferredStylist
-    });
-    setStylistQuery(preferredStylist);
-  }, [user, isEditing]);
-
-  useEffect(() => {
-    setProfileImage(user?.profileImage || '');
-  }, [user]);
-
+  // Get staff list from backend API
   useEffect(() => {
     let isMounted = true;
 
@@ -67,10 +64,42 @@ function Profile({ onClose }) {
     };
   }, []);
 
-  const displayName = user?.name || 'Ravindu Dulakshan';
-  const displayEmail = user?.email || 'ravindu@salondees.com';
-  const displayPhone = user?.phone || '+94 77 123 4567';
-  const displayStylist = user?.preferredStylist || 'Elena';
+  useEffect(() => {
+    const syncUserState = (updatedUser) => {
+      if (isEditing || !updatedUser) return;
+      const preferredStylist = updatedUser.preferredStylist || '';
+
+      setUser(updatedUser);
+      setProfileImage(updatedUser.profileImage || '');
+      setFormValues({
+        name: updatedUser.name || '',
+        email: updatedUser.email || '',
+        phone: updatedUser.phone || '',
+        preferredStylist
+      });
+      setStylistQuery(preferredStylist);
+    };
+
+    const handleProfileUpdated = (event) => syncUserState(event?.detail);
+    const handleStorage = (event) => {
+      if (event.key !== 'user' || !event.newValue) return;
+      syncUserState(JSON.parse(event.newValue));
+    };
+
+    window.addEventListener('profileUpdated', handleProfileUpdated);
+    window.addEventListener('storage', handleStorage);
+
+    return () => {
+      window.removeEventListener('profileUpdated', handleProfileUpdated);
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, [isEditing]);
+
+  const displayName = user?.name || 'User';
+  const displayEmail = user?.email || 'No Email Provided';
+  const displayPhone = user?.phone || 'No Phone Number Provided';
+  const displayStylist = user?.preferredStylist || 'Not Specified';
+
   const handleClose = () => {
     if (typeof onClose === 'function') {
       onClose();
@@ -89,22 +118,19 @@ function Profile({ onClose }) {
     reader.onload = () => {
       const imageUrl = typeof reader.result === 'string' ? reader.result : '';
       if (!imageUrl) return;
-
-      const updatedUser = {
-        ...user,
-        profileImage: imageUrl
-      };
-      setUser(updatedUser);
       setProfileImage(imageUrl);
-      localStorage.setItem('user', JSON.stringify(updatedUser));
-      window.dispatchEvent(new CustomEvent('profileUpdated', { detail: updatedUser }));
+      
+      if (!isEditing) {
+        setIsEditing(true);
+      }
     };
     reader.readAsDataURL(file);
     event.target.value = '';
   };
 
   const initials = useMemo(() => {
-    const name = (isEditing ? formValues.name : displayName).trim() || 'Ravindu Dulakshan';
+    const name = (isEditing ? formValues.name : displayName).trim() || '';
+    if (!name || name === 'User') return 'U';
     return name
       .split(' ')
       .filter(Boolean)
@@ -128,11 +154,11 @@ function Profile({ onClose }) {
   };
 
   const resetForm = () => {
-    const preferredStylist = user?.preferredStylist || 'Elena';
+    const preferredStylist = user?.preferredStylist || '';
     setFormValues({
-      name: user?.name || 'Ravindu Dulakshan',
-      email: user?.email || 'ravindu@salondees.com',
-      phone: user?.phone || '+94 77 123 4567',
+      name: user?.name || '',
+      email: user?.email || '',
+      phone: user?.phone || '',
       preferredStylist
     });
     setStylistQuery(preferredStylist);
@@ -140,28 +166,103 @@ function Profile({ onClose }) {
     setIsEditing(false);
   };
 
-  const saveDetails = () => {
-    const updatedUser = {
-      ...user,
-      name: formValues.name.trim() || user?.name || 'Ravindu Dulakshan',
-      email: formValues.email.trim() || user?.email || 'ravindu@salondees.com',
-      phone: formValues.phone.trim(),
-      preferredStylist: formValues.preferredStylist.trim() || user?.preferredStylist || 'Elena'
-    };
+  const saveDetails = async () => {
+    try {
+      const token = localStorage.getItem('token');
 
-    setUser(updatedUser);
-    localStorage.setItem('user', JSON.stringify(updatedUser));
-    window.dispatchEvent(new CustomEvent('profileUpdated', { detail: updatedUser }));
-    setIsEditing(false);
+      if (!token) {
+        console.error("Can't find authentication token in localStorage!");
+        alert("Please log in again.");
+        return;
+      }
+
+      const updatedUser = {
+        ...user,
+        name: formValues.name.trim() || user?.name || '',
+        email: formValues.email.trim() || user?.email || '',
+        phone: formValues.phone.trim() || user?.phone || '',
+        preferredStylist: formValues.preferredStylist.trim() || user?.preferredStylist || '',
+        profileImage: profileImage
+      };
+
+      const response = await axios.put(
+        `${BACKEND_BASE_URL}/api/users/profile`,
+        updatedUser,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      if (response.data) {
+        const mergedUser = { ...updatedUser, ...response.data };
+
+        setUser(mergedUser);
+        localStorage.setItem('user', JSON.stringify(mergedUser));
+        
+        setFormValues({
+          name: mergedUser.name || '',
+          email: mergedUser.email || '',
+          phone: mergedUser.phone || '',
+          preferredStylist: mergedUser.preferredStylist || ''
+        });
+        setStylistQuery(mergedUser.preferredStylist || '');
+
+        window.dispatchEvent(new CustomEvent('profileUpdated', { detail: mergedUser }));
+        setIsEditing(false); 
+        alert('Profile updated successfully!');
+      }
+
+    } catch (error) {
+      console.error('Profile update error:', error.response?.data?.message || error.message);
+      alert('Failed to update profile: ' + (error.response?.data?.message || error.message));
+    }
+  };
+
+  // Function to handle password update
+  const handlePasswordUpdate = async () => {
+    if (!passwordValues.newPassword || !passwordValues.confirmPassword) {
+      alert("Please fill in all password fields.");
+      return;
+    }
+
+    if (passwordValues.newPassword !== passwordValues.confirmPassword) {
+      alert("New passwords do not match!");
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        alert("Please log in again.");
+        return;
+      }
+
+      const response = await axios.put(
+        `${BACKEND_BASE_URL}/api/users/profile`,
+        { password: passwordValues.newPassword },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (response.data) {
+        alert("Password updated successfully!");
+        setIsPasswordModalOpen(false);
+        setPasswordValues({ newPassword: '', confirmPassword: '' });
+      }
+    } catch (error) {
+      console.error('Password update error:', error.response?.data?.message || error.message);
+      alert('Failed to update password: ' + (error.response?.data?.message || error.message));
+    }
   };
 
   const startEditing = () => {
-    const preferredStylist = user?.preferredStylist || 'Elena';
+    const preferredStylist = user?.preferredStylist || '';
     setFormValues({
-      name: user?.name || 'Ravindu Dulakshan',
-      email: user?.email || 'ravindu@salondees.com',
-      phone: user?.phone || '+94 77 123 4567',
-      preferredStylist
+      name: user?.name || '',
+      email: user?.email || '',
+      phone: user?.phone || '',
+      preferredStylist: user?.preferredStylist || ''
     });
     setStylistQuery(preferredStylist);
     setIsEditing(true);
@@ -189,7 +290,7 @@ function Profile({ onClose }) {
         <div className="absolute -top-20 left-10 h-72 w-72 rounded-full bg-[#D4AF37]/10 blur-3xl" />
 
         <div className="relative px-6 pb-10 pt-14 md:px-12 lg:px-16">
-          <div className="max-w-4xl"> 
+          <div className="max-w-4xl">
             <h1 className="font-serif text-4xl font-semibold tracking-wide">MY PROFILE</h1>
           </div>
 
@@ -302,7 +403,7 @@ function Profile({ onClose }) {
                 <p className="text-[10px] uppercase tracking-widest text-gray-500">Phone Number</p>
                 {isEditing ? (
                   <input
-                    type="tel"
+                    type="text"
                     value={formValues.phone}
                     onChange={(event) => updateField('phone', event.target.value)}
                     className="mt-2 w-full bg-transparent text-sm text-white outline-none border-b border-[#D4AF37]/40 focus:border-[#D4AF37]"
@@ -312,6 +413,21 @@ function Profile({ onClose }) {
                 )}
               </div>
             </div>
+
+            <div className="pt-6 mt-6 border-t border-[#D4AF37]/10">
+              <button
+                type="button"
+                onClick={() => setIsPasswordModalOpen(true)}
+                className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-neutral-400 transition hover:text-[#D4AF37]"
+              >
+                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0110 0v4" />
+                </svg>
+                Change Password
+              </button>
+            </div>
+
           </div>
 
           <div className="font-sans md:order-1 md:pt-16">
@@ -371,6 +487,59 @@ function Profile({ onClose }) {
           </div>
         </div>
       </div>
+
+      {isPasswordModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-[#D4AF37]/30 bg-[#0b0b0b] p-6 md:p-8 shadow-[0_0_40px_rgba(212,175,55,0.15)]">
+            <h3 className="font-serif text-2xl font-semibold text-white mb-2">Change Password</h3>
+            <p className="text-sm text-gray-400 mb-6">Ensure your account is using a secure password.</p>
+            
+            <div className="space-y-5">
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-gray-500 mb-2">New Password</p>
+                <input
+                  type="password"
+                  value={passwordValues.newPassword}
+                  onChange={(e) => setPasswordValues({...passwordValues, newPassword: e.target.value})}
+                  className="w-full rounded-xl border border-[#D4AF37]/40 bg-transparent px-4 py-3 text-sm text-white outline-none transition focus:border-[#D4AF37]"
+                  placeholder="Enter new password"
+                />
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-gray-500 mb-2">Confirm New Password</p>
+                <input
+                  type="password"
+                  value={passwordValues.confirmPassword}
+                  onChange={(e) => setPasswordValues({...passwordValues, confirmPassword: e.target.value})}
+                  className="w-full rounded-xl border border-[#D4AF37]/40 bg-transparent px-4 py-3 text-sm text-white outline-none transition focus:border-[#D4AF37]"
+                  placeholder="Confirm new password"
+                />
+              </div>
+            </div>
+
+            <div className="mt-8 flex items-center justify-end gap-4 text-[10px] uppercase tracking-widest">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsPasswordModalOpen(false);
+                  setPasswordValues({ newPassword: '', confirmPassword: '' });
+                }}
+                className="text-neutral-400 transition hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handlePasswordUpdate}
+                className="rounded-full bg-[#D4AF37] px-6 py-2.5 font-bold text-black transition hover:bg-[#f3d77a]"
+              >
+                Update Password
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

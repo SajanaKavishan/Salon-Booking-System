@@ -15,12 +15,40 @@ const getStaff = async (req, res) => {
 // @route   POST /api/staff
 const addStaff = async (req, res) => {
   try {
-    const { name, specialty, workingHours, offDays } = req.body;
-    if (!name || !specialty || !workingHours || !offDays) {
+    // Extracting fields from req.body. offDays is expected to be an array, but if it's sent as a string (e.g., from form data), we will handle that when saving to the database.
+    const { name, specialty, offDays, userId } = req.body; 
+    
+    // Only checking for name and specialty as required fields. offDays can be optional and defaults to an empty array if not provided.
+    if (!name || !specialty) {
       return res.status(400).json({ message: 'Please add all fields' });
     }
+    
     const imageUrl = req.file?.path || '';
-    const staff = await Staff.create({ name, imageUrl, specialty, workingHours, offDays });
+    
+    const parsedOffDays = (() => {
+      if (!offDays) return [];
+      if (Array.isArray(offDays)) return offDays.map((day) => day.trim()).filter(Boolean);
+      if (typeof offDays === 'string') {
+        try {
+          const parsed = JSON.parse(offDays);
+          if (Array.isArray(parsed)) return parsed.map((day) => day.trim()).filter(Boolean);
+          if (typeof parsed === 'string') return [parsed.trim()].filter(Boolean);
+        } catch {
+          return offDays.split(',').map((day) => day.trim()).filter(Boolean);
+        }
+      }
+      return [];
+    })();
+
+    const staff = await Staff.create({ 
+      userId,
+      name, 
+      imageUrl, 
+      specialty,
+      workingHours: req.body.workingHours || '',
+      offDays: parsedOffDays,
+    });
+    
     res.status(201).json(staff);
   } catch (error) {
     res.status(500).json({ message: error.message });

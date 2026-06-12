@@ -11,7 +11,8 @@ router.post('/register-staff', protect, admin, registerStaff); // Admin-only rou
 router.post('/google-login', googleLogin); // New route for handling Google login requests
 
 // This route is protected by the protect middleware, which means that only authenticated users can access it. The getMe function will return the profile information of the logged-in user.
-router.get('/me', protect, getMe); // Route for updating user profile, also protected by the protect middleware. The updateUserProfile function will handle the logic for updating the user's profile information.
+router.get('/me', protect, getMe);
+router.get('/profile', protect, getMe); // Alias for legacy frontend calls to GET /api/users/profile
 router.put('/profile', protect, updateUserProfile); // New route for updating user profile, also protected by the protect middleware. The updateUserProfile function will handle the logic for updating the user's profile information.
 
 module.exports = router;

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Menu } from 'lucide-react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import Sidebar from '../../components/admin/Sidebar';
-import Profile from '../customer/Profile';
+import RoleProfile from '../shared/RoleProfile';
 
 function Layout() {
   const location = useLocation();
@@ -36,12 +36,34 @@ function Layout() {
   };
 
   useEffect(() => {
-    fetchNotifications();
-    const interval = setInterval(() => {
-      fetchNotifications();
-    }, 60000); // 1 minute interval
+    let isMounted = true;
 
-    return () => clearInterval(interval);
+    const loadNotifications = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch('http://localhost:5000/api/notifications', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (!isMounted) return;
+        if (res.ok) {
+          const data = await res.json();
+          setNotifications(data);
+        }
+      } catch (error) {
+        if (isMounted) {
+          console.error("Error fetching notifications:", error);
+        }
+      }
+    };
+
+    loadNotifications();
+    const interval = setInterval(loadNotifications, 60000); // 1 minute interval
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, []);
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
@@ -91,6 +113,9 @@ function Layout() {
     }
     if (location.pathname.startsWith('/history')) {
       return 'Booking History';
+    }
+    if (location.pathname.startsWith('/profile')) {
+      return 'My Profile';
     }
     return 'Customer Portal';
   })();
@@ -237,7 +262,7 @@ function Layout() {
             className="relative h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-white/10 bg-[#070707] shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <Profile onClose={closeProfile} />
+            <RoleProfile onClose={closeProfile} />
           </div>
         </div>
       )}

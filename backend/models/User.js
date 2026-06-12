@@ -23,6 +23,21 @@ const userSchema = new mongoose.Schema(
 			enum: ['customer', 'staff', 'admin'],
 			default: 'customer',
 		},
+		phone: {
+			type: String,
+			trim: true,
+			default: '',
+		},
+		preferredStylist: {
+			type: String,
+			trim: true,
+			default: null,
+		},
+		profileImage: {
+			type: String,
+			trim: true,
+			default: '',
+		},
 	},
 	{
 		timestamps: true,
