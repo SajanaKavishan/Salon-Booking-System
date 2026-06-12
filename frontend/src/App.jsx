@@ -1,28 +1,28 @@
-import React, { useMemo } from 'react';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import Home from './pages/auth/Home';
-import Login from './pages/auth/Login';
-import Register from './pages/auth/Register';
-import Dashboard from './pages/customer/Dashboard';
-import Profile from './pages/customer/Profile';
-import BookAppointment from './pages/customer/BookAppointment';
-import History from './pages/customer/History';
-import AdminDashboard from './pages/admin/AdminDashboard';
-import StaffDashboard from './pages/staff/StaffDashboard';
-import StaffProfile from './pages/staff/StaffProfile';
-import ProtectedRoute from './routes/ProtectedRoute';
-import CustomerRoute from './routes/CustomerRoute';
-import Navbar from './components/common/Navbar';
-import { ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
-import AdminMessages from './components/admin/AdminMessages';
-import Layout from './pages/admin/Layout';
-import AppointmentsPage from './pages/admin/AppointmentsPage';
-import ClientsPage from './pages/admin/ClientsPage';
-import StaffPage from './pages/admin/StaffPage';
-import ServicesPage from './pages/admin/ServicesPage';
-import SettingsPage from './pages/admin/SettingsPage';
-import { AppointmentsProvider } from './context/AppointmentsContext';
+import React, { useMemo } from "react";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import Home from "./pages/auth/Home";
+import Login from "./pages/auth/Login";
+import Register from "./pages/auth/Register";
+import Dashboard from "./pages/customer/Dashboard";
+import RoleProfile from "./pages/shared/RoleProfile";
+import BookAppointment from "./pages/customer/BookAppointment";
+import History from "./pages/customer/History";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import StaffDashboard from "./pages/staff/StaffDashboard";
+import RosterShifts from "./pages/staff/RosterShifts";
+import ProtectedRoute from "./routes/ProtectedRoute";
+import CustomerRoute from "./routes/CustomerRoute";
+import Navbar from "./components/common/Navbar";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import AdminMessages from "./components/admin/AdminMessages";
+import Layout from "./pages/admin/Layout";
+import AppointmentsPage from "./pages/admin/AppointmentsPage";
+import ClientsPage from "./pages/admin/ClientsPage";
+import StaffPage from "./pages/admin/StaffPage";
+import ServicesPage from "./pages/admin/ServicesPage";
+import SettingsPage from "./pages/admin/SettingsPage";
+import { AppointmentsProvider } from "./context/AppointmentsContext";
 
 function PlaceholderPage({ title, subtitle }) {
   return (
@@ -36,7 +36,7 @@ function PlaceholderPage({ title, subtitle }) {
 function App() {
   const userProfile = useMemo(() => {
     try {
-      return JSON.parse(localStorage.getItem('userProfile')) || null;
+      return JSON.parse(localStorage.getItem("userProfile")) || null;
     } catch {
       return null;
     }
@@ -62,17 +62,26 @@ function App() {
               }
             >
               <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/profile" element={<Profile />} />
               <Route path="/book" element={<BookAppointment userProfile={userProfile} />} />
               <Route path="/booking" element={<BookAppointment userProfile={userProfile} />} />
               <Route path="/history" element={<History />} />
             </Route>
 
-            {/* Admin routes */}  
+            <Route
+              element={
+                <ProtectedRoute allowedRoles={["customer", "staff", "admin"]}>
+                  <Layout />
+                </ProtectedRoute>
+              }
+            >
+              <Route path="/profile" element={<RoleProfile />} />
+            </Route>
+
+            {/* Admin routes */}
             <Route 
               path="/admin" 
               element={
-                <ProtectedRoute allowedRoles={['admin']}>
+                <ProtectedRoute allowedRoles={["admin"]}>
                   <Layout />
                 </ProtectedRoute>
               } 
@@ -83,12 +92,13 @@ function App() {
               <Route path="staff" element={<StaffPage />} />
               <Route path="services" element={<ServicesPage />} />
               <Route path="analytics" element={<PlaceholderPage title="Analytics" subtitle="Analytics dashboard will be available here." />} />
+              <Route path="settings" element={<SettingsPage />} />
             </Route>
 
             <Route 
               path="/staff" 
               element={
-                <ProtectedRoute allowedRoles={['staff']}>
+                <ProtectedRoute allowedRoles={["staff"]}>
                   <Layout />
                 </ProtectedRoute>
               } 
@@ -96,12 +106,12 @@ function App() {
               <Route index element={<Navigate to="dashboard" replace />} />
               <Route path="dashboard" element={<StaffDashboard />} />
               <Route path="appointments" element={<AppointmentsPage />} />
-              <Route path="profile" element={<StaffProfile />} />
+              <Route path="roster-shifts" element={<RosterShifts />} />
             </Route>
             <Route 
               path="/admin/messages" 
               element={
-                <ProtectedRoute allowedRoles={['admin']}>
+                <ProtectedRoute allowedRoles={["admin"]}>
                   <AdminMessages />
                 </ProtectedRoute>
               } 

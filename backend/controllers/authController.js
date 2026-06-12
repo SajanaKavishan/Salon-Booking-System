@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const Staff = require('../models/Staff');
 
 const generateToken = (user) => {
   return jwt.sign(
@@ -70,10 +71,33 @@ const login = async (req, res) => {
 
     const token = generateToken(user);
 
+    let profileImage = user.profileImage || '';
+    let specialty = '';
+    let offDays = [];
+
+    if (user.role === 'staff') {
+      const staffDetails = await Staff.findOne({ userId: user._id }).lean();
+      if (staffDetails) {
+        profileImage = profileImage || staffDetails.imageUrl || '';
+        specialty = staffDetails.specialty || '';
+        offDays = Array.isArray(staffDetails.offDays)
+          ? staffDetails.offDays
+          : typeof staffDetails.offDays === 'string'
+          ? staffDetails.offDays.split(',').map((day) => day.trim()).filter(Boolean)
+          : [];
+      }
+    }
+
     return res.status(200).json({
       _id: user._id,
       name: user.name,
       email: user.email,
+      phone: user.phone || '',
+      preferredStylist: user.preferredStylist || '',
+      profileImage,
+      imageUrl: profileImage,
+      specialty,
+      offDays,
       role: user.role,
       token
     });

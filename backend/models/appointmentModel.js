@@ -26,7 +26,11 @@ const appointmentSchema = new mongoose.Schema({
     totalAmount: { type: Number, required: true },   
 
     isHiddenByCustomer: { type: Boolean, default: false },
-    status: { type: String, default: 'Pending' }
+    status: { 
+        type: String, 
+        enum: ['Pending', 'Confirmed', 'Approved', 'Rejected', 'Cancelled', 'Completed', 'No-Show'],
+        default: 'Pending' 
+    }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Appointment', appointmentSchema);

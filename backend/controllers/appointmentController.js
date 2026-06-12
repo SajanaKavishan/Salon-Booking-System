@@ -1,5 +1,6 @@
 const Appointment = require('../models/appointmentModel');
 const Service = require('../models/Service'); // Import the Service model to interact with the services collection in the database
+const Staff = require('../models/Staff'); // Import the Staff model to interact with the staff collection
 const sendEmail = require('../utils/sendEmail'); // Import the sendEmail utility function to send email notifications to users about their appointment status updates
 const { ensureSettingsDocument, defaultSettings } = require('./settingsController');
 
@@ -73,12 +74,57 @@ const createAppointment = async (req, res) => {
         const startMins = timeToMinutes(startTime);
         const endMins = startMins + totalDuration;
         const endTime = minutesToTime(endMins);
-        const stylistName = stylist && String(stylist).trim() ? stylist : 'Any Available Stylist';
 
-        if (stylistName !== 'Any Available Stylist') {
+        let stylistId = stylist;
+        if (!stylistId || stylistId === 'Any Available Stylist') {
+            const appointmentDate = new Date(`${date}T00:00:00`);
+            const dayOfWeek = appointmentDate.getDay();
+            const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const dayName = days[dayOfWeek];
+
+            const staffList = await Staff.find({});
+            const workingStaff = staffList.filter(s => {
+                const offDaysList = Array.isArray(s.offDays)
+                    ? s.offDays
+                    : typeof s.offDays === 'string'
+                        ? s.offDays.split(',').map(d => d.trim())
+                        : [];
+                return !offDaysList.map(d => d.toLowerCase()).includes(dayName.toLowerCase());
+            });
+
+            let assignedStaff = null;
+            for (let s of workingStaff) {
+                const existingAppointments = await Appointment.find({
+                    date: date,
+                    stylist: s._id,
+                    status: { $nin: ['Rejected', 'Cancelled'] }
+                });
+
+                let hasOverlap = false;
+                for (let appt of existingAppointments) {
+                    const existingStart = timeToMinutes(appt.startTime);
+                    const existingEnd = timeToMinutes(appt.endTime);
+                    if ((startMins < existingEnd) && (endMins > existingStart)) {
+                        hasOverlap = true;
+                        break;
+                    }
+                }
+
+                if (!hasOverlap) {
+                    assignedStaff = s;
+                    break;
+                }
+            }
+
+            if (!assignedStaff) {
+                return res.status(400).json({ message: "No stylists are available at the selected time." });
+            }
+
+            stylistId = assignedStaff._id;
+        } else {
             const existingAppointments = await Appointment.find({
                 date: date,
-                stylist: stylistName,
+                stylist: stylistId,
                 status: { $nin: ['Rejected', 'Cancelled'] }
             });
 
@@ -97,6 +143,9 @@ const createAppointment = async (req, res) => {
                 return res.status(400).json({ message: "Appointment overlaps with an existing appointment." });
             }
         }
+
+        const finalStylist = await Staff.findById(stylistId);
+        const stylistName = finalStylist ? finalStylist.name : 'Any Available Stylist';
 
         let appointmentStatus = 'Pending';
         if (settings.autoConfirmVip) {
@@ -120,7 +169,7 @@ const createAppointment = async (req, res) => {
             endTime: endTime,
             totalDuration: totalDuration,
             totalAmount: totalAmount,
-            stylist: stylistName,
+            stylist: stylistId,
             status: appointmentStatus
         });
 
@@ -192,9 +241,12 @@ const getStaffAppointments = async (req, res) => {
             return res.status(401).json({ message: 'Unauthorized' });
         }
 
-        const query = req.user.role === 'admin'
-            ? {}
-            : { stylist: req.user.name };
+        let query = {};
+        if (req.user.role === 'staff') {
+            const staffMembers = await Staff.find({ name: req.user.name });
+            const staffIds = staffMembers.map(s => s._id);
+            query = { stylist: { $in: staffIds } };
+        }
 
         const appointments = await Appointment.find(query)
             .populate('user', 'name email phone')
@@ -407,8 +459,12 @@ const updateAppointmentStatusByStaff = async (req, res) => {
             return res.status(404).json({ message: 'Appointment not found.' });
         }
 
-        if (req.user.role === 'staff' && appointment.stylist !== req.user.name) {
-            return res.status(401).json({ message: 'You are not assigned to this appointment.' });
+        if (req.user.role === 'staff') {
+            const staffMembers = await Staff.find({ name: req.user.name });
+            const staffIds = staffMembers.map(s => s._id.toString());
+            if (!appointment.stylist || !staffIds.includes(appointment.stylist.toString())) {
+                return res.status(401).json({ message: 'You are not assigned to this appointment.' });
+            }
         }
 
         if (appointment.status !== 'Approved') {
