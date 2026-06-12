@@ -8,7 +8,24 @@ import { useNavigate } from "react-router-dom";
 
 import { CalendarDays, Clock, Users, DollarSign, Briefcase, XCircle } from "lucide-react";
 
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+} from "recharts";
+
 import { GoldButton, GlassCard } from "../../components/admin/SystemUI";
+
+
+
+const formatYAxis = (value) => {
+  if (value >= 1000) return `Rs. ${value / 1000}k`;
+  return `Rs. ${value}`;
+};
 
 
 
@@ -19,6 +36,8 @@ function AdminDashboard() {
   const [summaryData, setSummaryData] = useState(null);
 
   const [loading, setLoading] = useState(true);
+
+  const [chartData, setChartData] = useState([]);
 
   const [recentAppointments, setRecentAppointments] = useState([]);
 
@@ -54,9 +73,11 @@ function AdminDashboard() {
 
 
 
-        const [summaryResponse, appointmentsRes, leaveRes] = await Promise.all([
+        const [summaryResponse, analyticsResponse, appointmentsRes, leaveRes] = await Promise.all([
 
           axios.get("http://localhost:5000/api/dashboard/summary", authHeaders),
+
+          axios.get("http://localhost:5000/api/dashboard/weekly-analytics", authHeaders),
 
           axios.get("http://localhost:5000/api/appointments?limit=5", authHeaders),
 
@@ -67,6 +88,12 @@ function AdminDashboard() {
 
 
         setSummaryData(summaryResponse.data.data);
+
+        const weeklyAnalytics = Array.isArray(analyticsResponse.data)
+          ? analyticsResponse.data
+          : analyticsResponse.data?.data;
+
+        setChartData(Array.isArray(weeklyAnalytics) ? weeklyAnalytics : []);
 
         setRecentAppointments(appointmentsRes.data);
 
@@ -363,6 +390,40 @@ function AdminDashboard() {
         </GlassCard>
 
       </section>
+
+      <div className="group lux-card backdrop-blur-xl bg-card/40 border border-white/[0.04] p-4 sm:p-6 rounded-2xl shadow-2xl mt-8">
+        <div className="mb-6">
+          <h3 className="text-xl font-brand font-semibold text-white">Weekly Revenue Analytics</h3>
+          <p className="text-neutral-500 text-xs mt-1">Completed appointment revenue from Monday to Sunday</p>
+        </div>
+
+        <div className="h-[250px] w-full min-w-0 sm:h-[300px]">
+          <ResponsiveContainer
+            width="100%"
+            height="100%"
+            minWidth={1}
+            minHeight={250}
+            initialDimension={{ width: 1, height: 250 }}
+          >
+            <AreaChart
+              data={chartData}
+              margin={{ top: 10, right: 5, left: -15, bottom: 0 }}
+            >
+              <defs>
+                <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#d4af37" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#d4af37" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
+              <XAxis dataKey="day" stroke="#737373" fontSize={11} tickLine={false} axisLine={false} dy={10} />
+              <YAxis stroke="#737373" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} domain={[0, "auto"]} tickFormatter={formatYAxis} />
+              <Tooltip contentStyle={{ backgroundColor: '#111', borderColor: '#222', borderRadius: '8px' }} itemStyle={{ color: '#d4af37' }} formatter={(value) => [`Rs. ${value.toLocaleString()}`, 'Revenue']} />
+              <Area type="monotone" dataKey="revenue" stroke="#d4af37" strokeWidth={2} fillOpacity={1} fill="url(#colorRevenue)" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
 
 
 
