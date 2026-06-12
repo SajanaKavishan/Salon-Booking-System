@@ -16,17 +16,9 @@ function AdminDashboard() {
 
   const navigate = useNavigate();
 
-  const [dashboardMetrics, setDashboardMetrics] = useState({
+  const [summaryData, setSummaryData] = useState(null);
 
-    totalAppointments: 0,
-
-    pendingAppointments: 0,
-
-    totalRevenue: 0,
-
-    totalStaff: 0,
-
-  });
+  const [loading, setLoading] = useState(true);
 
   const [recentAppointments, setRecentAppointments] = useState([]);
 
@@ -48,13 +40,23 @@ function AdminDashboard() {
 
         const token = localStorage.getItem("token");
 
-        const authHeaders = token ? { headers: { Authorization: `Bearer ${token}` } } : undefined;
+        if (!token) {
+
+          throw new Error("Admin authentication token is missing.");
+
+        }
+
+        const authHeaders = {
+
+          headers: { Authorization: `Bearer ${token}` },
+
+        };
 
 
 
-        const [metricsRes, appointmentsRes, leaveRes] = await Promise.all([
+        const [summaryResponse, appointmentsRes, leaveRes] = await Promise.all([
 
-          axios.get("http://localhost:5000/api/appointments/metrics", authHeaders),
+          axios.get("http://localhost:5000/api/dashboard/summary", authHeaders),
 
           axios.get("http://localhost:5000/api/appointments?limit=5", authHeaders),
 
@@ -64,7 +66,7 @@ function AdminDashboard() {
 
 
 
-        setDashboardMetrics(metricsRes.data);
+        setSummaryData(summaryResponse.data.data);
 
         setRecentAppointments(appointmentsRes.data);
 
@@ -72,7 +74,13 @@ function AdminDashboard() {
 
       } catch (error) {
 
-        toast.error(error.response?.data?.message || "Failed to load dashboard data");
+        console.error("Dashboard data fetch error:", error);
+
+        toast.error(error.response?.data?.message || error.message || "Failed to load dashboard data");
+
+      } finally {
+
+        setLoading(false);
 
       }
 
@@ -158,7 +166,7 @@ function AdminDashboard() {
 
         // No conflicts, proceed with approval
 
-        await confirmApproveLeave();
+        await confirmApproveLeave(leaveRequest._id);
 
       }
 
@@ -174,15 +182,21 @@ function AdminDashboard() {
 
 
 
-  const confirmApproveLeave = async () => {
+  const confirmApproveLeave = async (leaveRequestId) => {
 
     try {
+
+      if (!leaveRequestId) {
+
+        throw new Error("Leave request is no longer available.");
+
+      }
 
       const token = localStorage.getItem("token");
 
       const authHeaders = token ? { headers: { Authorization: `Bearer ${token}` } } : undefined;
 
-      await axios.post(`http://localhost:5000/api/leaves/${currentLeaveRequest._id}/approve`, {}, authHeaders);
+      await axios.post(`http://localhost:5000/api/leaves/${leaveRequestId}/approve`, {}, authHeaders);
 
       toast.success("Leave request approved!");
 
@@ -278,7 +292,11 @@ function AdminDashboard() {
 
             <p className="text-sm font-medium text-gray-400">Total Appointments</p>
 
-            <p className="text-3xl font-bold text-white">{dashboardMetrics.totalAppointments}</p>
+            <p className="text-3xl font-bold text-white">
+
+              {loading ? "..." : summaryData?.totalAppointments || 0}
+
+            </p>
 
           </div>
 
@@ -292,7 +310,11 @@ function AdminDashboard() {
 
             <p className="text-sm font-medium text-gray-400">Pending Appointments</p>
 
-            <p className="text-3xl font-bold text-white">{dashboardMetrics.pendingAppointments}</p>
+            <p className="text-3xl font-bold text-white">
+
+              {loading ? "..." : summaryData?.pendingAppointments || 0}
+
+            </p>
 
           </div>
 
@@ -306,7 +328,15 @@ function AdminDashboard() {
 
             <p className="text-sm font-medium text-gray-400">Total Revenue</p>
 
-            <p className="text-3xl font-bold text-white">${dashboardMetrics.totalRevenue.toFixed(2)}</p>
+            <p className="text-3xl font-bold text-white">
+
+              {loading
+
+                ? "..."
+
+                : `Rs. ${(summaryData?.totalRevenue || 0).toLocaleString()}`}
+
+            </p>
 
           </div>
 
@@ -320,7 +350,11 @@ function AdminDashboard() {
 
             <p className="text-sm font-medium text-gray-400">Total Staff</p>
 
-            <p className="text-3xl font-bold text-white">{dashboardMetrics.totalStaff}</p>
+            <p className="text-3xl font-bold text-white">
+
+              {loading ? "..." : summaryData?.totalStaff || 0}
+
+            </p>
 
           </div>
 
@@ -368,9 +402,17 @@ function AdminDashboard() {
 
                     <tr key={appointment._id} className="border-b border-white/5 last:border-b-0 hover:bg-white/5">
 
-                      <td className="py-3 px-4 text-white">{appointment.user.name}</td>
+                      <td className="py-3 px-4 text-white">
 
-                      <td className="py-3 px-4 text-gray-300">{appointment.stylist.name}</td>
+                        {appointment.user?.name || "Unknown customer"}
+
+                      </td>
+
+                      <td className="py-3 px-4 text-gray-300">
+
+                        {appointment.stylist?.name || "Unassigned"}
+
+                      </td>
 
                       <td className="py-3 px-4 text-gray-300">
 
@@ -458,9 +500,33 @@ function AdminDashboard() {
 
                       <td className="py-3 px-4 flex items-center gap-3">
 
-                        <img src={leave.staffId.imageUrl || 'https://via.placeholder.com/40'} alt={leave.staffId.name} className="h-8 w-8 rounded-full object-cover" />
+                        {leave.staffId?.imageUrl ? (
 
-                        <span className="font-medium text-white">{leave.staffId.name}</span>
+                          <img
+
+                            src={leave.staffId.imageUrl}
+
+                            alt={leave.staffId.name || "Staff member"}
+
+                            className="h-8 w-8 rounded-full object-cover"
+
+                          />
+
+                        ) : (
+
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-gray-300">
+
+                            {leave.staffId?.name?.charAt(0).toUpperCase() || "?"}
+
+                          </div>
+
+                        )}
+
+                        <span className="font-medium text-white">
+
+                          {leave.staffId?.name || "Former staff member"}
+
+                        </span>
 
                       </td>
 
@@ -588,7 +654,7 @@ function AdminDashboard() {
 
                 type="button"
 
-                onClick={confirmApproveLeave}
+                onClick={() => confirmApproveLeave(currentLeaveRequest?._id)}
 
                 className="bg-red-600/90 px-4 py-2 font-semibold text-white shadow-[0_0_15px_rgba(220,38,38,0.4)] hover:bg-red-700"
 
