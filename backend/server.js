@@ -66,6 +66,7 @@ app.use("/api/notifications", ensureMongoConnection, require("./routes/notificat
 app.use("/api/settings", ensureMongoConnection, require("./routes/settingsRoutes")); // Salon settings routes
 app.use("/api/roster", ensureMongoConnection, require("./routes/rosterRoutes")); // Roster and Shifts routes
 app.use("/api/leaves", ensureMongoConnection, require("./routes/leaveRoutes")); // Leave management routes
+app.use("/api/dashboard", ensureMongoConnection, require("./routes/dashboardRoutes")); // Admin dashboard summary routes
 app.post("/api/login", async (req, res) => { // Basic login route for testing purposes, should be replaced by the more robust authentication routes in authRoutes.js
     try {
         const { email, password } = req.body; 
