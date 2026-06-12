@@ -1,4 +1,5 @@
 const Appointment = require('../models/appointmentModel');
+const Service = require('../models/Service');
 const Staff = require('../models/Staff');
 
 const WEEK_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -125,7 +126,86 @@ const getWeeklyAnalytics = async (req, res) => {
   }
 };
 
+// @desc    Get the five most booked salon services
+// @route   GET /api/dashboard/top-services
+// @access  Private/Admin
+const getTopServices = async (req, res) => {
+  try {
+    const topServices = await Appointment.aggregate([
+      { $unwind: '$services' },
+      {
+        $group: {
+          _id: '$services',
+          bookings: { $sum: 1 },
+        },
+      },
+      {
+        $lookup: {
+          from: Service.collection.name,
+          localField: '_id',
+          foreignField: '_id',
+          as: 'service',
+        },
+      },
+      { $unwind: '$service' },
+      { $sort: { bookings: -1, _id: 1 } },
+      { $limit: 5 },
+      {
+        $project: {
+          _id: 0,
+          name: '$service.name',
+          bookings: 1,
+        },
+      },
+    ]);
+
+    return res.status(200).json(topServices);
+  } catch (error) {
+    console.error('Top Services Analytics Error:', error);
+
+    return res.status(500).json({
+      success: false,
+      message: 'Server Error: Could not fetch top services analytics.',
+    });
+  }
+};
+
+// @desc    Get appointment totals grouped by status
+// @route   GET /api/dashboard/appointment-status
+// @access  Private/Admin
+const getAppointmentStatus = async (req, res) => {
+  try {
+    const appointmentStatus = await Appointment.aggregate([
+      {
+        $group: {
+          _id: '$status',
+          value: { $sum: 1 },
+        },
+      },
+      { $sort: { value: -1, _id: 1 } },
+      {
+        $project: {
+          _id: 0,
+          name: '$_id',
+          value: 1,
+        },
+      },
+    ]);
+
+    return res.status(200).json(appointmentStatus);
+  } catch (error) {
+    console.error('Appointment Status Analytics Error:', error);
+
+    return res.status(500).json({
+      success: false,
+      message: 'Server Error: Could not fetch appointment status analytics.',
+    });
+  }
+};
+
 module.exports = {
   getDashboardSummary,
   getWeeklyAnalytics,
+  getTopServices,
+  getAppointmentStatus,
 };

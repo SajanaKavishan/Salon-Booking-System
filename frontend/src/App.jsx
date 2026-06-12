@@ -22,16 +22,8 @@ import ClientsPage from "./pages/admin/ClientsPage";
 import StaffPage from "./pages/admin/StaffPage";
 import ServicesPage from "./pages/admin/ServicesPage";
 import SettingsPage from "./pages/admin/SettingsPage";
+import Analytics from "./pages/admin/Analytics";
 import { AppointmentsProvider } from "./context/AppointmentsContext";
-
-function PlaceholderPage({ title, subtitle }) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-[#111111]/70 p-8 shadow-xl backdrop-blur-md">
-      <h1 className="text-3xl font-serif text-white">{title}</h1>
-      <p className="mt-3 text-gray-400">{subtitle}</p>
-    </div>
-  );
-}
 
 function App() {
   const userProfile = useMemo(() => {
@@ -91,7 +83,7 @@ function App() {
               <Route path="clients" element={<ClientsPage />} />
               <Route path="staff" element={<StaffPage />} />
               <Route path="services" element={<ServicesPage />} />
-              <Route path="analytics" element={<PlaceholderPage title="Analytics" subtitle="Analytics dashboard will be available here." />} />
+              <Route path="analytics" element={<Analytics />} />
               <Route path="settings" element={<SettingsPage />} />
             </Route>
 
