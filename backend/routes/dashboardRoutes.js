@@ -1,5 +1,6 @@
 const express = require('express');
 const {
+  getAnalyticsSummary,
   getAppointmentStatus,
   getDashboardSummary,
   getTopServices,
@@ -11,6 +12,7 @@ const router = express.Router();
 
 router.get('/summary', protect, admin, getDashboardSummary);
 router.get('/weekly-analytics', protect, admin, getWeeklyAnalytics);
+router.get('/analytics-summary', protect, admin, getAnalyticsSummary);
 router.get('/top-services', protect, admin, getTopServices);
 router.get('/appointment-status', protect, admin, getAppointmentStatus);
 
