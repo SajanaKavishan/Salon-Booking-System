@@ -49,6 +49,8 @@ function AdminDashboard() {
 
   const [currentLeaveRequest, setCurrentLeaveRequest] = useState(null);
 
+  const [isLeaveActionLoading, setIsLeaveActionLoading] = useState(false);
+
 
 
   useEffect(() => {
@@ -153,7 +155,7 @@ function AdminDashboard() {
 
   const getLeaveStatusBadge = (status) => {
 
-    switch(status) {
+    switch(status?.toLowerCase()) {
 
       case 'approved': return <span className="text-[10px] uppercase tracking-wider font-bold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded border border-emerald-400/20">Approved</span>;
 
@@ -171,7 +173,10 @@ function AdminDashboard() {
 
   const handleApproveLeave = async (leaveRequest) => {
 
+    if (isLeaveActionLoading) return;
+
     setCurrentLeaveRequest(leaveRequest);
+    setIsLeaveActionLoading(true);
 
     try {
 
@@ -188,6 +193,7 @@ function AdminDashboard() {
         setConflictingAppointments(conflictsRes.data);
 
         setIsConflictModalOpen(true);
+        setIsLeaveActionLoading(false);
 
       } else {
 
@@ -202,6 +208,8 @@ function AdminDashboard() {
       toast.error(error.response?.data?.message || "Failed to check for conflicts.");
 
       console.error("Conflict check error:", error);
+      setCurrentLeaveRequest(null);
+      setIsLeaveActionLoading(false);
 
     }
 
@@ -212,6 +220,8 @@ function AdminDashboard() {
   const confirmApproveLeave = async (leaveRequestId) => {
 
     try {
+
+      setIsLeaveActionLoading(true);
 
       if (!leaveRequestId) {
 
@@ -250,6 +260,10 @@ function AdminDashboard() {
       toast.error(error.response?.data?.message || "Failed to approve leave request.");
 
       console.error("Approval error:", error);
+
+    } finally {
+
+      setIsLeaveActionLoading(false);
 
     }
 
@@ -607,13 +621,26 @@ function AdminDashboard() {
 
                       <td className="py-3 px-4 text-center">
 
-                        {leave.status === 'pending' && (
+                        {leave.status?.toLowerCase() === 'pending' && (
 
                           <div className="flex justify-center gap-2">
 
-                            <GoldButton onClick={() => handleApproveLeave(leave)} className="px-3 py-1 text-xs">Approve</GoldButton>
+                            <GoldButton
+                              onClick={() => handleApproveLeave(leave)}
+                              disabled={isLeaveActionLoading}
+                              className="px-3 py-1 text-xs"
+                            >
+                              {isLeaveActionLoading && currentLeaveRequest?._id === leave._id ? "Checking..." : "Approve"}
+                            </GoldButton>
 
-                            <GoldButton onClick={() => handleRejectLeave(leave._id)} variant="outline" className="border-red-400/30 text-red-400 px-3 py-1 text-xs hover:bg-red-500/10">Reject</GoldButton>
+                            <GoldButton
+                              onClick={() => handleRejectLeave(leave._id)}
+                              disabled={isLeaveActionLoading}
+                              variant="outline"
+                              className="border-red-400/30 text-red-400 px-3 py-1 text-xs hover:bg-red-500/10"
+                            >
+                              Reject
+                            </GoldButton>
 
                           </div>
 
@@ -665,19 +692,26 @@ function AdminDashboard() {
 
             </h4>
 
-            <p className="mb-4 text-gray-400">
+            <p className="mb-4 text-gray-300">
 
-              Approving this leave will cancel {conflictingAppointments.length} appointments:
+              Warning: Approving this leave will cancel the following {conflictingAppointments.length} appointments.
 
             </p>
 
-            <ul className="list-disc list-inside mb-6 text-gray-300 max-h-60 overflow-y-auto pr-2">
+            <ul className="mb-6 max-h-72 space-y-2 overflow-y-auto pr-2 text-gray-300">
 
-              {conflictingAppointments.map((app, index) => (
+              {conflictingAppointments.map((app) => (
 
-                <li key={index} className="mb-2 last:mb-0 text-sm">
+                <li
+                  key={app.appointmentId}
+                  className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm"
+                >
 
-                  <span className="font-medium text-white">{app.customerName}</span> has a booking on <span className="font-medium text-white">{app.time}</span> for <span className="font-medium text-white">{app.service}</span>.
+                  <p className="font-semibold text-white">{app.customerName}</p>
+                  <p className="mt-1 text-xs text-gray-400">
+                    {app.date ? new Date(`${app.date}T00:00:00`).toLocaleDateString() : "Leave date"} at {app.time}
+                  </p>
+                  <p className="mt-1 text-xs text-gray-300">{app.service}</p>
 
                 </li>
 
@@ -692,6 +726,7 @@ function AdminDashboard() {
                 type="button"
 
                 variant="ghost"
+                disabled={isLeaveActionLoading}
 
                 onClick={() => {
 
@@ -716,12 +751,13 @@ function AdminDashboard() {
                 type="button"
 
                 onClick={() => confirmApproveLeave(currentLeaveRequest?._id)}
+                disabled={isLeaveActionLoading}
 
                 className="bg-red-600/90 px-4 py-2 font-semibold text-white shadow-[0_0_15px_rgba(220,38,38,0.4)] hover:bg-red-700"
 
               >
 
-                Confirm & Cancel Appointments
+                {isLeaveActionLoading ? "Approving..." : "Confirm & Cancel Appointments"}
 
               </GoldButton>
 

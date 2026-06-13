@@ -29,8 +29,8 @@ const userSchema = new mongoose.Schema(
 			default: '',
 		},
 		preferredStylist: {
-			type: String,
-			trim: true,
+			type: mongoose.Schema.Types.ObjectId,
+			ref: 'User',
 			default: null,
 		},
 		profileImage: {

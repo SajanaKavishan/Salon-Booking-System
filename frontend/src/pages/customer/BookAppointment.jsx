@@ -86,9 +86,9 @@ function BookAppointment({ userProfile, customerData }) {
 
 
 
-  const profile = userProfile || customerData || {};
+  const profile = user || userProfile || customerData || {};
 
-  const preferredStylistName = typeof profile.preferredStylist === 'string'
+  const preferredStylistValue = typeof profile.preferredStylist === 'string'
 
     ? profile.preferredStylist.trim()
 
@@ -326,13 +326,14 @@ function BookAppointment({ userProfile, customerData }) {
 
       if (hasUserSelectedStylist || stylist || stylistsList.length === 0) return;
 
-      if (!preferredStylistName || preferredStylistName.toLowerCase() === 'not selected') return;
+      if (!preferredStylistValue || preferredStylistValue.toLowerCase() === 'not selected') return;
 
 
 
       const preferred = stylistsList.find(
 
-        (stylistItem) => stylistItem.name?.toLowerCase() === preferredStylistName.toLowerCase()
+        (stylistItem) => stylistItem.userId === preferredStylistValue
+          || stylistItem.name?.toLowerCase() === preferredStylistValue.toLowerCase()
 
       );
 
@@ -344,7 +345,25 @@ function BookAppointment({ userProfile, customerData }) {
 
       }
 
-    }, [hasUserSelectedStylist, preferredStylistName, stylist, stylistsList]);
+    }, [hasUserSelectedStylist, preferredStylistValue, stylist, stylistsList]);
+
+
+
+    useEffect(() => {
+
+      if (!location.state?.isReschedule) return;
+
+      const originalServices = Array.isArray(location.state.originalServices)
+        ? location.state.originalServices
+            .map((service) => typeof service === 'string' ? service : service?._id || service?.id)
+            .filter(Boolean)
+        : [];
+
+      setSelectedServices([...new Set(originalServices)]);
+      setStep(2);
+      toast.info('Your original services are selected. Choose a stylist for the new booking.');
+
+    }, [location.state]);
 
 
 
@@ -1562,9 +1581,10 @@ function BookAppointment({ userProfile, customerData }) {
 
                             const isSelected = stylist === stylistItem._id;
 
-                            const isPreferred = preferredStylistName
+                            const isPreferred = preferredStylistValue
 
-                              ? stylistItem.name?.toLowerCase() === preferredStylistName.toLowerCase()
+                              ? stylistItem.userId === preferredStylistValue
+                                || stylistItem.name?.toLowerCase() === preferredStylistValue.toLowerCase()
 
                               : false;
 

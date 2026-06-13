@@ -21,10 +21,15 @@ const applyLeave = async (req, res) => {
             return res.status(400).json({ message: "Start date, leave type, and reason are required." });
         }
 
+        const resolvedEndDate = endDate || startDate;
+        if (new Date(resolvedEndDate) < new Date(startDate)) {
+            return res.status(400).json({ message: "End date must be on or after the start date." });
+        }
+
         const newLeave = new LeaveRequest({
             staffId,
             startDate,
-            endDate,
+            endDate: resolvedEndDate,
             leaveType: type,
             reason
         });

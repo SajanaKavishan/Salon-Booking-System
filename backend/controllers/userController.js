@@ -1,5 +1,8 @@
 const User = require('../models/userModel');
 const Staff = require('../models/Staff');
+const LeaveRequest = require('../models/LeaveRequest');
+const Notification = require('../models/Notification');
+const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const axios = require('axios'); 
@@ -22,6 +25,38 @@ const generateToken = (id) => { // Generate a JWT token with the user's ID as pa
     });
 };
 
+const formatLeaveDate = (startDate, endDate = startDate) => {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'UTC'
+  });
+  const start = formatter.format(new Date(startDate));
+  const end = formatter.format(new Date(endDate));
+  return start === end ? start : `${start} - ${end}`;
+};
+
+const resolvePreferredStylistId = async (preferredStylist) => {
+  if (preferredStylist === null || preferredStylist === '') return null;
+  if (preferredStylist === undefined) return undefined;
+
+  if (mongoose.isValidObjectId(preferredStylist)) {
+    const user = await User.findOne({ _id: preferredStylist, role: 'staff' }).select('_id');
+    if (user) return user._id;
+
+    const staff = await Staff.findById(preferredStylist).select('userId');
+    if (staff?.userId) return staff.userId;
+  }
+
+  const staff = await Staff.findOne({ name: preferredStylist }).select('userId');
+  if (staff?.userId) return staff.userId;
+
+  const error = new Error('Please select a valid stylist.');
+  error.statusCode = 400;
+  throw error;
+};
+
 const registerUser = async (req, res) => { // Register a new user
     try {
     const { name, email, password, phone, preferredStylist } = req.body;
@@ -35,11 +70,12 @@ const registerUser = async (req, res) => { // Register a new user
 
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
+        const resolvedPreferredStylist = await resolvePreferredStylistId(preferredStylist);
         const user = await User.create({ // Create a new user in the database with the provided details and hashed password
             name,
             email,
             phone,
-            preferredStylist: preferredStylist || null,
+            preferredStylist: resolvedPreferredStylist || null,
             profileImage: req.body.profileImage || '',
             password: hashedPassword,
             role: 'customer',
@@ -119,11 +155,12 @@ const googleLogin = async (req, res) => {
       const randomPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8);
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(randomPassword, salt);
+      const resolvedPreferredStylist = await resolvePreferredStylistId(req.body.preferredStylist);
       user = await User.create({
         name,
         email,
         phone: req.body.phone || 'Not Provided',
-        preferredStylist: req.body.preferredStylist || null,
+        preferredStylist: resolvedPreferredStylist || null,
         profileImage: req.body.profileImage || '',
         password: hashedPassword,
         role: 'customer'
@@ -185,10 +222,15 @@ const updateUserProfile = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
+    const previousPreferredStylist = user.preferredStylist?.toString() || null;
+    const resolvedPreferredStylist = await resolvePreferredStylistId(preferredStylist);
+
     user.name = name || user.name;
     user.email = email || user.email;
     user.phone = phone !== undefined ? phone : user.phone;
-    user.preferredStylist = preferredStylist !== undefined ? preferredStylist : user.preferredStylist;
+    user.preferredStylist = resolvedPreferredStylist !== undefined
+      ? resolvedPreferredStylist
+      : user.preferredStylist;
     user.profileImage = profileImage !== undefined ? profileImage : user.profileImage;
 
     if (password) {
@@ -197,6 +239,28 @@ const updateUserProfile = async (req, res) => {
     }
 
     const updatedUser = await user.save();
+
+    const preferredStylistChanged = resolvedPreferredStylist !== undefined
+      && previousPreferredStylist !== (updatedUser.preferredStylist?.toString() || null);
+
+    if (preferredStylistChanged && updatedUser.preferredStylist) {
+      const today = new Date();
+      today.setUTCHours(0, 0, 0, 0);
+
+      const upcomingLeaves = await LeaveRequest.find({
+        staffId: updatedUser.preferredStylist,
+        status: { $in: ['Approved', 'approved'] },
+        endDate: { $gte: today }
+      }).sort({ startDate: 1 });
+
+      if (upcomingLeaves.length > 0) {
+        await Notification.insertMany(upcomingLeaves.map((leave) => ({
+          user: updatedUser._id,
+          type: 'INFO',
+          message: `Just a heads-up! Your preferred stylist will be on leave on ${formatLeaveDate(leave.startDate, leave.endDate)}. Plan your next visit accordingly!`
+        })));
+      }
+    }
 
     let staffDetails = null;
     if (updatedUser.role === 'staff') {
@@ -249,7 +313,7 @@ const updateUserProfile = async (req, res) => {
 
     res.json(mergedResponse);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(error.statusCode || 500).json({ message: error.message });
   }
 };
 

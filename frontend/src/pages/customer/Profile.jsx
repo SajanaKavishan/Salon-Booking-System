@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 
-const DEFAULT_STYLISTS = ['Dileep Malshan'];
+const DEFAULT_STYLISTS = [];
 
 const BACKEND_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
 
@@ -47,11 +47,13 @@ function Profile({ onClose }) {
         const response = await fetch(`${BACKEND_BASE_URL}/api/staff`);
         if (!response.ok) return;
         const data = await response.json();
-        const names = Array.isArray(data)
-          ? data.map((staff) => staff?.name).filter(Boolean)
+        const availableStylists = Array.isArray(data)
+          ? data
+              .filter((staff) => staff?.name && staff?.userId)
+              .map((staff) => ({ name: staff.name, userId: staff.userId }))
           : [];
-        if (isMounted && names.length > 0) {
-          setStylists(names);
+        if (isMounted && availableStylists.length > 0) {
+          setStylists(availableStylists);
         }
       } catch {
         // Keep defaults on failure.
@@ -98,7 +100,9 @@ function Profile({ onClose }) {
   const displayName = user?.name || 'User';
   const displayEmail = user?.email || 'No Email Provided';
   const displayPhone = user?.phone || 'No Phone Number Provided';
-  const displayStylist = user?.preferredStylist || 'Not Specified';
+  const displayStylist = stylists.find(
+    (stylist) => stylist.userId === user?.preferredStylist || stylist.name === user?.preferredStylist
+  )?.name || user?.preferredStylist || 'Not Specified';
 
   const handleClose = () => {
     if (typeof onClose === 'function') {
@@ -143,7 +147,7 @@ function Profile({ onClose }) {
   const filteredStylists = useMemo(() => {
     const query = stylistQuery.trim().toLowerCase();
     if (!query) return stylists;
-    return stylists.filter((stylist) => stylist.toLowerCase().includes(query));
+    return stylists.filter((stylist) => stylist.name.toLowerCase().includes(query));
   }, [stylistQuery, stylists]);
 
   const updateField = (field, value) => {
@@ -264,13 +268,13 @@ function Profile({ onClose }) {
       phone: user?.phone || '',
       preferredStylist: user?.preferredStylist || ''
     });
-    setStylistQuery(preferredStylist);
+    setStylistQuery(displayStylist === 'Not Specified' ? '' : displayStylist);
     setIsEditing(true);
   };
 
   const handleStylistSelect = (stylist) => {
-    updateField('preferredStylist', stylist);
-    setStylistQuery(stylist);
+    updateField('preferredStylist', stylist.userId);
+    setStylistQuery(stylist.name);
     setIsStylistOpen(false);
   };
 
@@ -471,11 +475,11 @@ function Profile({ onClose }) {
                     filteredStylists.map((stylist) => (
                       <button
                         type="button"
-                        key={stylist}
+                        key={stylist.userId}
                         onMouseDown={() => handleStylistSelect(stylist)}
                         className="w-full px-4 py-2 text-left text-sm text-neutral-200 transition hover:text-white"
                       >
-                        {stylist}
+                        {stylist.name}
                       </button>
                     ))
                   ) : (

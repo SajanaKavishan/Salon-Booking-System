@@ -12,7 +12,13 @@ const leaveRequestSchema = new mongoose.Schema({
     },
     endDate: {
         type: Date,
-        required: true
+        required: true,
+        validate: {
+            validator(value) {
+                return !this.startDate || value >= this.startDate;
+            },
+            message: 'End date must be on or after the start date.'
+        }
     },
     leaveType: {
         type: String,
@@ -24,8 +30,13 @@ const leaveRequestSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['pending', 'approved', 'rejected'],
-        default: 'pending'
+        enum: ['Pending', 'Approved', 'Rejected'],
+        default: 'Pending',
+        set: (value) => {
+            if (typeof value !== 'string') return value;
+            const normalized = value.trim().toLowerCase();
+            return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+        }
     }
 }, { timestamps: true });
 

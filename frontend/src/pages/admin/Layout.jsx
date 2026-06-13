@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Menu } from 'lucide-react';
-import { Navigate, Outlet, useLocation } from 'react-router-dom';
+import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from '../../components/admin/Sidebar';
 import RoleProfile from '../shared/RoleProfile';
 
 function Layout() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
@@ -68,16 +69,27 @@ function Layout() {
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
-  const handleNotificationClick = async (id) => {
+  const handleNotificationClick = async (notification) => {
+    const shouldReschedule = notification.type === 'RESCHEDULE_REQUIRED' && notification.meta?.actionUrl;
+
     try {
       const token = localStorage.getItem('token');
-      await fetch(`http://localhost:5000/api/notifications/${id}/read`, {
+      await fetch(`http://localhost:5000/api/notifications/${notification._id}/read`, {
         method: 'PUT',
         headers: { 'Authorization': `Bearer ${token}` }
       });
       fetchNotifications();
     } catch (error) {
       console.error("Error marking notification as read:", error);
+    } finally {
+      if (shouldReschedule) {
+        navigate(notification.meta.actionUrl, {
+          state: {
+            isReschedule: true,
+            originalServices: notification.meta.originalServices || []
+          }
+        });
+      }
     }
   };
 
@@ -188,7 +200,7 @@ function Layout() {
                         <button
                           key={notif._id}
                           onClick={() => {
-                            handleNotificationClick(notif._id);
+                            handleNotificationClick(notif);
                             setIsNotificationOpen(false);
                           }}
                           className={`w-full p-3.5 text-left transition-colors duration-150 block hover:bg-white/5 ${!notif.isRead ? 'bg-amber-500/[0.02]' : ''}`}
