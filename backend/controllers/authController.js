@@ -2,6 +2,10 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Staff = require('../models/Staff');
+const {
+  normalizeOffDays,
+  normalizeWorkingHours,
+} = require('../utils/staffSchedule');
 
 const generateToken = (user) => {
   return jwt.sign(
@@ -18,7 +22,7 @@ const generateToken = (user) => {
 
 const registerStaff = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, specialty, offDays, workingHours } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ message: 'Name, email, and password are required.' });
@@ -40,11 +44,24 @@ const registerStaff = async (req, res) => {
       phone: req.body.phone || 'Not Provided'
     });
 
+    let staffProfile = null;
+    if (specialty) {
+      staffProfile = await Staff.create({
+        userId: staffUser._id,
+        name: staffUser.name,
+        imageUrl: req.body.imageUrl || req.body.profileImage || '',
+        specialty,
+        offDays: normalizeOffDays(offDays),
+        workingHours: normalizeWorkingHours(workingHours),
+      });
+    }
+
     return res.status(201).json({
       _id: staffUser._id,
       name: staffUser.name,
       email: staffUser.email,
-      role: staffUser.role
+      role: staffUser.role,
+      staffDetails: staffProfile,
     });
   } catch (error) {
     return res.status(500).json({ message: error.message });
@@ -74,12 +91,14 @@ const login = async (req, res) => {
     let profileImage = user.profileImage || '';
     let specialty = '';
     let offDays = [];
+    let workingHours = normalizeWorkingHours();
 
     if (user.role === 'staff') {
       const staffDetails = await Staff.findOne({ userId: user._id }).lean();
       if (staffDetails) {
         profileImage = profileImage || staffDetails.imageUrl || '';
         specialty = staffDetails.specialty || '';
+        workingHours = normalizeWorkingHours(staffDetails.workingHours);
         offDays = Array.isArray(staffDetails.offDays)
           ? staffDetails.offDays
           : typeof staffDetails.offDays === 'string'
@@ -97,6 +116,7 @@ const login = async (req, res) => {
       profileImage,
       imageUrl: profileImage,
       specialty,
+      workingHours,
       offDays,
       role: user.role,
       token

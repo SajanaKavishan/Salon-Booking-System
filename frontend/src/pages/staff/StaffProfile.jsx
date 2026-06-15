@@ -4,6 +4,18 @@ import { toast } from 'react-toastify';
 
 const BACKEND_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
 
+const formatWorkingHours = (workingHours) => {
+  if (!workingHours) return '';
+  if (typeof workingHours === 'string') return workingHours;
+  if (typeof workingHours === 'object') {
+    const start = workingHours.start || '';
+    const end = workingHours.end || '';
+    if (start && end) return `${start} - ${end}`;
+    return start || end;
+  }
+  return '';
+};
+
 function StaffProfile({ onClose }) {
   const photoInputRef = useRef(null);
 
@@ -57,7 +69,7 @@ function StaffProfile({ onClose }) {
           const mergedData = {
             ...dbData,
             specialty: dbData.specialty || dbData.staffDetails?.specialty || '',
-            workingHours: dbData.workingHours || dbData.staffDetails?.workingHours || '',
+            workingHours: formatWorkingHours(dbData.workingHours || dbData.staffDetails?.workingHours),
             offDays: normalizeOffDaysForDisplay(dbData.offDays || dbData.staffDetails?.offDays),
             profileImage: dbData.profileImage || dbData.imageUrl || dbData.staffDetails?.imageUrl || ''
           };
@@ -70,7 +82,7 @@ function StaffProfile({ onClose }) {
             email: mergedData.email || '',
             phone: mergedData.phone || '',
             specialty: mergedData.specialty || '',
-            workingHours: mergedData.workingHours || '',
+            workingHours: formatWorkingHours(mergedData.workingHours),
             offDays: mergedData.offDays || ''
           });
         }
@@ -123,7 +135,7 @@ function StaffProfile({ onClose }) {
       email: user?.email || '',
       phone: user?.phone || '',
       specialty: user?.specialty || '',
-      workingHours: user?.workingHours || '',
+      workingHours: formatWorkingHours(user?.workingHours),
       offDays: user?.offDays || ''
     });
     setIsEditing(false);
@@ -160,7 +172,7 @@ function StaffProfile({ onClose }) {
         const mergedResponse = {
           ...response.data,
           specialty: response.data.specialty || response.data.staffDetails?.specialty || '',
-          workingHours: response.data.workingHours || response.data.staffDetails?.workingHours || '',
+          workingHours: formatWorkingHours(response.data.workingHours || response.data.staffDetails?.workingHours),
           offDays: Array.isArray(response.data.offDays) ? response.data.offDays.join(', ') : response.data.offDays || ''
         };
         setUser(mergedResponse);
@@ -169,7 +181,7 @@ function StaffProfile({ onClose }) {
           email: mergedResponse.email || '',
           phone: mergedResponse.phone || '',
           specialty: mergedResponse.specialty || '',
-          workingHours: mergedResponse.workingHours || '',
+          workingHours: formatWorkingHours(mergedResponse.workingHours),
           offDays: mergedResponse.offDays || ''
         });
       }
@@ -296,7 +308,7 @@ function StaffProfile({ onClose }) {
               </div>
               <div>
                 <p className="text-[10px] uppercase tracking-widest text-gray-500">Working Hours</p>
-                {isEditing ? <input type="text" value={formValues.workingHours} onChange={(e) => updateField('workingHours', e.target.value)} placeholder="e.g. 09:00 AM - 05:00 PM" className="mt-2 w-full bg-transparent text-sm text-white outline-none border-b border-[#D4AF37]/40 focus:border-[#D4AF37]" /> : <p className="mt-2 text-sm text-white">{user?.workingHours || 'Not specified'}</p>}
+                {isEditing ? <input type="text" value={formValues.workingHours} onChange={(e) => updateField('workingHours', e.target.value)} placeholder="e.g. 09:00 - 17:00" className="mt-2 w-full bg-transparent text-sm text-white outline-none border-b border-[#D4AF37]/40 focus:border-[#D4AF37]" /> : <p className="mt-2 text-sm text-white">{formatWorkingHours(user?.workingHours) || 'Not specified'}</p>}
               </div>
               <div>
                 <p className="text-[10px] uppercase tracking-widest text-gray-500">Off Days</p>

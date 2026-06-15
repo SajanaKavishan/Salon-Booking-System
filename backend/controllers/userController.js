@@ -6,18 +6,10 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const axios = require('axios'); 
-
-const normalizeOffDays = (offDays) => {
-  if (!offDays) return [];
-  if (Array.isArray(offDays)) return offDays.map((day) => day.trim()).filter(Boolean);
-  if (typeof offDays === 'string') {
-    return offDays
-      .split(',')
-      .map((day) => day.trim())
-      .filter(Boolean);
-  }
-  return [];
-};
+const {
+  normalizeOffDays,
+  normalizeWorkingHours,
+} = require('../utils/staffSchedule');
 
 const generateToken = (id) => { // Generate a JWT token with the user's ID as payload
     return jwt.sign({ id }, process.env.JWT_SECRET, { // Token expires in 30 days
@@ -193,7 +185,7 @@ const getMe = async (req, res) => {
     if (user.role === 'staff') {
       const staffDetails = await Staff.findOne({ userId: user._id }).lean();
       const profileImage = user.profileImage || staffDetails?.imageUrl || '';
-      const offDays = normalizeOffDays(staffDetails?.offDays);
+      const offDays = normalizeOffDays(staffDetails?.offDays) || [];
 
       return res.status(200).json({
         ...user,
@@ -201,7 +193,7 @@ const getMe = async (req, res) => {
         profileImage,
         imageUrl: staffDetails?.imageUrl || user.profileImage || '',
         specialty: staffDetails?.specialty || '',
-        workingHours: staffDetails?.workingHours || '',
+        workingHours: normalizeWorkingHours(staffDetails?.workingHours),
         offDays,
       });
     }
@@ -273,15 +265,19 @@ const updateUserProfile = async (req, res) => {
           name: updatedUser.name,
           imageUrl: profileImage || '',
           specialty: specialty || '',
-          workingHours: workingHours || '',
-          offDays: normalizedOffDays,
+          workingHours: normalizeWorkingHours(workingHours),
+          offDays: normalizedOffDays || [],
         });
       } else {
         staffDetails.name = updatedUser.name || staffDetails.name;
         staffDetails.imageUrl = profileImage ? profileImage : staffDetails.imageUrl;
         staffDetails.specialty = specialty !== undefined ? specialty : staffDetails.specialty;
-        staffDetails.workingHours = workingHours !== undefined ? workingHours : staffDetails.workingHours;
-        staffDetails.offDays = normalizedOffDays.length ? normalizedOffDays : staffDetails.offDays;
+        if (workingHours !== undefined) {
+          staffDetails.workingHours = normalizeWorkingHours(workingHours);
+        }
+        if (offDays !== undefined) {
+          staffDetails.offDays = normalizedOffDays;
+        }
         await staffDetails.save();
       }
     }
@@ -306,8 +302,8 @@ const updateUserProfile = async (req, res) => {
       token: req.headers.authorization ? req.headers.authorization.split(' ')[1] : '',
       staffDetails,
       specialty: staffDetails?.specialty || '',
-      workingHours: staffDetails?.workingHours || '',
-      offDays: normalizeOffDays(staffDetails?.offDays),
+      workingHours: normalizeWorkingHours(staffDetails?.workingHours),
+      offDays: normalizeOffDays(staffDetails?.offDays) || [],
       imageUrl: staffDetails?.imageUrl || updatedUser.profileImage || '',
     };
 

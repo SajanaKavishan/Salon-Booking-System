@@ -20,9 +20,14 @@ const staffSchema = new mongoose.Schema(
       required: [true, 'Please add a specialty (e.g., Hair Stylist)'],
     },
     workingHours: {
-      type: String,
-      trim: true,
-      default: '',
+      start: {
+        type: String,
+        default: '09:00',
+      },
+      end: {
+        type: String,
+        default: '17:00',
+      },
     },
     offDays: {
       type: [String],
