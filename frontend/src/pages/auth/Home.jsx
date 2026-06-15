@@ -148,6 +148,49 @@ function Home() {
     }
   };
 
+  const sectionVariants = {
+    hidden: { opacity: 0, y: 56 },
+    show: {
+      opacity: 1,
+      y: 0,
+      transition: {
+        duration: 0.8,
+        ease: [0.22, 1, 0.36, 1],
+        staggerChildren: 0.14
+      }
+    }
+  };
+
+  const revealLeftVariants = {
+    hidden: { opacity: 0, x: -48 },
+    show: {
+      opacity: 1,
+      x: 0,
+      transition: { duration: 0.8, ease: [0.22, 1, 0.36, 1] }
+    }
+  };
+
+  const revealRightVariants = {
+    hidden: { opacity: 0, x: 48 },
+    show: {
+      opacity: 1,
+      x: 0,
+      transition: { duration: 0.8, ease: [0.22, 1, 0.36, 1] }
+    }
+  };
+
+  const revealItemVariants = {
+    hidden: { opacity: 0, y: 24, scale: 0.98 },
+    show: {
+      opacity: 1,
+      y: 0,
+      scale: 1,
+      transition: { duration: 0.55, ease: [0.22, 1, 0.36, 1] }
+    }
+  };
+
+  const scrollViewport = { once: true, amount: 0.2 };
+
   return (
     <motion.div
       className="salon-page min-h-screen bg-[#0a0a0a] text-white selection:bg-[#d4af37] selection:text-black"
@@ -230,7 +273,8 @@ function Home() {
           className="salon-shell max-w-6xl mx-auto grid gap-5 md:grid-cols-3"
           variants={infoCardsContainerVariants}
           initial="hidden"
-          animate="show"
+          whileInView="show"
+          viewport={scrollViewport}
         >
           {[
             {
@@ -288,22 +332,28 @@ function Home() {
       <motion.section
         id="about"
         className="py-24 px-6 lg:px-12"
-        initial={{ opacity: 0, y: 40 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, amount: 0.2 }}
-        transition={{ duration: 0.6, ease: 'easeOut' }}
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="show"
+        viewport={scrollViewport}
       >
-        <div className="max-w-6xl mx-auto grid gap-12 md:grid-cols-2 items-center">
-          <div className="relative overflow-hidden rounded-2xl border border-white/10 shadow-2xl">
+        <motion.div className="max-w-6xl mx-auto grid gap-12 md:grid-cols-2 items-center">
+          <motion.div
+            className="relative overflow-hidden rounded-2xl border border-white/10 shadow-2xl"
+            variants={revealLeftVariants}
+          >
             <img
               src="/salonInterior.jpg"
               alt="Salon Interior"
               className="h-[380px] w-full object-cover brightness-110 transition duration-500 hover:scale-105"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
-          </div>
+          </motion.div>
 
-          <div className="relative z-10 rounded-2xl border border-white/10 bg-black/40 p-6 text-white backdrop-blur-sm">
+          <motion.div
+            className="relative z-10 rounded-2xl border border-white/10 bg-black/40 p-6 text-white backdrop-blur-sm"
+            variants={revealRightVariants}
+          >
             <span className="tracking-[0.2em] text-xs uppercase text-white font-medium">The Experience</span>
             <h2 className="mt-4 text-4xl md:text-5xl font-serif text-white tracking-tight">A Ritual of Refinement</h2>
             <p className="mt-4 text-white text-base md:text-lg leading-relaxed">
@@ -315,30 +365,37 @@ function Home() {
                 'Personalized consultations with master stylists',
                 'Luxury product rituals and signature treatments',
                 'Private, calming atmosphere for every appointment'
-              ].map((item) => (
-                <div key={item} className="flex items-start gap-3">
+              ].map((item, index) => (
+                <motion.div
+                  key={item}
+                  className="flex items-start gap-3"
+                  initial={{ opacity: 0, x: 18 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  viewport={scrollViewport}
+                  transition={{ duration: 0.45, delay: index * 0.1 }}
+                >
                   <span className="mt-2 h-2 w-2 rounded-full bg-primary shrink-0" />
                   <p className="text-white text-sm md:text-base">{item}</p>
-                </div>
+                </motion.div>
               ))}
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       </motion.section>
 
       {/* Owner Section */}
       <motion.section
         id="owner"
         className="relative py-24 px-6 lg:px-12 border-t border-white/5 overflow-hidden"
-        variants={itemVariants}
+        variants={sectionVariants}
         initial="hidden"
         whileInView="show"
-        viewport={{ once: true, amount: 0.2 }}
+        viewport={scrollViewport}
       >
         <div className="absolute top-1/2 left-0 -translate-y-1/2 bg-primary/5 blur-[120px] rounded-full w-[300px] h-[300px] pointer-events-none" />
 
         <div className="max-w-6xl mx-auto grid gap-12 md:grid-cols-2 items-center relative z-10">
-          <div>
+          <motion.div variants={revealLeftVariants}>
             <span className="tracking-[0.2em] text-xs uppercase text-primary font-medium">Meet The Visionary</span>
             <h2 className="mt-4 text-4xl md:text-5xl font-serif text-white tracking-tight">Dileep Malshan</h2>
             <p className="mt-4 text-white text-base md:text-lg leading-relaxed">
@@ -350,22 +407,27 @@ function Home() {
                 'Internationally trained techniques and trends',
                 'One-on-one consultations to refine every detail',
                 'Signature finishes that elevate your confidence'
-              ].map((item) => (
-                <div key={item} className="flex items-start gap-3">
+              ].map((item, index) => (
+                <motion.div
+                  key={item}
+                  className="flex items-start gap-3"
+                  variants={revealItemVariants}
+                  transition={{ delay: index * 0.08 }}
+                >
                   <span className="mt-2 h-2 w-2 rounded-full bg-primary shrink-0" />
                   <p className="text-white text-sm md:text-base">{item}</p>
-                </div>
+                </motion.div>
               ))}
             </div>
-          </div>
+          </motion.div>
 
-          <div className="flex justify-center">
+          <motion.div className="flex justify-center" variants={revealRightVariants}>
             <img
               src="/Owner.jpg"
               alt="Dileep Malshan"
               className="rounded-lg shadow-2xl object-cover aspect-[4/5] w-full max-w-md brightness-105 transition-all duration-700 border border-white/10"
             />
-          </div>
+          </motion.div>
         </div>
       </motion.section>
 
@@ -373,21 +435,24 @@ function Home() {
       <motion.section
         id="gallery"
         className="py-24 px-6 lg:px-12 border-t border-white/5"
-        variants={itemVariants}
+        variants={sectionVariants}
         initial="hidden"
         whileInView="show"
-        viewport={{ once: true, amount: 0.2 }}
+        viewport={scrollViewport}
       >
         <div className="max-w-6xl mx-auto">
-          <div className="text-center">
+          <motion.div className="text-center" variants={revealItemVariants}>
             <span className="tracking-[0.2em] text-xs uppercase text-primary">Portfolio</span>
             <h2 className="mt-4 text-4xl md:text-5xl font-serif text-white">Our Latest Work</h2>
             <p className="mt-4 text-white text-base md:text-lg max-w-2xl mx-auto">
               A glimpse into the transformations crafted by our expert stylists.
             </p>
-          </div>
+          </motion.div>
 
-          <div className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-4">
+          <motion.div
+            className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-4"
+            variants={containerVariants}
+          >
             {[
               'https://images.unsplash.com/photo-1580618672591-eb180b1a973f?q=80&w=2069&auto=format&fit=crop',
               'https://images.unsplash.com/photo-1600948836101-f9ffda59d250?q=80&w=2036&auto=format&fit=crop',
@@ -397,6 +462,7 @@ function Home() {
               <motion.div
                 key={src}
                 className="group overflow-hidden rounded-xl border border-white/10"
+                variants={revealItemVariants}
                 whileHover={{ y: -6, transition: { duration: 0.2 } }}
               >
                 <img
@@ -406,7 +472,7 @@ function Home() {
                 />
               </motion.div>
             ))}
-          </div>
+          </motion.div>
         </div>
       </motion.section>
 
@@ -414,10 +480,13 @@ function Home() {
       <motion.section
         id="contact"
         className="py-24 px-6 lg:px-12 border-t border-white/5"
-        variants={itemVariants}
+        variants={sectionVariants}
+        initial="hidden"
+        whileInView="show"
+        viewport={scrollViewport}
       >
         <div className="max-w-6xl mx-auto grid gap-12 md:grid-cols-2">
-          <div>
+          <motion.div variants={revealLeftVariants}>
             <span className="tracking-[0.2em] text-xs uppercase text-primary">Get In Touch</span>
             <h2 className="mt-4 text-4xl md:text-5xl font-serif text-white">Visit Our Salon</h2>
             <p className="mt-4 text-white text-base md:text-lg">
@@ -439,9 +508,12 @@ function Home() {
                 <p className="text-white">Sunday: Closed</p>
               </div>
             </div>
-          </div>
+          </motion.div>
 
-          <div className="group lux-card lux-card-hover backdrop-blur-xl bg-card/40 border border-white/[0.04] relative overflow-hidden p-8 rounded-2xl">
+          <motion.div
+            className="group lux-card lux-card-hover backdrop-blur-xl bg-card/40 border border-white/[0.04] relative overflow-hidden p-8 rounded-2xl"
+            variants={revealRightVariants}
+          >
             <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100 bg-gradient-to-br from-white/12 via-white/0 to-transparent" />
             <div className="relative">
               <h3 className="text-2xl font-serif text-white">Send a Message</h3>
@@ -490,13 +562,16 @@ function Home() {
                 </motion.button>
               </form>
             </div>
-          </div>
+          </motion.div>
         </div>
       </motion.section>
 
       <motion.footer
         className="py-10 border-t border-white/5 text-center text-gray-500 text-sm font-light"
         variants={itemVariants}
+        initial="hidden"
+        whileInView="show"
+        viewport={{ once: true }}
       >
         <p>&copy; {new Date().getFullYear()} {settings.salonName}. All rights reserved.</p>
       </motion.footer>

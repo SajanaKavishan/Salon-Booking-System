@@ -18,6 +18,15 @@ const cardMotion = {
   })
 };
 
+const sectionMotion = {
+  hidden: { opacity: 0, y: 56 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.8, ease: [0.22, 1, 0.36, 1] }
+  }
+};
+
 function ServiceSkeleton({ index }) {
   return (
     <SwiperSlide className="services-carousel-slide">
@@ -39,15 +48,28 @@ function ServiceSkeleton({ index }) {
 
 function ServicesCarousel({ services, loading, onBook }) {
   return (
-    <section id="services" className="relative overflow-hidden px-6 py-24 lg:px-12">
+    <motion.section
+      id="services"
+      className="relative overflow-hidden px-6 py-24 lg:px-12"
+      variants={sectionMotion}
+      initial="hidden"
+      whileInView="visible"
+      viewport={{ once: true, amount: 0.15 }}
+    >
       <div className="mx-auto max-w-7xl">
-        <div className="text-center">
+        <motion.div
+          className="text-center"
+          initial={{ opacity: 0, y: 24 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.5 }}
+          transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
+        >
           <span className="text-xs uppercase tracking-[0.2em] text-primary">Premium Services</span>
           <h2 className="mt-4 font-serif text-4xl text-white md:text-5xl">Signature Rituals</h2>
           <p className="mx-auto mt-4 max-w-2xl text-base text-gray-400 md:text-lg">
             Curated treatments tailored to elevate your look and leave a lasting impression.
           </p>
-        </div>
+        </motion.div>
 
         <div className="relative mt-14">
           <Swiper
@@ -68,7 +90,8 @@ function ServicesCarousel({ services, loading, onBook }) {
                   className="group flex h-[260px] flex-col rounded-3xl border border-white/[0.04] bg-white/[0.01] p-8 backdrop-blur-lg transition-all duration-500 ease-out hover:scale-[1.03] hover:border-[#d4af37]/20 hover:shadow-[0_20px_50px_-15px_rgba(212,175,55,0.25)]"
                   custom={index}
                   initial="hidden"
-                  animate="visible"
+                  whileInView="visible"
+                  viewport={{ once: true, amount: 0.3 }}
                   variants={cardMotion}
                 >
                   <p className="text-xs uppercase tracking-[0.18em] text-neutral-500">
@@ -102,7 +125,7 @@ function ServicesCarousel({ services, loading, onBook }) {
           <p className="mt-12 text-center text-neutral-500">No services available yet.</p>
         )}
       </div>
-    </section>
+    </motion.section>
   );
 }
 
