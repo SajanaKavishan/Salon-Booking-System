@@ -26,6 +26,8 @@ function BookAppointment({ userProfile, customerData }) {
 
   const [hasHydratedRebook, setHasHydratedRebook] = useState(false);
 
+  const [hasHydratedPreselection, setHasHydratedPreselection] = useState(false);
+
   const [isUserProfileHydrated, setIsUserProfileHydrated] = useState(false);
 
   const [currentDateTime, setCurrentDateTime] = useState(() => new Date());
@@ -238,7 +240,15 @@ function BookAppointment({ userProfile, customerData }) {
 
           ]);
 
-          setServicesList(servicesRes.data);
+          const fetchedServices = Array.isArray(servicesRes.data?.data)
+            ? servicesRes.data.data
+            : Array.isArray(servicesRes.data)
+              ? servicesRes.data
+              : Array.isArray(servicesRes.data?.services)
+                ? servicesRes.data.services
+                : [];
+
+          setServicesList(fetchedServices);
 
           setStylistsList(staffRes.data);
 
@@ -346,6 +356,26 @@ function BookAppointment({ userProfile, customerData }) {
       }
 
     }, [hasUserSelectedStylist, preferredStylistValue, stylist, stylistsList]);
+
+    useEffect(() => {
+
+      const preSelectedServiceId = location.state?.preSelectedServiceId;
+
+      if (hasHydratedPreselection || !preSelectedServiceId || servicesList.length === 0) return;
+
+      const serviceExists = servicesList.some((service) => service._id === preSelectedServiceId);
+
+      if (serviceExists) {
+
+        setSelectedServices([preSelectedServiceId]);
+
+        toast.info('Your selected service is ready. Choose an artist to continue.');
+
+      }
+
+      setHasHydratedPreselection(true);
+
+    }, [hasHydratedPreselection, location.state, servicesList]);
 
 
 

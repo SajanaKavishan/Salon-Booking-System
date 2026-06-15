@@ -1,0 +1,109 @@
+import { motion } from 'framer-motion';
+import { FreeMode } from 'swiper/modules';
+import { Swiper, SwiperSlide } from 'swiper/react';
+import 'swiper/css';
+import 'swiper/css/free-mode';
+import './ServicesCarousel.css';
+
+const cardMotion = {
+  hidden: { opacity: 0, y: 28 },
+  visible: (index) => ({
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.65,
+      delay: index * 0.1,
+      ease: [0.22, 1, 0.36, 1]
+    }
+  })
+};
+
+function ServiceSkeleton({ index }) {
+  return (
+    <SwiperSlide className="services-carousel-slide">
+      <div
+        className="flex h-[260px] flex-col rounded-3xl border border-white/[0.04] bg-white/[0.01] p-8 backdrop-blur-lg animate-pulse"
+        aria-hidden="true"
+      >
+        <div className="h-3 w-20 rounded-full bg-white/10" />
+        <div className="mt-5 h-8 w-4/5 rounded-lg bg-white/10" />
+        <div className="mt-auto flex items-end justify-between">
+          <div className="h-7 w-28 rounded-lg bg-[#d4af37]/10" />
+          <div className="h-10 w-32 rounded-full border border-[#d4af37]/10" />
+        </div>
+        <span className="sr-only">Loading service {index + 1}</span>
+      </div>
+    </SwiperSlide>
+  );
+}
+
+function ServicesCarousel({ services, loading, onBook }) {
+  return (
+    <section id="services" className="relative overflow-hidden px-6 py-24 lg:px-12">
+      <div className="mx-auto max-w-7xl">
+        <div className="text-center">
+          <span className="text-xs uppercase tracking-[0.2em] text-primary">Premium Services</span>
+          <h2 className="mt-4 font-serif text-4xl text-white md:text-5xl">Signature Rituals</h2>
+          <p className="mx-auto mt-4 max-w-2xl text-base text-gray-400 md:text-lg">
+            Curated treatments tailored to elevate your look and leave a lasting impression.
+          </p>
+        </div>
+
+        <div className="relative mt-14">
+          <Swiper
+            className="services-carousel"
+            modules={[FreeMode]}
+            freeMode
+            grabCursor
+            slidesPerView="auto"
+            spaceBetween={30}
+          >
+            {loading && Array.from({ length: 4 }).map((_, index) => (
+              <ServiceSkeleton key={`service-placeholder-${index}`} index={index} />
+            ))}
+
+            {!loading && services.map((service, index) => (
+              <SwiperSlide key={service._id} className="services-carousel-slide">
+                <motion.article
+                  className="group flex h-[260px] flex-col rounded-3xl border border-white/[0.04] bg-white/[0.01] p-8 backdrop-blur-lg transition-all duration-500 ease-out hover:scale-[1.03] hover:border-[#d4af37]/20 hover:shadow-[0_20px_50px_-15px_rgba(212,175,55,0.25)]"
+                  custom={index}
+                  initial="hidden"
+                  animate="visible"
+                  variants={cardMotion}
+                >
+                  <p className="text-xs uppercase tracking-[0.18em] text-neutral-500">
+                    {service.duration} mins
+                  </p>
+
+                  <h3 className="mt-5 font-brand text-3xl leading-tight text-white">
+                    {service.name}
+                  </h3>
+
+                  <div className="mt-auto flex items-end justify-between">
+                    <span className="whitespace-nowrap text-xl font-bold text-[#d4af37]">
+                      Rs. {Number(service.price || 0).toLocaleString()}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onBook(service._id)}
+                      className="text-sm font-medium text-[#d4af37] flex items-center gap-1.5 hover:opacity-80 transition-all duration-300"
+                      aria-label={`Book ${service.name}`}
+                    >
+                      Book now <span aria-hidden="true">→</span>
+                    </button>
+                  </div>
+                </motion.article>
+              </SwiperSlide>
+            ))}
+          </Swiper>
+        </div>
+
+        {!loading && services.length === 0 && (
+          <p className="mt-12 text-center text-neutral-500">No services available yet.</p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+export default ServicesCarousel;

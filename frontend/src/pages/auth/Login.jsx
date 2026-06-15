@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import axios from 'axios';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { useGoogleLogin } from '@react-oauth/google';
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
@@ -24,6 +24,7 @@ const itemVariants = {
 
 function Login() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -36,7 +37,23 @@ function Login() {
   const getRedirectPath = (role) => {
     if (role === 'admin') return '/admin';
     if (role === 'staff') return '/staff/dashboard';
+
+    const next = searchParams.get('next');
+    if (next?.startsWith('/') && !next.startsWith('//')) return next;
+
     return '/booking';
+  };
+
+  const redirectAfterLogin = (role) => {
+    const redirectPath = getRedirectPath(role);
+    const serviceId = searchParams.get('serviceId');
+
+    navigate(
+      redirectPath,
+      role === 'customer' && serviceId
+        ? { state: { preSelectedServiceId: serviceId } }
+        : undefined
+    );
   };
 
   const onChange = (e) => {
@@ -74,7 +91,7 @@ function Login() {
       );
 
       toast.success('Welcome back to Salon DEES!');
-      navigate(getRedirectPath(role));
+      redirectAfterLogin(role);
     } catch (error) {
       toast.error(error.response?.data?.message || 'Login failed. Check your email and password.');
     } finally {
@@ -107,7 +124,7 @@ function Login() {
         );
 
         toast.success('Successfully logged in with Google!');
-        navigate(getRedirectPath(response.data.role));
+        redirectAfterLogin(response.data.role);
       } catch {
         toast.error('Google login failed on our server. Please try again.');
       } finally {

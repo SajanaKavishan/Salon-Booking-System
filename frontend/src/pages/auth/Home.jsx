@@ -4,6 +4,7 @@ import axios from 'axios';
 import { motion } from 'framer-motion';
 import { ArrowRight, Clock, MapPin, Star } from 'lucide-react';
 import { useSalonSettings } from '../../hooks/useSalonSettings';
+import ServicesCarousel from '../../components/home/ServicesCarousel';
 
 function Home() {
   const navigate = useNavigate();
@@ -20,8 +21,15 @@ function Home() {
     const fetchServices = async () => {
       try {
         const response = await axios.get('http://localhost:5000/api/services');
-        const data = Array.isArray(response.data) ? response.data : response.data.services || [];
-        setServices(data);
+        const fetchedServices = Array.isArray(response.data?.data)
+          ? response.data.data
+          : Array.isArray(response.data)
+            ? response.data
+            : Array.isArray(response.data?.services)
+              ? response.data.services
+              : [];
+
+        setServices(fetchedServices);
       } catch (error) {
         console.error('Error fetching services:', error);
         setServices([]);
@@ -45,6 +53,19 @@ function Home() {
     }
 
     navigate('/booking');
+  };
+
+  const handleBookingRedirect = (serviceId) => {
+    const token = localStorage.getItem('token');
+
+    if (token) {
+      navigate('/customer/book', {
+        state: { preSelectedServiceId: serviceId }
+      });
+      return;
+    }
+
+    navigate(`/login?next=/customer/book&serviceId=${encodeURIComponent(serviceId)}`);
   };
 
   const primaryCTALabel = userRole === 'admin'
@@ -257,46 +278,11 @@ function Home() {
         </motion.div>
       </section>
 
-      {/* Signature Rituals (Services) Section */}
-      <motion.section
-        id="services"
-        className="relative py-24 px-6 lg:px-12"
-        variants={itemVariants}
-      >
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center">
-            <span className="tracking-[0.2em] text-xs uppercase text-primary">Premium Services</span>
-            <h2 className="mt-4 text-4xl md:text-5xl font-serif text-white">Signature Rituals</h2>
-            <p className="mt-4 text-gray-400 text-base md:text-lg max-w-2xl mx-auto">
-              Curated treatments tailored to elevate your look and leave a lasting impression.
-            </p>
-          </div>
-
-          <div className="mt-14 grid gap-6 md:grid-cols-3">
-            {services.slice(0, 3).map((service) => (
-              <motion.div
-                key={service._id}
-                className="group lux-card lux-card-hover backdrop-blur-xl bg-card/40 border border-white/[0.04] relative overflow-hidden p-6 rounded-2xl"
-                variants={itemVariants}
-                whileHover={{ y: -10, transition: { duration: 0.2 } }}
-              >
-                <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100 bg-gradient-to-br from-white/12 via-white/0 to-transparent" />
-                <div className="relative">
-                  <p className="text-neutral-500 text-xs uppercase tracking-wider">{service.duration} mins</p>
-                  <h3 className="mt-3 text-2xl font-sans font-semibold text-white">{service.name}</h3>
-                  <p className="mt-4 text-gray-400">Premium experience from Rs. {service.price}</p>
-                  <div className="mt-6 inline-flex items-center gap-2 text-primary text-sm font-medium">
-                    Book this ritual <ArrowRight className="h-4 w-4" />
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-            {!loading && services.length === 0 && (
-              <div className="text-center text-gray-500 md:col-span-3">No services available yet.</div>
-            )}
-          </div>
-        </div>
-      </motion.section>
+      <ServicesCarousel
+        services={services}
+        loading={loading}
+        onBook={handleBookingRedirect}
+      />
 
       {/* About Section */}
       <motion.section

@@ -1,0 +1,28 @@
+.services-carousel {
+  overflow: hidden;
+  padding: 12px 4px 48px;
+  -webkit-mask-image: linear-gradient(to right, #000 80%, transparent 100%);
+  mask-image: linear-gradient(to right, #000 80%, transparent 100%);
+  scrollbar-width: none;
+}
+
+.services-carousel::-webkit-scrollbar,
+.services-carousel .swiper-wrapper::-webkit-scrollbar {
+  display: none;
+}
+
+.services-carousel .swiper-wrapper {
+  align-items: stretch;
+}
+
+.services-carousel-slide {
+  width: min(82vw, 330px);
+  height: auto;
+}
+
+@media (max-width: 639px) {
+  .services-carousel {
+    -webkit-mask-image: linear-gradient(to right, #000 90%, transparent 100%);
+    mask-image: linear-gradient(to right, #000 90%, transparent 100%);
+  }
+}
