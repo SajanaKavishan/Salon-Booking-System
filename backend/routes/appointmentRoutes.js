@@ -9,6 +9,8 @@ const {
   deleteAppointment,
   updateAppointmentStatus,
   updateAppointmentStatusByStaff,
+  markAppointmentRunningLate,
+  shiftUpcomingAppointments,
   hideAppointmentByCustomer
 } = require('../controllers/appointmentController');
 const { protect, admin, staffOrAdmin } = require('../middleware/authMiddleware'); // Import the protect and admin middleware to secure the routes and restrict access to admin-only routes    
@@ -20,6 +22,7 @@ router.get('/all', protect, admin, getAllAppointments);
 router.get('/staff', protect, getStaffAppointments);
 router.get('/staff-schedule', protect, getStaffAppointments);
 router.get('/availability', getStaffAvailability);
+router.post('/shift-slots', protect, admin, shiftUpcomingAppointments);
 
 // Utility functions to convert time formats for easier calculations when checking for blocked time slots
 const timeToMins = (timeStr) => {
@@ -100,6 +103,7 @@ router.get('/booked-times', async (req, res) => {
 
 // Routes with ID parameters - defined after specific routes to avoid conflicts
 router.route('/:id').delete(protect, deleteAppointment);
+router.route('/:id/running-late').post(protect, markAppointmentRunningLate);
 router.route('/:id/status').put(protect, staffOrAdmin, updateAppointmentStatus); // Admin and staff route to update the status of an appointment.
 router.route('/:id/staff-status').put(protect, staffOrAdmin, updateAppointmentStatusByStaff);
 router.route('/:id/hide').put(protect, hideAppointmentByCustomer);

@@ -35,12 +35,13 @@ const timeToMinutes = (timeStr) => {
 };
 
 const minutesToTime = (mins) => {
-    let hours = Math.floor(mins / 60);
-    let minutes = mins % 60;
+    const normalizedMins = ((mins % 1440) + 1440) % 1440;
+    let hours = Math.floor(normalizedMins / 60);
+    let minutes = normalizedMins % 60;
     const modifier = hours >= 12 ? 'PM' : 'AM';
     hours = hours % 12;
     if (hours === 0) hours = 12;
-    return `${hours < 10 ? '0' : ''}${hours}:${minutes === 0 ? '00' : minutes} ${modifier}`;
+    return `${hours < 10 ? '0' : ''}${hours}:${String(minutes).padStart(2, '0')} ${modifier}`;
 };
 
 // @desc    Get available time slots for a staff member
@@ -587,6 +588,107 @@ const updateAppointmentStatusByStaff = async (req, res) => {
     }
 };
 
+// @desc    Mark an appointment as running late and calculate the shifted end time
+// @route   POST /api/appointments/:id/running-late
+// @access  Private
+const markAppointmentRunningLate = async (req, res) => {
+    try {
+        const appointment = await Appointment.findById(req.params.id);
+
+        if (!appointment) {
+            return res.status(404).json({ message: 'Appointment not found.' });
+        }
+
+        // Convert the client-provided delay into a number before saving it.
+        const lateMinutes = Number.parseInt(req.body.minutes, 10);
+        if (!Number.isFinite(lateMinutes) || lateMinutes < 0) {
+            return res.status(400).json({ message: 'A valid late minutes value is required.' });
+        }
+
+        // Shift the stored appointment end time by the delay and keep the original endTime unchanged.
+        const currentEndMinutes = timeToMinutes(appointment.endTime);
+        const adjustedEndTime = minutesToTime(currentEndMinutes + lateMinutes);
+
+        appointment.isLate = true;
+        appointment.lateMinutes = lateMinutes;
+        appointment.adjustedEndTime = adjustedEndTime;
+
+        const updatedAppointment = await appointment.save();
+
+        return res.status(200).json({
+            message: 'Appointment late status updated successfully.',
+            appointment: updatedAppointment,
+        });
+    } catch (error) {
+        console.error('Running Late Appointment Error:', error);
+        return res.status(500).json({ message: 'Server Error: Could not update appointment late status.' });
+    }
+};
+
+// @desc    Shift upcoming appointments for a stylist on a specific day
+// @route   POST /api/appointments/shift-slots
+// @access  Private/Admin
+const shiftUpcomingAppointments = async (req, res) => {
+    try {
+        const { stylistId, date } = req.body;
+        const shiftMinutes = req.body.shiftMinutes === undefined
+            ? 15
+            : Number.parseInt(req.body.shiftMinutes, 10);
+
+        if (!stylistId || !date) {
+            return res.status(400).json({ message: 'stylistId and date are required.' });
+        }
+
+        if (!Number.isFinite(shiftMinutes)) {
+            return res.status(400).json({ message: 'shiftMinutes must be a valid number.' });
+        }
+
+        const bookingDate = new Date(`${String(date).slice(0, 10)}T00:00:00.000Z`);
+        if (Number.isNaN(bookingDate.getTime())) {
+            return res.status(400).json({ message: 'Invalid date. Use YYYY-MM-DD format.' });
+        }
+
+        const appointments = await Appointment.find({
+            stylist: stylistId,
+            bookingDate,
+            status: { $in: ['pending', 'confirmed'] },
+        });
+
+        // AM/PM strings do not sort safely in MongoDB, so sort by converted minutes.
+        appointments.sort((firstAppointment, secondAppointment) => (
+            timeToMinutes(firstAppointment.startTime) - timeToMinutes(secondAppointment.startTime)
+        ));
+
+        const shiftedAppointments = [];
+
+        for (const appointment of appointments) {
+            const shiftedStartTime = minutesToTime(timeToMinutes(appointment.startTime) + shiftMinutes);
+            const shiftedEndTime = minutesToTime(timeToMinutes(appointment.endTime) + shiftMinutes);
+
+            appointment.startTime = shiftedStartTime;
+            appointment.endTime = shiftedEndTime;
+            appointment.timeSlot = `${shiftedStartTime} - ${shiftedEndTime}`;
+
+            if (appointment.isLate && appointment.adjustedEndTime) {
+                appointment.adjustedEndTime = minutesToTime(
+                    timeToMinutes(appointment.adjustedEndTime) + shiftMinutes
+                );
+            }
+
+            shiftedAppointments.push(await appointment.save());
+        }
+
+        return res.status(200).json({
+            message: 'Appointment slots shifted successfully.',
+            count: shiftedAppointments.length,
+            appointments: shiftedAppointments,
+        });
+    } catch (error) {
+        console.error('Shift Slots Error:', error);
+        return res.status(500).json({ message: 'Server Error: Could not shift appointment slots.' });
+    }
+};
+
 // @desc    Soft hide an appointment from customer's history
 // @route   PUT /api/appointments/:id/hide
 // @access  Private
@@ -625,5 +727,7 @@ module.exports = {
     deleteAppointment,
     updateAppointmentStatus,
     updateAppointmentStatusByStaff,
+    markAppointmentRunningLate,
+    shiftUpcomingAppointments,
     hideAppointmentByCustomer
 };

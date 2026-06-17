@@ -74,6 +74,17 @@ const appointmentSchema = new mongoose.Schema({
     endTime: {
         type: String,
     },
+    isLate: {
+        type: Boolean,
+        default: false,
+    },
+    lateMinutes: {
+        type: Number,
+        default: 0,
+    },
+    adjustedEndTime: {
+        type: String,
+    },
     totalDuration: {
         type: Number,
         required: true,
