@@ -98,6 +98,20 @@ const minutesToTime = (minutes) => {
 };
 
 /**
+ * Returns today's date in the server's local timezone as YYYY-MM-DD.
+ *
+ * @returns {string}
+ */
+const getLocalDateString = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+};
+
+/**
  * Parses a stored time-slot range into numeric boundaries.
  *
  * @param {string} timeSlot Example: "09:00 - 09:30".
@@ -166,7 +180,8 @@ const generateAvailableSlots = async (
         date: dateInput,
         serviceDuration: requestedDuration,
       };
-  const { staffId, date, serviceDuration } = options;
+  const { staffId, bookingDate, date, serviceDuration } = options;
+  const requestedDateValue = bookingDate || date;
 
   if (!mongoose.isValidObjectId(staffId)) {
     throw createSlotError('Please provide a valid staff ID.');
@@ -176,7 +191,7 @@ const generateAvailableSlots = async (
     throw createSlotError('Service duration must be a positive whole number of minutes.');
   }
 
-  const requestedDate = parseBookingDate(date);
+  const requestedDate = parseBookingDate(requestedDateValue);
   const [staff, defaultBufferTime] = await Promise.all([
     Staff.findById(staffId)
       .select('workingHours offDays')
@@ -229,7 +244,12 @@ const generateAvailableSlots = async (
     })
     .sort((left, right) => left.start - right.start);
   const availableSlots = [];
-  let currentTime = workingStart;
+  const isToday = requestedDateValue === getLocalDateString();
+  const now = new Date();
+  const currentRealTimeInMinutes = now.getHours() * 60 + now.getMinutes();
+  let currentTime = isToday
+    ? Math.max(workingStart, currentRealTimeInMinutes + 5)
+    : workingStart;
 
   while (currentTime + serviceDuration <= workingEnd) {
     const slotEnd = currentTime + serviceDuration;

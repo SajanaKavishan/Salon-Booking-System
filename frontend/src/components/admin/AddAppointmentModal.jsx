@@ -1,13 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import {
-  AlertTriangle,
   CalendarDays,
   CalendarPlus,
   Check,
   Clock,
   Loader2,
-  ShieldCheck,
   UserRound,
   X
 } from 'lucide-react';
@@ -98,7 +96,9 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
   const [staff, setStaff] = useState([]);
   const [isLoadingOptions, setIsLoadingOptions] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [forceOverride, setForceOverride] = useState(false);
+  const [hasConflict, setHasConflict] = useState(false);
+  const [isOverriding, setIsOverriding] = useState(false);
+  const [conflictDetails, setConflictDetails] = useState(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -127,7 +127,9 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
   useEffect(() => {
     if (isOpen) return;
     setForm(initialForm);
-    setForceOverride(false);
+    setHasConflict(false);
+    setIsOverriding(false);
+    setConflictDetails(null);
     document.body.style.overflow = '';
     document.documentElement.style.overflow = '';
   }, [isOpen]);
@@ -162,10 +164,24 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
     };
   }, [form.startTime, totalDuration]);
 
-  const conflict = useMemo(() => {
-    if (!form.staffId || !form.bookingDate || !proposedRange) return null;
+  const canSubmit = Boolean(
+    form.staffId &&
+    form.bookingDate &&
+    form.startTime &&
+    form.services.length > 0 &&
+    (!hasConflict || isOverriding) &&
+    !isSubmitting
+  );
 
-    return appointments.find((appointment) => {
+  useEffect(() => {
+    if (!form.staffId || !form.bookingDate || !form.startTime || selectedServices.length === 0 || !proposedRange) {
+      setHasConflict(false);
+      setIsOverriding(false);
+      setConflictDetails(null);
+      return;
+    }
+
+    const matchedConflict = appointments.find((appointment) => {
       const status = String(appointment.status || '').trim().toLowerCase();
       if (BLOCKED_STATUSES.includes(status)) return false;
       if (getAppointmentDate(appointment) !== form.bookingDate) return false;
@@ -178,21 +194,24 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
 
       return proposedRange.start < busyEnd + BUFFER_MINUTES && proposedRange.end > busyStart - BUFFER_MINUTES;
     });
-  }, [appointments, form.bookingDate, form.staffId, proposedRange]);
 
-  const hasConflict = Boolean(conflict);
-  const canSubmit = Boolean(
-    form.staffId &&
-    form.bookingDate &&
-    form.startTime &&
-    form.services.length > 0 &&
-    (!hasConflict || forceOverride) &&
-    !isSubmitting
-  );
+    if (matchedConflict) {
+      const { startTime, endTime } = getAppointmentTimes(matchedConflict);
 
-  useEffect(() => {
-    if (!hasConflict) setForceOverride(false);
-  }, [hasConflict]);
+      setHasConflict(true);
+      setConflictDetails({
+        appointment: matchedConflict,
+        message: `${startTime} - ${endTime}`,
+        startTime,
+        endTime
+      });
+      return;
+    }
+
+    setHasConflict(false);
+    setIsOverriding(false);
+    setConflictDetails(null);
+  }, [appointments, form.bookingDate, form.staffId, form.startTime, proposedRange, selectedServices]);
 
   const summaryStartTime = form.startTime ? minutesToDisplayTime(toMinutes(form.startTime)) : 'Not selected';
   const summaryEndTime = proposedRange ? minutesToDisplayTime(proposedRange.end) : null;
@@ -233,12 +252,12 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
           startTime,
           timeSlot: `${startTime} - ${endTime}`,
           services: form.services,
-          bypassBuffer: forceOverride
+          bypassBuffer: hasConflict && isOverriding
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      toast.success(forceOverride ? 'Appointment force booked successfully.' : 'Appointment created successfully.');
+      toast.success(hasConflict && isOverriding ? 'Appointment force booked successfully.' : 'Appointment created successfully.');
       onCreated?.(response.data?.appointment);
       onClose();
     } catch (error) {
@@ -410,41 +429,48 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
                 </div>
               </div>
 
-              {hasConflict && (
-                <div className="mt-6 rounded-2xl bg-[#1a1308] p-4 shadow-[inset_0_0_0_1px_rgba(212,175,55,0.22)]">
-                  <div className="flex gap-3 text-sm text-amber-100">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[#D4AF37]" />
-                    <div>
-                      <p className="font-semibold">Booking conflict detected.</p>
-                      <p className="mt-1 text-xs text-amber-100/70">
-                        Existing booking: {getAppointmentTimes(conflict).startTime} - {getAppointmentTimes(conflict).endTime}
-                      </p>
+              <div className="my-4">
+                {hasConflict ? (
+                  <div className="space-y-3 animate-fadeIn">
+                    <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-400 shadow-[0_0_22px_rgba(245,158,11,0.08)]">
+                      <span>⚠️</span>
+                      <div>
+                        <p className="font-semibold">Schedule Conflict Detected</p>
+                        <p className="mt-0.5 text-amber-400/70">
+                          This time overlaps with another booking or required cleaning buffer.
+                        </p>
+                        {conflictDetails?.message && (
+                          <p className="mt-1 text-amber-300/80">
+                            Existing booking: {conflictDetails.message}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="mt-4 flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-2">
-                      <ShieldCheck className="h-4 w-4 text-[#D4AF37]" />
-                      <span className="text-sm font-semibold text-white">Force Override Schedule</span>
-                    </div>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={forceOverride}
-                      onClick={() => setForceOverride((current) => !current)}
-                      className={`relative h-7 w-12 rounded-full p-1 transition ${
-                        forceOverride ? 'bg-[#D4AF37]' : 'bg-neutral-700'
-                      }`}
-                    >
-                      <span
-                        className={`block h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                          forceOverride ? 'translate-x-5' : 'translate-x-0'
+                    <div className="flex items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900/50 p-2.5">
+                      <span className="text-xs font-medium text-zinc-400">Force Override Schedule</span>
+
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={isOverriding}
+                        onClick={() => setIsOverriding((current) => !current)}
+                        className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          isOverriding ? 'bg-amber-500' : 'bg-zinc-700'
                         }`}
-                      />
-                    </button>
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                            isOverriding ? 'translate-x-4' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
+                ) : (
+                  <p className="text-xs font-medium text-emerald-400">✓ Schedule clear</p>
+                )}
+              </div>
 
               <div className="mt-8 flex flex-col gap-3 sm:flex-row lg:flex-col">
                 <GoldButton
