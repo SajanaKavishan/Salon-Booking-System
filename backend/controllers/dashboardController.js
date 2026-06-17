@@ -18,7 +18,12 @@ const MONTH_NAMES = [
   'Nov',
   'Dec',
 ];
-const ANALYTICS_STATUSES = ['Approved', 'Pending', 'Cancelled', 'Rejected'];
+const ANALYTICS_STATUSES = ['confirmed', 'pending', 'cancelled'];
+const STATUS_LABELS = {
+  confirmed: 'Approved',
+  pending: 'Pending',
+  cancelled: 'Cancelled',
+};
 
 const formatDate = (date) => {
   const year = date.getFullYear();
@@ -40,9 +45,9 @@ const getDashboardSummary = async (req, res) => {
       totalStaff,
     ] = await Promise.all([
       Appointment.countDocuments(),
-      Appointment.countDocuments({ status: 'Pending' }),
+      Appointment.countDocuments({ status: { $in: ['pending', 'Pending'] } }),
       Appointment.aggregate([
-        { $match: { status: 'Completed' } },
+        { $match: { status: { $in: ['completed', 'Completed'] } } },
         {
           $group: {
             _id: null,
@@ -95,7 +100,7 @@ const getWeeklyAnalytics = async (req, res) => {
     const revenueByDay = await Appointment.aggregate([
       {
         $match: {
-          status: 'Completed',
+          status: { $in: ['completed', 'Completed'] },
           date: { $gte: startDate, $lte: endDate },
         },
       },
@@ -175,7 +180,7 @@ const getAnalyticsSummary = async (req, res) => {
       Appointment.aggregate([
         {
           $match: {
-            status: 'Completed',
+            status: { $in: ['completed', 'Completed'] },
             date: { $gte: yearStart, $lte: yearEnd },
           },
         },
@@ -204,7 +209,7 @@ const getAnalyticsSummary = async (req, res) => {
       Appointment.aggregate([
         {
           $match: {
-            status: 'Completed',
+            status: { $in: ['completed', 'Completed'] },
             date: { $type: 'string' },
           },
         },
@@ -308,7 +313,7 @@ const getAppointmentStatus = async (req, res) => {
     const statusCounts = await Appointment.aggregate([
       {
         $match: {
-          status: { $in: ANALYTICS_STATUSES },
+          status: { $in: [...ANALYTICS_STATUSES, 'Approved', 'Pending', 'Cancelled', 'Rejected'] },
         },
       },
       {
@@ -326,12 +331,14 @@ const getAppointmentStatus = async (req, res) => {
       },
     ]);
 
-    const countByStatus = new Map(
-      statusCounts.map(({ name, value }) => [name, value])
-    );
+    const countByStatus = new Map();
+    statusCounts.forEach(({ name, value }) => {
+      const canonicalName = Appointment.normalizeStatus(name);
+      countByStatus.set(canonicalName, (countByStatus.get(canonicalName) ?? 0) + value);
+    });
 
     const appointmentStatus = ANALYTICS_STATUSES.map((name) => ({
-      name,
+      name: STATUS_LABELS[name],
       value: countByStatus.get(name) ?? 0,
     }));
 

@@ -47,7 +47,7 @@ const getLeaveConflicts = async (req, res) => {
         const staffProfile = await Staff.findOne({ userId: leaveRequest.staffId }).select('_id');
         const conflictingAppointments = staffProfile ? await Appointment.find({
             stylist: staffProfile._id,
-            status: { $in: ['Pending', 'Confirmed'] },
+            status: { $in: ['pending', 'confirmed', 'Pending', 'Confirmed'] },
             date: {
                 $gte: leaveRequest.startDate.toISOString().split('T')[0],
                 $lte: leaveRequest.endDate.toISOString().split('T')[0]
@@ -101,7 +101,7 @@ const approveLeave = async (req, res) => {
             const conflictingAppointments = staffProfile
                 ? await Appointment.find({
                     stylist: staffProfile._id,
-                    status: { $in: ['Pending', 'Confirmed'] },
+                    status: { $in: ['pending', 'confirmed', 'Pending', 'Confirmed'] },
                     date: {
                         $gte: toDateKey(leaveRequest.startDate),
                         $lte: toDateKey(leaveRequest.endDate)
@@ -116,7 +116,7 @@ const approveLeave = async (req, res) => {
             if (conflictingAppointments.length > 0) {
                 await Appointment.updateMany(
                     { _id: { $in: conflictingAppointments.map((appointment) => appointment._id) } },
-                    { $set: { status: 'Cancelled' } },
+                    { $set: { status: 'cancelled' } },
                     { session }
                 );
 
