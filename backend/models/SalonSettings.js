@@ -31,21 +31,23 @@ const salonSettingsSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
-    lowStockReports: {
-      type: Boolean,
-      default: false,
-    },
     weekendBookings: {
       type: Boolean,
       default: true,
     },
-    autoConfirmVip: {
-      type: Boolean,
-      default: false,
-    },
     darkReceipts: {
       type: Boolean,
       default: true,
+    },
+    defaultBufferTime: {
+      type: Number,
+      default: 15,
+      min: 0,
+    },
+    gracePeriod: {
+      type: Number,
+      default: 15,
+      min: 0,
     },
   },
   {

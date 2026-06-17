@@ -8,10 +8,10 @@ const defaultSettings = {
   address: 'Colombo, Sri Lanka',
   bookingAlerts: true,
   customerEmails: true,
-  lowStockReports: false,
   weekendBookings: true,
-  autoConfirmVip: false,
-  darkReceipts: true
+  darkReceipts: true,
+  defaultBufferTime: 15,
+  gracePeriod: 15
 };
 
 export function useSalonSettings() {

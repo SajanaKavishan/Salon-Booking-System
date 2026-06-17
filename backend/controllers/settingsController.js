@@ -7,10 +7,10 @@ const defaultSettings = {
   address: 'Colombo, Sri Lanka',
   bookingAlerts: true,
   customerEmails: true,
-  lowStockReports: false,
   weekendBookings: true,
-  autoConfirmVip: false,
   darkReceipts: true,
+  defaultBufferTime: 15,
+  gracePeriod: 15,
 };
 
 const ensureSettingsDocument = async () => {
@@ -21,6 +21,12 @@ const ensureSettingsDocument = async () => {
   }
 
   return settings;
+};
+
+const parseMinutes = (value, fallback = 15) => {
+  const numericValue = Number(value);
+  const fallbackValue = Number.isFinite(Number(fallback)) ? Number(fallback) : 15;
+  return Number.isFinite(numericValue) && numericValue >= 0 ? numericValue : fallbackValue;
 };
 
 const getSettings = async (_req, res) => {
@@ -44,10 +50,10 @@ const updateSettings = async (req, res) => {
       address: req.body.address ?? settings.address,
       bookingAlerts: req.body.bookingAlerts ?? settings.bookingAlerts,
       customerEmails: req.body.customerEmails ?? settings.customerEmails,
-      lowStockReports: req.body.lowStockReports ?? settings.lowStockReports,
       weekendBookings: req.body.weekendBookings ?? settings.weekendBookings,
-      autoConfirmVip: req.body.autoConfirmVip ?? settings.autoConfirmVip,
       darkReceipts: req.body.darkReceipts ?? settings.darkReceipts,
+      defaultBufferTime: parseMinutes(req.body.defaultBufferTime, settings.defaultBufferTime),
+      gracePeriod: parseMinutes(req.body.gracePeriod, settings.gracePeriod),
     });
 
     const updatedSettings = await settings.save();

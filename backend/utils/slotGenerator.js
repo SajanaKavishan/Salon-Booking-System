@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Staff = require('../models/Staff');
 const Appointment = require('../models/appointmentModel');
+const SalonSettings = require('../models/SalonSettings');
 
 const DAY_NAMES = [
   'Sunday',
@@ -122,6 +123,21 @@ const parseTimeSlot = (timeSlot) => {
   return { start, end };
 };
 
+const getDefaultBufferTime = async () => {
+  const settings = await SalonSettings.findOne()
+    .select('defaultBufferTime')
+    .lean();
+
+  const bufferTime = Number(settings?.defaultBufferTime);
+  return Number.isFinite(bufferTime) && bufferTime >= 0 ? bufferTime : 15;
+};
+
+const findFirstConflict = (bookedRanges, windowStart, windowEnd) => (
+  bookedRanges.find(
+    (booking) => windowStart < booking.end && windowEnd > booking.start
+  )
+);
+
 /**
  * Generates the free service slots for one staff member on one date.
  *
@@ -161,9 +177,12 @@ const generateAvailableSlots = async (
   }
 
   const requestedDate = parseBookingDate(date);
-  const staff = await Staff.findById(staffId)
-    .select('workingHours offDays')
-    .lean();
+  const [staff, defaultBufferTime] = await Promise.all([
+    Staff.findById(staffId)
+      .select('workingHours offDays')
+      .lean(),
+    getDefaultBufferTime(),
+  ]);
 
   if (!staff) {
     throw createSlotError('Staff member not found.', 404);
@@ -199,27 +218,36 @@ const generateAvailableSlots = async (
     .select('timeSlot')
     .lean();
 
-  const bookedRanges = appointments.map(({ timeSlot }) => parseTimeSlot(timeSlot));
+  const bookedRanges = appointments
+    .map(({ timeSlot }) => {
+      const booking = parseTimeSlot(timeSlot);
+
+      return {
+        ...booking,
+        end: booking.end + defaultBufferTime,
+      };
+    })
+    .sort((left, right) => left.start - right.start);
   const availableSlots = [];
+  let currentTime = workingStart;
 
-  // Only complete intervals that fit inside working hours are generated.
-  for (
-    let slotStart = workingStart;
-    slotStart + serviceDuration <= workingEnd;
-    slotStart += serviceDuration
-  ) {
-    const slotEnd = slotStart + serviceDuration;
+  while (currentTime + serviceDuration <= workingEnd) {
+    const slotEnd = currentTime + serviceDuration;
+    const validationEnd = Math.min(slotEnd + defaultBufferTime, workingEnd);
 
-    // Half-open ranges overlap when each starts before the other one ends.
-    const hasConflict = bookedRanges.some(
-      (booking) => slotStart < booking.end && slotEnd > booking.start
-    );
+    // Validate the full service plus trailing buffer against existing bookings.
+    const conflict = findFirstConflict(bookedRanges, currentTime, validationEnd);
 
-    if (!hasConflict) {
-      availableSlots.push({
-        slot: `${minutesToTime(slotStart)} - ${minutesToTime(slotEnd)}`,
-      });
+    if (conflict) {
+      currentTime = Math.max(conflict.end, currentTime + 1);
+      continue;
     }
+
+    availableSlots.push({
+      slot: `${minutesToTime(currentTime)} - ${minutesToTime(slotEnd)}`,
+    });
+
+    currentTime = slotEnd;
   }
 
   return availableSlots;
