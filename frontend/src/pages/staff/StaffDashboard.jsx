@@ -34,6 +34,25 @@ const buildAppointmentDateTime = (appointment) => {
   return new Date(year, month - 1, day, hours, minutes, 0, 0);
 };
 
+const formatRosterDate = (appointment) => {
+  const rawDate = appointment?.date || appointment?.bookingDate;
+  if (!rawDate) return 'Date not set';
+
+  const dateKey = String(rawDate).slice(0, 10);
+  const [year, month, day] = dateKey.split('-').map(Number);
+  const parsedDate = [year, month, day].some(Number.isNaN)
+    ? new Date(rawDate)
+    : new Date(year, month - 1, day);
+
+  if (Number.isNaN(parsedDate.getTime())) return 'Date not set';
+
+  return new Intl.DateTimeFormat('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric'
+  }).format(parsedDate);
+};
+
 function StaffDashboard() {
   const [_user, setUser] = useState(null);
   const [appointments, setAppointments] = useState([]);
@@ -266,8 +285,13 @@ function StaffDashboard() {
 
                   return (
                     <tr key={appointment._id} className="border-b border-white/10 last:border-b-0 hover:bg-white/5">
-                      <td className="px-4 py-4 text-sm font-medium text-white">
-                        {appointment.startTime} {appointment.endTime ? `- ${appointment.endTime}` : ''}
+                      <td className="px-4 py-4 align-middle">
+                        <div className="text-sm font-semibold text-white">
+                          {appointment.startTime} {appointment.endTime ? `- ${appointment.endTime}` : ''}
+                        </div>
+                        <div className="mt-0.5 text-xs text-zinc-500">
+                          {formatRosterDate(appointment)}
+                        </div>
                       </td>
                       <td className="px-4 py-4">
                         <div className="font-semibold text-white">{appointment.user?.name || 'Client'}</div>

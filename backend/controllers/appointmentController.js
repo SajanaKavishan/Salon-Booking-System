@@ -140,8 +140,9 @@ const createAppointment = async (req, res) => {
         });
         const startMins = timeToMinutes(startTime);
         const calculatedEndMins = startMins + totalDuration;
-        const endTime = slotEndTime || minutesToTime(calculatedEndMins);
-        const endMins = timeToMinutes(endTime);
+        const endMins = slotEndTime ? timeToMinutes(slotEndTime) : calculatedEndMins;
+        const formattedStartTime = minutesToTime(startMins);
+        const formattedEndTime = minutesToTime(endMins);
 
         let stylistId = stylist;
         if (!stylistId || stylistId === 'Any Available Stylist') {
@@ -241,13 +242,13 @@ const createAppointment = async (req, res) => {
             user: req.user._id, 
             services: services,
             date: date,
-            startTime: startTime,
-            endTime: endTime,
+            startTime: formattedStartTime,
+            endTime: formattedEndTime,
             totalDuration: totalDuration,
             totalAmount: totalAmount,
             staffId: stylistId,
             bookingDate: appointmentDate,
-            timeSlot: `${startTime} - ${endTime}`,
+            timeSlot: `${formattedStartTime} - ${formattedEndTime}`,
             stylist: stylistId,
             status: appointmentStatus
         });
@@ -264,7 +265,7 @@ const createAppointment = async (req, res) => {
                         <p><strong>Client:</strong> ${req.user.name || req.user.email}</p>
                         <p><strong>Services:</strong> ${serviceNames}</p>
                         <p><strong>Date:</strong> ${date}</p>
-                        <p><strong>Time:</strong> ${startTime} - ${endTime}</p>
+                        <p><strong>Time:</strong> ${formattedStartTime} - ${formattedEndTime}</p>
                         <p><strong>Stylist:</strong> ${stylistName}</p>
                         <p><strong>Status:</strong> ${appointmentStatus}</p>
                         <p style="margin-top: 16px; color: #bbbbbb;">For assistance, contact ${supportEmail} or ${contactNumber}</p>
