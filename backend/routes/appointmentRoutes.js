@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const {
   createAppointment,
+  getStaffAvailability,
   getMyAppointments,
   getAllAppointments,
   getStaffAppointments,
@@ -18,6 +19,7 @@ router.route('/').post(protect, createAppointment).get(protect, getMyAppointment
 router.get('/all', protect, admin, getAllAppointments);
 router.get('/staff', protect, getStaffAppointments);
 router.get('/staff-schedule', protect, getStaffAppointments);
+router.get('/availability', getStaffAvailability);
 
 // Utility functions to convert time formats for easier calculations when checking for blocked time slots
 const timeToMins = (timeStr) => {
@@ -29,8 +31,12 @@ const timeToMins = (timeStr) => {
 
   if (typeof timeStr !== 'string') return 0;
 
-  const parts = timeStr.trim().split(' ');
-  if (parts.length < 2) return 0;
+  const parts = timeStr.trim().split(/\s+/);
+  if (parts.length === 1) {
+    const [hours, minutes] = parts[0].split(':').map(Number);
+    if (Number.isNaN(hours) || Number.isNaN(minutes)) return 0;
+    return hours * 60 + minutes;
+  }
 
   const [time, modifier] = parts;
   const timeParts = time.split(':');
@@ -56,16 +62,20 @@ const minsToTime = (mins) => {
 // Route to get booked times for a specific date and stylist. This endpoint is public (no auth required) so the frontend can check available times. It accepts query parameters for the date and stylist ID, and returns a list of time slots that are already booked. This allows the frontend to display which time slots are available for booking.
 router.get('/booked-times', async (req, res) => {
   try {
-    const { date, stylistId } = req.query;
+    const date = req.query.bookingDate || req.query.date;
+    const stylistId = req.query.staffId || req.query.stylistId;
 
     if (!date || !stylistId) {
       return res.status(400).json({ message: 'Date and stylist ID are required' });
     }
 
-    const appointments = await Appointment.find({ 
-      date: date, 
-      stylist: stylistId,
-      status: { $nin: ['Rejected', 'Cancelled'] } 
+    const bookingDate = new Date(`${String(date).slice(0, 10)}T00:00:00.000Z`);
+    const appointments = await Appointment.find({
+      $or: [
+        { date: String(date).slice(0, 10), stylist: stylistId },
+        { bookingDate, staffId: stylistId },
+      ],
+      status: { $nin: ['cancelled', 'Rejected', 'Cancelled'] }
     });
 
     let blockedSlots = [];

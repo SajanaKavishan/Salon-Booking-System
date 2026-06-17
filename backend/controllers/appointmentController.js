@@ -2,6 +2,7 @@ const Appointment = require('../models/appointmentModel');
 const Service = require('../models/Service'); // Import the Service model to interact with the services collection in the database
 const Staff = require('../models/Staff'); // Import the Staff model to interact with the staff collection
 const sendEmail = require('../utils/sendEmail'); // Import the sendEmail utility function to send email notifications to users about their appointment status updates
+const generateAvailableSlots = require('../utils/slotGenerator');
 const { ensureSettingsDocument, defaultSettings } = require('./settingsController');
 
 // Utility functions to convert time formats for easier calculations when checking for overlapping appointments. The timeToMinutes function converts a time string (e.g., "10:30 AM") into total minutes, while the minutesToTime function converts total minutes back into a time string format. These functions are essential for accurately determining if appointment times overlap when creating or updating appointments.
@@ -14,8 +15,12 @@ const timeToMinutes = (timeStr) => {
 
     if (typeof timeStr !== 'string') return 0;
 
-    const parts = timeStr.trim().split(' ');
-    if (parts.length < 2) return 0;
+    const parts = timeStr.trim().split(/\s+/);
+    if (parts.length === 1) {
+        const [hours, minutes] = parts[0].split(':').map(Number);
+        if (Number.isNaN(hours) || Number.isNaN(minutes)) return 0;
+        return hours * 60 + minutes;
+    }
 
     const [time, modifier] = parts;
     const timeParts = time.split(':');
@@ -38,12 +43,72 @@ const minutesToTime = (mins) => {
     return `${hours < 10 ? '0' : ''}${hours}:${minutes === 0 ? '00' : minutes} ${modifier}`;
 };
 
+// @desc    Get available time slots for a staff member
+// @route   GET /api/appointments/availability
+// @access  Public
+const getStaffAvailability = async (req, res) => {
+    try {
+        const { staffId, date, duration } = req.query;
+
+        if (!staffId || !date || !duration) {
+            return res.status(400).json({
+                success: false,
+                message: 'staffId, date, and duration query parameters are required.'
+            });
+        }
+
+        const availableSlots = await generateAvailableSlots({
+            staffId,
+            date,
+            serviceDuration: Number(duration)
+        });
+
+        return res.status(200).json({
+            success: true,
+            availableSlots
+        });
+    } catch (error) {
+        const statusCode = error.statusCode === 404 ? 404 : error.statusCode || 500;
+
+        if (statusCode >= 500) {
+            console.error('Get Staff Availability Error:', error);
+        }
+
+        return res.status(statusCode).json({
+            success: false,
+            message: statusCode >= 500
+                ? 'Server Error: Could not generate staff availability.'
+                : error.message
+        });
+    }
+};
+
 // @desc    Create new appointment
 // @route   POST /api/appointments
 // @access  Private
 const createAppointment = async (req, res) => {
     try {
-        const { stylist, date, startTime, services } = req.body;
+        const {
+            staffId,
+            stylist: legacyStylist,
+            bookingDate,
+            date: legacyDate,
+            timeSlot,
+            startTime: legacyStartTime,
+            services,
+        } = req.body;
+        const stylist = staffId || legacyStylist;
+        const dateValue = bookingDate || legacyDate;
+        const parsedBookingDate = dateValue ? new Date(dateValue) : null;
+        const date = legacyDate || (
+            parsedBookingDate && !Number.isNaN(parsedBookingDate.getTime())
+                ? parsedBookingDate.toISOString().slice(0, 10)
+                : ''
+        );
+        const [slotStartTime, slotEndTime] = typeof timeSlot === 'string'
+            ? timeSlot.split(/\s+-\s+/)
+            : [];
+        const startTime = legacyStartTime || slotStartTime;
         const settings = await ensureSettingsDocument();
         const salonName = settings?.salonName || defaultSettings.salonName;
         const supportEmail = settings?.supportEmail || defaultSettings.supportEmail;
@@ -54,12 +119,12 @@ const createAppointment = async (req, res) => {
             return res.status(400).json({ message: "Please fill in all required fields." });
         }
 
-        const appointmentDate = new Date(`${date}T00:00:00`);
+        const appointmentDate = new Date(`${date}T00:00:00.000Z`);
         if (Number.isNaN(appointmentDate.getTime())) {
             return res.status(400).json({ message: 'Invalid appointment date.' });
         }
 
-        const dayOfWeek = appointmentDate.getDay();
+        const dayOfWeek = appointmentDate.getUTCDay();
         if (!settings.weekendBookings && (dayOfWeek === 0 || dayOfWeek === 6)) {
             return res.status(400).json({ message: 'Weekend bookings are currently unavailable.' });
         }
@@ -72,13 +137,13 @@ const createAppointment = async (req, res) => {
             totalAmount += service.price;
         });
         const startMins = timeToMinutes(startTime);
-        const endMins = startMins + totalDuration;
-        const endTime = minutesToTime(endMins);
+        const calculatedEndMins = startMins + totalDuration;
+        const endTime = slotEndTime || minutesToTime(calculatedEndMins);
+        const endMins = timeToMinutes(endTime);
 
         let stylistId = stylist;
         if (!stylistId || stylistId === 'Any Available Stylist') {
-            const appointmentDate = new Date(`${date}T00:00:00`);
-            const dayOfWeek = appointmentDate.getDay();
+            const dayOfWeek = appointmentDate.getUTCDay();
             const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
             const dayName = days[dayOfWeek];
 
@@ -97,7 +162,7 @@ const createAppointment = async (req, res) => {
                 const existingAppointments = await Appointment.find({
                     date: date,
                     stylist: s._id,
-                    status: { $nin: ['Rejected', 'Cancelled'] }
+                    status: { $nin: ['cancelled', 'Rejected', 'Cancelled'] }
                 });
 
                 let hasOverlap = false;
@@ -125,7 +190,7 @@ const createAppointment = async (req, res) => {
             const existingAppointments = await Appointment.find({
                 date: date,
                 stylist: stylistId,
-                status: { $nin: ['Rejected', 'Cancelled'] }
+                status: { $nin: ['cancelled', 'Rejected', 'Cancelled'] }
             });
 
             let hasOverlap = false;
@@ -147,15 +212,15 @@ const createAppointment = async (req, res) => {
         const finalStylist = await Staff.findById(stylistId);
         const stylistName = finalStylist ? finalStylist.name : 'Any Available Stylist';
 
-        let appointmentStatus = 'Pending';
+        let appointmentStatus = 'pending';
         if (settings.autoConfirmVip) {
             const completedAppointments = await Appointment.countDocuments({
                 user: req.user._id,
-                status: 'Completed'
+                status: { $in: ['completed', 'Completed'] }
             });
 
             if (completedAppointments >= 3) {
-                appointmentStatus = 'Approved';
+                appointmentStatus = 'confirmed';
             }
         }
 
@@ -169,6 +234,9 @@ const createAppointment = async (req, res) => {
             endTime: endTime,
             totalDuration: totalDuration,
             totalAmount: totalAmount,
+            staffId: stylistId,
+            bookingDate: appointmentDate,
+            timeSlot: `${startTime} - ${endTime}`,
             stylist: stylistId,
             status: appointmentStatus
         });
@@ -212,6 +280,7 @@ const getMyAppointments = async (req, res) => {
     try {
         const appointments = await Appointment.find({ user: req.user._id })
             .populate('services', 'name price')
+            .populate('staffId', 'name')
             .populate('stylist', 'name')
             .sort({ createdAt: -1 });
             
@@ -224,7 +293,12 @@ const getMyAppointments = async (req, res) => {
 
 const getAllAppointments = async (req, res) => {
     try {        // Find all appointments and populate the user field with the user's name and email for better readability. The services field is also populated to include the name, price, and duration of each service in the appointment. The appointments are sorted by creation date in descending order, so the most recent appointments will appear first in the response. This route is intended for admin users to view all appointments.
-        const appointments = await Appointment.find({}).populate('user', 'name email phone').populate('services', 'name price').sort({ createdAt: -1 }); 
+        const appointments = await Appointment.find({})
+            .populate('user', 'name email phone')
+            .populate('services', 'name price')
+            .populate('staffId', 'name')
+            .populate('stylist', 'name')
+            .sort({ createdAt: -1 });
         res.status(200).json(appointments);
     }catch (error) {
         console.error("Get All Appointments Error:", error);
@@ -251,6 +325,8 @@ const getStaffAppointments = async (req, res) => {
         const appointments = await Appointment.find(query)
             .populate('user', 'name email phone')
             .populate('services', 'name price duration')
+            .populate('staffId', 'name')
+            .populate('stylist', 'name')
             .sort({ date: 1, startTime: 1 });
 
         res.status(200).json(appointments);
@@ -299,11 +375,11 @@ const deleteAppointment = async (req, res) => {
             });
         }
 
-        if (['Cancelled', 'Rejected', 'Completed', 'No-Show'].includes(appointment.status)) {
+        if (['cancelled', 'completed'].includes(Appointment.normalizeStatus(appointment.status))) {
             return res.status(400).json({ message: `This appointment is already ${appointment.status.toLowerCase()}.` });
         }
 
-        appointment.status = 'Cancelled';
+        appointment.status = 'cancelled';
         const updatedAppointment = await appointment.save();
 
         res.status(200).json({
@@ -326,8 +402,9 @@ const updateAppointmentStatus = async (req, res) => {
         const { status } = req.body;
         
         // Validate status value
-        const validStatuses = ['Pending', 'Approved', 'Rejected', 'Cancelled', 'Completed', 'No-Show'];
-        if (!status || !validStatuses.includes(status)) {
+        const validStatuses = ['pending', 'confirmed', 'cancelled', 'completed'];
+        const normalizedStatus = Appointment.normalizeStatus(status);
+        if (!status || !validStatuses.includes(normalizedStatus)) {
             return res.status(400).json({ 
                 message: `Invalid status. Must be one of: ${validStatuses.join(', ')}` 
             });
@@ -344,7 +421,7 @@ const updateAppointmentStatus = async (req, res) => {
             return res.status(404).json({ message: "Appointment not found." });
         }
 
-        appointment.status = status;
+        appointment.status = normalizedStatus;
         const updatedAppointment = await appointment.save();
 
         // Part of the code to send an email notification to the user about the status update of their appointment. The email includes the appointment details and a message indicating the new status of the appointment. This enhances the user experience by keeping them informed about the status of their appointments in a timely manner.
@@ -441,7 +518,7 @@ const updateAppointmentStatus = async (req, res) => {
 const updateAppointmentStatusByStaff = async (req, res) => {
     try {
         const { status } = req.body;
-        const allowedStatuses = ['Completed', 'No-Show'];
+        const allowedStatuses = ['Completed', 'No-Show', 'completed', 'cancelled'];
 
         if (!allowedStatuses.includes(status)) {
             return res.status(400).json({ message: 'This status transition is not allowed for staff.' });
@@ -467,7 +544,7 @@ const updateAppointmentStatusByStaff = async (req, res) => {
             }
         }
 
-        if (appointment.status !== 'Approved') {
+        if (Appointment.normalizeStatus(appointment.status) !== 'confirmed') {
             return res.status(400).json({ message: 'Only approved appointments can be completed or marked no-show.' });
         }
 
@@ -481,7 +558,7 @@ const updateAppointmentStatusByStaff = async (req, res) => {
             return res.status(400).json({ message: 'This appointment cannot be updated before its start time.' });
         }
 
-        appointment.status = status;
+        appointment.status = Appointment.normalizeStatus(status);
         const updatedAppointment = await appointment.save();
 
         res.status(200).json({
@@ -528,6 +605,7 @@ const hideAppointmentByCustomer = async (req, res) => {
 };
 
 module.exports = {
+    getStaffAvailability,
     createAppointment,
     getMyAppointments,
     getAllAppointments,

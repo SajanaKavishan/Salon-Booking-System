@@ -30,11 +30,9 @@ function BookAppointment({ userProfile, customerData }) {
 
   const [isUserProfileHydrated, setIsUserProfileHydrated] = useState(false);
 
-  const [currentDateTime, setCurrentDateTime] = useState(() => new Date());
-
   const [date, setDate] = useState('');
 
-  const [time, setTime] = useState('');
+  const [timeSlot, setTimeSlot] = useState('');
 
   const [selectedServices, setSelectedServices] = useState([]);
 
@@ -70,9 +68,11 @@ function BookAppointment({ userProfile, customerData }) {
 
   const [stylistsList, setStylistsList] = useState([]);
 
-  const [bookedTimes, setBookedTimes] = useState([]);
+  const [availableSlots, setAvailableSlots] = useState([]);
 
-  const [bookedTimesByStylist, setBookedTimesByStylist] = useState({});
+  const [isAvailabilityLoading, setIsAvailabilityLoading] = useState(false);
+
+  const [hasLoadedAvailability, setHasLoadedAvailability] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
 
@@ -169,60 +169,6 @@ function BookAppointment({ userProfile, customerData }) {
     </svg>
 
   );
-
-
-
-    const allTimeSlots = useMemo(() => {
-
-      const slots = [];
-
-      let startTime = 9 * 60;
-
-      const endTime = 20 * 60;
-
-
-
-      while (startTime < endTime) {
-
-        const hours = Math.floor(startTime / 60);
-
-        const mins = startTime % 60;
-
-        const ampm = hours >= 12 ? 'PM' : 'AM';
-
-        const displayHours = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours);
-
-        const displayMins = mins === 0 ? '00' : mins;
-
-
-
-        slots.push(`${displayHours < 10 ? '0' : ''}${displayHours}:${displayMins} ${ampm}`);
-
-        startTime += 30;
-
-      }
-
-
-
-      return slots;
-
-    }, []);
-
-
-
-    useEffect(() => {
-
-      const timer = window.setInterval(() => {
-
-        setCurrentDateTime(new Date());
-
-      }, 60000);
-
-
-
-      return () => window.clearInterval(timer);
-
-    }, []);
 
 
 
@@ -493,7 +439,7 @@ function BookAppointment({ userProfile, customerData }) {
 
       setDate('');
 
-      setTime('');
+      setTimeSlot('');
 
       setHasUserSelectedStylist(true);
 
@@ -504,170 +450,6 @@ function BookAppointment({ userProfile, customerData }) {
       toast.info('Your previous service and artist choices are ready. Pick a new date and time.');
 
     }, [hasHydratedRebook, location.state, servicesList, stylistsList]);
-
-
-
-    const getLocalDateString = (value) => {
-
-      const source = value instanceof Date ? value : new Date(value);
-
-      const year = source.getFullYear();
-
-      const month = String(source.getMonth() + 1).padStart(2, '0');
-
-      const day = String(source.getDate()).padStart(2, '0');
-
-
-
-      return `${year}-${month}-${day}`;
-
-    };
-
-
-
-    const timeToMinutes = (timeValue) => {
-
-      if (!timeValue || typeof timeValue !== 'string') return 0;
-
-
-
-      const [rawTime, modifier] = timeValue.trim().split(' ');
-
-      const [rawHours, rawMinutes] = rawTime.split(':');
-
-      let hours = Number(rawHours);
-
-      const minutes = Number(rawMinutes);
-
-
-
-      if (Number.isNaN(hours) || Number.isNaN(minutes)) return 0;
-
-      if (hours === 12) hours = 0;
-
-      if (modifier === 'PM') hours += 12;
-
-
-
-      return hours * 60 + minutes;
-
-    };
-
-
-
-    const getFallbackBookedSlots = (stylistItem) => {
-
-      if (!Array.isArray(stylistItem?.bookedSlots)) return [];
-
-
-
-      return stylistItem.bookedSlots
-
-        .filter((slot) => {
-
-          if (typeof slot === 'string') return true;
-
-          return !slot?.date || slot.date === date;
-
-        })
-
-        .map((slot) => (typeof slot === 'string' ? slot : slot?.time || slot?.startTime))
-
-        .filter(Boolean);
-
-    };
-
-
-
-    useEffect(() => {
-
-      let isCancelled = false;
-
-      const stylistRecord = stylistsList.find((item) => item._id === stylist);
-
-
-
-      if (date && stylist && stylist !== ANY_STYLIST && stylistRecord) {
-
-        axios
-
-          .get(`http://localhost:5000/api/appointments/booked-times?date=${date}&stylistId=${stylist}`)
-
-          .then((response) => {
-
-            if (isCancelled) return;
-
-            setBookedTimes(response.data);
-
-            setBookedTimesByStylist({});
-
-            setTime('');
-
-          })
-
-          .catch((err) => {
-
-            console.error('Error fetching booked times:', err);
-
-            toast.error('Failed to check available times.');
-
-          });
-
-      } else if (date && stylist === ANY_STYLIST && stylistsList.length > 0) {
-
-        Promise.all(
-
-          stylistsList.map((stylistItem) =>
-
-            axios
-
-              .get(`http://localhost:5000/api/appointments/booked-times?date=${date}&stylistId=${stylistItem._id}`)
-
-              .then((response) => [stylistItem._id, response.data])
-
-          )
-
-        )
-
-          .then((results) => {
-
-            if (isCancelled) return;
-
-            setBookedTimes([]);
-
-            setBookedTimesByStylist(Object.fromEntries(results));
-
-            setTime('');
-
-          })
-
-          .catch((err) => {
-
-            console.error('Error fetching aggregated booked times:', err);
-
-            toast.error('Failed to check available times.');
-
-          });
-
-      } else {
-
-        setBookedTimes([]);
-
-        setBookedTimesByStylist({});
-
-        setTime('');
-
-      }
-
-
-
-      return () => {
-
-        isCancelled = true;
-
-      };
-
-    }, [date, stylist, stylistsList]);
 
 
 
@@ -687,7 +469,7 @@ function BookAppointment({ userProfile, customerData }) {
 
         setDate('');
 
-        setTime('');
+        setTimeSlot('');
 
         toast.error('Weekend bookings are currently unavailable.');
 
@@ -725,6 +507,180 @@ function BookAppointment({ userProfile, customerData }) {
 
     );
 
+    const formatTimeForDisplay = (timeValue) => {
+
+      const [rawHours, rawMinutes] = String(timeValue || '').split(':');
+
+      const hours = Number(rawHours);
+
+      const minutes = Number(rawMinutes);
+
+      if (Number.isNaN(hours) || Number.isNaN(minutes)) return timeValue || '';
+
+      const period = hours >= 12 ? 'PM' : 'AM';
+
+      const displayHours = hours % 12 || 12;
+
+      return `${String(displayHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${period}`;
+
+    };
+
+
+
+    const formatSlotForDisplay = (slotRange) => {
+
+      const [start, end] = String(slotRange || '').split(/\s+-\s+/);
+
+      if (!start || !end) return slotRange || '';
+
+      return `${formatTimeForDisplay(start)} - ${formatTimeForDisplay(end)}`;
+
+    };
+
+
+
+    const getSlotStartLabel = (slotRange) => {
+
+      const [start] = String(slotRange || '').split(/\s+-\s+/);
+
+      return formatTimeForDisplay(start);
+
+    };
+
+
+
+    useEffect(() => {
+
+      let isCancelled = false;
+
+      const fetchAvailability = async () => {
+
+        if (!date || !stylist || totalDuration <= 0) {
+
+          setAvailableSlots([]);
+
+          setTimeSlot('');
+
+          setIsAvailabilityLoading(false);
+
+          setHasLoadedAvailability(false);
+
+          return;
+
+        }
+
+        const staffIds = stylist === ANY_STYLIST
+
+          ? stylistsList.map((stylistItem) => stylistItem._id).filter(Boolean)
+
+          : [stylist];
+
+        if (staffIds.length === 0) {
+
+          setAvailableSlots([]);
+
+          setTimeSlot('');
+
+          setIsAvailabilityLoading(false);
+
+          setHasLoadedAvailability(true);
+
+          return;
+
+        }
+
+        setAvailableSlots([]);
+
+        setTimeSlot('');
+
+        setIsAvailabilityLoading(true);
+
+        setHasLoadedAvailability(false);
+
+        try {
+
+          const responses = await Promise.all(
+
+            staffIds.map((staffId) =>
+
+              axios.get('http://localhost:5000/api/appointments/availability', {
+
+                params: {
+
+                  staffId,
+
+                  date,
+
+                  duration: totalDuration
+
+                }
+
+              })
+
+            )
+
+          );
+
+          if (isCancelled) return;
+
+          const pooledSlots = responses.flatMap((response) =>
+
+            Array.isArray(response.data?.availableSlots) ? response.data.availableSlots : []
+
+          );
+
+          const uniqueSlots = Array.from(
+
+            new Map(
+
+              pooledSlots
+
+                .filter((item) => item?.slot)
+
+                .map((item) => [item.slot, item])
+
+            ).values()
+
+          ).sort((first, second) => first.slot.localeCompare(second.slot));
+
+          setAvailableSlots(uniqueSlots);
+
+          setTimeSlot('');
+
+          setHasLoadedAvailability(true);
+
+        } catch (error) {
+
+          if (isCancelled) return;
+
+          console.error('Error fetching staff availability:', error);
+
+          setAvailableSlots([]);
+
+          setTimeSlot('');
+
+          setHasLoadedAvailability(false);
+
+          toast.error(error.response?.data?.message || 'Failed to check available times.');
+
+        } finally {
+
+          if (!isCancelled) setIsAvailabilityLoading(false);
+
+        }
+
+      };
+
+      fetchAvailability();
+
+      return () => {
+
+        isCancelled = true;
+
+      };
+
+    }, [date, stylist, stylistsList, totalDuration]);
+
 
 
     const stylistOptions = stylistsList;
@@ -745,85 +701,25 @@ function BookAppointment({ userProfile, customerData }) {
 
     const formattedDate = date ? new Date(`${date}T00:00:00`).toLocaleDateString() : 'Not selected';
 
-    const isToday = date === getLocalDateString(currentDateTime);
-
-    const nextAvailableMinutes = useMemo(() => {
-
-      const currentMinutes = currentDateTime.getHours() * 60 + currentDateTime.getMinutes();
-
-      const nextHour = currentDateTime.getMinutes() === 0
-
-        ? currentMinutes
-
-        : (currentDateTime.getHours() + 1) * 60;
-
-
-
-      return nextHour;
-
-    }, [currentDateTime]);
-
-    const visibleTimeSlots = useMemo(
-
-      () => allTimeSlots.filter((slot) => !isToday || timeToMinutes(slot) >= nextAvailableMinutes),
-
-      [allTimeSlots, isToday, nextAvailableMinutes]
-
-    );
-
-    const isSlotBooked = (slot) => {
-
-      if (stylist === ANY_STYLIST) {
-
-        if (stylistsList.length === 0) return true;
-
-
-
-        return stylistsList.every((stylistItem) => {
-
-          const apiBookedSlots = bookedTimesByStylist[stylistItem._id] || [];
-
-          const fallbackBookedSlots = getFallbackBookedSlots(stylistItem);
-
-
-
-          return [...apiBookedSlots, ...fallbackBookedSlots].includes(slot);
-
-        });
-
-      }
-
-
-
-      const fallbackBookedSlots = getFallbackBookedSlots(selectedStylist);
-
-
-
-      return [...bookedTimes, ...fallbackBookedSlots].includes(slot);
-
-    };
-
     const canMoveToStylist = selectedServices.length > 0;
 
     const canMoveToTime = stylist !== '';
 
-    const canMoveToReview = Boolean(date && time && stylist);
+    const canMoveToReview = Boolean(date && timeSlot && stylist);
 
 
 
     useEffect(() => {
 
-      if (!time) return;
+      if (!timeSlot) return;
 
+      if (!availableSlots.some((availableSlot) => availableSlot.slot === timeSlot)) {
 
-
-      if (!visibleTimeSlots.includes(time) || isSlotBooked(time)) {
-
-        setTime('');
+        setTimeSlot('');
 
       }
 
-    }, [time, visibleTimeSlots, stylist, bookedTimes, bookedTimesByStylist, stylistsList, selectedStylist]);
+    }, [timeSlot, availableSlots]);
 
 
 
@@ -899,7 +795,7 @@ function BookAppointment({ userProfile, customerData }) {
 
 
 
-      if (!time) {
+      if (!timeSlot) {
 
         toast.error('Please select an available time slot.');
 
@@ -953,9 +849,15 @@ function BookAppointment({ userProfile, customerData }) {
 
           date,
 
-          startTime: time,
+          bookingDate: date,
+
+          startTime: getSlotStartLabel(timeSlot),
+
+          timeSlot,
 
           services: selectedServices,
+
+          staffId: stylistId,
 
           stylist: stylistId,
 
@@ -1001,7 +903,7 @@ function BookAppointment({ userProfile, customerData }) {
 
           date: createdAppointment?.date || date,
 
-          startTime: createdAppointment?.startTime || time,
+          startTime: createdAppointment?.startTime || getSlotStartLabel(timeSlot),
 
           endTime: createdAppointment?.endTime || '',
 
@@ -1039,7 +941,7 @@ function BookAppointment({ userProfile, customerData }) {
 
         setDate('');
 
-        setTime('');
+        setTimeSlot('');
 
         setSelectedServices([]);
 
@@ -1778,19 +1680,21 @@ function BookAppointment({ userProfile, customerData }) {
 
                         {date && stylist ? (
 
-                          visibleTimeSlots.length > 0 ? (
+                          isAvailabilityLoading ? (
+
+                            <div className="flex min-h-40 items-center justify-center rounded-[1.5rem] border border-white/8 bg-white/[0.02]">
+
+                              <Spinner />
+
+                            </div>
+
+                          ) : availableSlots.length > 0 ? (
 
                             <div className="min-h-0 flex-1 overflow-y-auto pr-1">
 
                               <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
 
-                              {visibleTimeSlots.map((slot) => {
-
-                                const isBooked = isSlotBooked(slot);
-
-
-
-                                return (
+                              {availableSlots.map(({ slot }) => (
 
                                   <button
 
@@ -1798,45 +1702,47 @@ function BookAppointment({ userProfile, customerData }) {
 
                                     type="button"
 
-                                    disabled={isBooked}
-
-                                    onClick={() => setTime(slot)}
+                                    onClick={() => setTimeSlot(slot)}
 
                                     className={`rounded-full border px-4 py-3 text-xs uppercase tracking-[0.22em] transition-all duration-300 ${
 
-                                      isBooked
+                                      timeSlot === slot
 
-                                        ? 'pointer-events-none cursor-not-allowed border-white/5 text-white/30 opacity-30 line-through'
+                                        ? 'border-[#d4af37] bg-[#d4af37] font-semibold text-black shadow-[0_0_0_1px_rgba(212,175,55,0.2)]'
 
-                                        : time === slot
-
-                                          ? 'border-[#D4AF37] bg-[#D4AF37] text-black shadow-[0_0_0_1px_rgba(212,175,55,0.2)]'
-
-                                          : 'border-white/15 text-white/60 hover:border-[#D4AF37]/70 hover:text-[#D4AF37] hover:shadow-[0_0_18px_rgba(212,175,55,0.16)]'
+                                        : 'border-white/15 text-white/60 hover:border-[#D4AF37]/70 hover:text-[#D4AF37] hover:shadow-[0_0_18px_rgba(212,175,55,0.16)]'
 
                                     }`}
 
                                   >
 
-                                    {slot}
+                                    {formatSlotForDisplay(slot)}
 
                                   </button>
 
-                                );
-
-                              })}
+                              ))}
 
                               </div>
 
                             </div>
 
+                          ) : hasLoadedAvailability ? (
+
+                            <div className="rounded-[1.5rem] border border-[#D4AF37]/25 bg-[linear-gradient(135deg,rgba(212,175,55,0.1),rgba(255,255,255,0.02))] px-6 py-5 shadow-[0_18px_45px_rgba(0,0,0,0.2)]">
+
+                              <p className="text-[0.65rem] uppercase tracking-[0.32em] text-[#D4AF37]">No availability</p>
+
+                              <p className="mt-3 max-w-2xl text-sm leading-6 text-white/65">
+
+                                The selected stylist is unavailable or on leave on this day. Please choose another date or artist.
+
+                              </p>
+
+                            </div>
+
                           ) : (
 
-                            <p className="text-sm text-white/40">
-
-                              No remaining time slots are available for today.
-
-                            </p>
+                            <p className="text-sm text-white/40">Availability could not be loaded. Please try another date or artist.</p>
 
                           )
 
@@ -1932,7 +1838,11 @@ function BookAppointment({ userProfile, customerData }) {
 
                                 <p className="text-[0.65rem] uppercase tracking-[0.3em] text-white/35">Time</p>
 
-                                <p className="mt-3 text-sm text-white">{time || 'Not selected'}</p>
+                                <p className="mt-3 text-sm text-white">
+
+                                  {timeSlot ? formatSlotForDisplay(timeSlot) : 'Not selected'}
+
+                                </p>
 
                               </div>
 

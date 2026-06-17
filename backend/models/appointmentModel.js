@@ -1,36 +1,125 @@
 const mongoose = require('mongoose');
 
+const STATUS_ALIASES = {
+    pending: 'pending',
+    confirmed: 'confirmed',
+    approved: 'confirmed',
+    cancelled: 'cancelled',
+    canceled: 'cancelled',
+    rejected: 'cancelled',
+    completed: 'completed',
+    'no-show': 'cancelled',
+};
+
+const STATUS_DISPLAY_NAMES = {
+    pending: 'Pending',
+    confirmed: 'Approved',
+    cancelled: 'Cancelled',
+    completed: 'Completed',
+};
+
+const normalizeBookingStatus = (status) => {
+    if (typeof status !== 'string') return status;
+    return STATUS_ALIASES[status.trim().toLowerCase()] || status.trim().toLowerCase();
+};
+
+const toLegacyDateString = (bookingDate) => {
+    if (!(bookingDate instanceof Date) || Number.isNaN(bookingDate.getTime())) return undefined;
+    return bookingDate.toISOString().slice(0, 10);
+};
+
 const appointmentSchema = new mongoose.Schema({
     user: {
         type: mongoose.Schema.Types.ObjectId,
         required: true,
-        ref: 'User', // This creates a reference to the User model, allowing us to associate an appointment with a specific user.
+        ref: 'User',
     },
-    services: [{ 
-    type: mongoose.Schema.Types.ObjectId, 
-    ref: 'Service',
-    required: true 
-    }], // This is an array of ObjectIds that reference the Service model, allowing an appointment to include multiple services.
+    services: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Service',
+        required: true,
+    }],
+    staffId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Staff',
+        required: true,
+    },
+    bookingDate: {
+        type: Date,
+        required: true,
+    },
+    timeSlot: {
+        type: String,
+        required: true,
+        trim: true,
+    },
+    status: {
+        type: String,
+        enum: ['pending', 'confirmed', 'cancelled', 'completed'],
+        default: 'pending',
+        set: normalizeBookingStatus,
+    },
+
+    // Legacy fields remain synchronized while existing clients migrate.
     stylist: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Staff',
-        required: [true, 'Please enter the stylist name'],
     },
     date: {
         type: String,
-        required: [true, 'Please enter the date'],
     },
-    startTime: { type: String, required: true }, 
-    endTime: { type: String, required: true },   
-    totalDuration: { type: Number, required: true }, 
-    totalAmount: { type: Number, required: true },   
+    startTime: {
+        type: String,
+    },
+    endTime: {
+        type: String,
+    },
+    totalDuration: {
+        type: Number,
+        required: true,
+    },
+    totalAmount: {
+        type: Number,
+        required: true,
+    },
+    isHiddenByCustomer: {
+        type: Boolean,
+        default: false,
+    },
+}, {
+    timestamps: true,
+    toJSON: {
+        transform: (_document, returnedObject) => {
+            returnedObject.status = STATUS_DISPLAY_NAMES[returnedObject.status] || returnedObject.status;
+            return returnedObject;
+        },
+    },
+});
 
-    isHiddenByCustomer: { type: Boolean, default: false },
-    status: { 
-        type: String, 
-        enum: ['Pending', 'Confirmed', 'Approved', 'Rejected', 'Cancelled', 'Completed', 'No-Show'],
-        default: 'Pending' 
+appointmentSchema.pre('validate', function synchronizeBookingFields() {
+    if (!this.staffId && this.stylist) this.staffId = this.stylist;
+    if (!this.stylist && this.staffId) this.stylist = this.staffId;
+
+    if (!this.bookingDate && this.date) {
+        this.bookingDate = new Date(`${this.date}T00:00:00.000Z`);
     }
-}, { timestamps: true });
+    if (!this.date && this.bookingDate) {
+        this.date = toLegacyDateString(this.bookingDate);
+    }
+
+    if (!this.timeSlot && this.startTime && this.endTime) {
+        this.timeSlot = `${this.startTime} - ${this.endTime}`;
+    }
+
+    if (this.timeSlot && (!this.startTime || !this.endTime)) {
+        const [startTime, endTime] = this.timeSlot.split(/\s+-\s+/);
+        if (!this.startTime && startTime) this.startTime = startTime;
+        if (!this.endTime && endTime) this.endTime = endTime;
+    }
+
+    this.status = normalizeBookingStatus(this.status);
+});
+
+appointmentSchema.statics.normalizeStatus = normalizeBookingStatus;
 
 module.exports = mongoose.model('Appointment', appointmentSchema);
