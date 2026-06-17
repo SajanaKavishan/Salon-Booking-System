@@ -1,6 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
+import { CalendarPlus } from 'lucide-react';
 import { toast } from 'react-toastify';
+import AddAppointmentModal from '../../components/admin/AddAppointmentModal';
 import { DarkSelect, GoldButton, StatusBadge } from '../../components/admin/SystemUI';
 
 const finalStatuses = ['Completed', 'Rejected', 'Cancelled', 'No-Show'];
@@ -11,6 +13,7 @@ function AppointmentsPage() {
   const [activeTab, setActiveTab] = useState('Pending');
   const [dateFilter, setDateFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const userRole = localStorage.getItem('userRole') || 'customer';
   const isAdmin = userRole === 'admin';
 
@@ -70,36 +73,44 @@ function AppointmentsPage() {
     return [currentStatus];
   };
 
-  useEffect(() => {
-    const fetchAppointments = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        if (!token) {
-          toast.error('Please log in again to load appointments.');
-          return;
-        }
-
-        const endpoint = isAdmin
-          ? 'http://localhost:5000/api/appointments/all'
-          : 'http://localhost:5000/api/appointments/staff-schedule';
-
-        const response = await axios.get(endpoint, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        setAppointments(response.data);
-      } catch (error) {
-        console.error('Error fetching all appointments:', error);
-        const message = error.response?.status === 401
-          ? 'You are not authorized to view these appointments.'
-          : 'Could not load appointments right now.';
-        toast.error(message);
-      } finally {
-        setIsLoading(false);
+  const fetchAppointments = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toast.error('Please log in again to load appointments.');
+        return;
       }
-    };
+
+      const endpoint = isAdmin
+        ? 'http://localhost:5000/api/appointments/all'
+        : 'http://localhost:5000/api/appointments/staff-schedule';
+
+      const response = await axios.get(endpoint, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setAppointments(response.data);
+    } catch (error) {
+      console.error('Error fetching all appointments:', error);
+      const message = error.response?.status === 401
+        ? 'You are not authorized to view these appointments.'
+        : 'Could not load appointments right now.';
+      toast.error(message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isAdmin]);
+
+  useEffect(() => {
+    fetchAppointments();
+  }, [fetchAppointments]);
+
+  const handleAppointmentCreated = (appointment) => {
+    if (appointment) {
+      setAppointments((current) => [appointment, ...current]);
+    }
 
     fetchAppointments();
-  }, [isAdmin]);
+  };
 
   const handleStatusChange = async (id, newStatus) => {
     try {
@@ -284,12 +295,32 @@ function AppointmentsPage() {
 
   return (
     <div className="w-full max-w-7xl mx-auto">
-      <header className="mb-8">
-        <h1 className="text-4xl font-serif font-bold tracking-tight text-white">Appointments</h1>
-        <p className="mt-3 text-base text-gray-400">
-          Review bookings, refine the queue, and update customer appointment status.
-        </p>
+      <header className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h1 className="text-4xl font-serif font-bold tracking-tight text-white">Appointments</h1>
+          <p className="mt-3 text-base text-gray-400">
+            Review bookings, refine the queue, and update customer appointment status.
+          </p>
+        </div>
+
+        {isAdmin && (
+          <GoldButton
+            type="button"
+            onClick={() => setIsAddModalOpen(true)}
+            className="inline-flex w-fit items-center gap-2 rounded-lg px-5 py-3 font-bold"
+          >
+            <CalendarPlus className="h-5 w-5" />
+            Quick Book
+          </GoldButton>
+        )}
       </header>
+
+      <AddAppointmentModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        appointments={appointments}
+        onCreated={handleAppointmentCreated}
+      />
 
       <section className="rounded-2xl border border-white/10 bg-[#111111]/70 p-6 shadow-xl backdrop-blur-md">
         <div className="flex flex-col gap-6 border-b border-white/10 pb-6 xl:flex-row xl:items-start xl:justify-between">

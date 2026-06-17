@@ -96,9 +96,11 @@ const createAppointment = async (req, res) => {
             timeSlot,
             startTime: legacyStartTime,
             services,
+            bypassBuffer = false,
         } = req.body;
         const stylist = staffId || legacyStylist;
         const dateValue = bookingDate || legacyDate;
+        const isAdminBypass = bypassBuffer === true && req.user?.role === 'admin';
         const parsedBookingDate = dateValue ? new Date(dateValue) : null;
         const date = legacyDate || (
             parsedBookingDate && !Number.isNaN(parsedBookingDate.getTime())
@@ -125,7 +127,7 @@ const createAppointment = async (req, res) => {
         }
 
         const dayOfWeek = appointmentDate.getUTCDay();
-        if (!settings.weekendBookings && (dayOfWeek === 0 || dayOfWeek === 6)) {
+        if (!isAdminBypass && !settings.weekendBookings && (dayOfWeek === 0 || dayOfWeek === 6)) {
             return res.status(400).json({ message: 'Weekend bookings are currently unavailable.' });
         }
 
@@ -159,6 +161,11 @@ const createAppointment = async (req, res) => {
 
             let assignedStaff = null;
             for (let s of workingStaff) {
+                if (isAdminBypass) {
+                    assignedStaff = s;
+                    break;
+                }
+
                 const existingAppointments = await Appointment.find({
                     date: date,
                     stylist: s._id,
@@ -187,25 +194,29 @@ const createAppointment = async (req, res) => {
 
             stylistId = assignedStaff._id;
         } else {
-            const existingAppointments = await Appointment.find({
-                date: date,
-                stylist: stylistId,
-                status: { $nin: ['cancelled', 'Rejected', 'Cancelled'] }
-            });
+            // Admin force bookings intentionally skip the normal overlap/buffer guard.
+            // The flag is ignored for customers and staff so public booking rules remain intact.
+            if (!isAdminBypass) {
+                const existingAppointments = await Appointment.find({
+                    date: date,
+                    stylist: stylistId,
+                    status: { $nin: ['cancelled', 'Rejected', 'Cancelled'] }
+                });
 
-            let hasOverlap = false;
-            for (let appt of existingAppointments) {
-                const existingStart = timeToMinutes(appt.startTime);
-                const existingEnd = timeToMinutes(appt.endTime);
+                let hasOverlap = false;
+                for (let appt of existingAppointments) {
+                    const existingStart = timeToMinutes(appt.startTime);
+                    const existingEnd = timeToMinutes(appt.endTime);
 
-                if ((startMins < existingEnd) && (endMins > existingStart)) {
-                    hasOverlap = true;
-                    break;
+                    if ((startMins < existingEnd) && (endMins > existingStart)) {
+                        hasOverlap = true;
+                        break;
+                    }
                 }
-            }
 
-            if (hasOverlap) {
-                return res.status(400).json({ message: "Appointment overlaps with an existing appointment." });
+                if (hasOverlap) {
+                    return res.status(400).json({ message: "Appointment overlaps with an existing appointment." });
+                }
             }
         }
 
