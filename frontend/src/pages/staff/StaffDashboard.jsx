@@ -21,17 +21,53 @@ const timeToMinutes = (timeStr) => {
   return hours * 60 + rawMinutes;
 };
 
-const buildAppointmentDateTime = (appointment) => {
+const buildAppointmentDateTime = (appointment, timeValue = appointment?.startTime) => {
   if (!appointment?.date) return null;
 
-  const [year, month, day] = appointment.date.split('-').map(Number);
+  const dateKey = String(appointment.date).slice(0, 10);
+  const [year, month, day] = dateKey.split('-').map(Number);
   if ([year, month, day].some(Number.isNaN)) return null;
 
-  const startMinutes = timeToMinutes(appointment.startTime);
-  const hours = Math.floor(startMinutes / 60);
-  const minutes = startMinutes % 60;
+  const timeMinutes = timeToMinutes(timeValue);
+  const hours = Math.floor(timeMinutes / 60);
+  const minutes = timeMinutes % 60;
 
   return new Date(year, month - 1, day, hours, minutes, 0, 0);
+};
+
+const getAppointmentSortGroup = (appointment) => {
+  const status = String(appointment?.status || '').trim().toLowerCase();
+  const startDateTime = buildAppointmentDateTime(appointment);
+  const endDateTime = buildAppointmentDateTime(appointment, appointment?.endTime);
+  const hasStarted = startDateTime?.getTime() <= Date.now();
+  const hasEnded = endDateTime?.getTime() <= Date.now();
+
+  if (status === 'in progress' || (['approved', 'confirmed'].includes(status) && hasStarted && !hasEnded)) {
+    return 0;
+  }
+
+  if (['scheduled', 'pending'].includes(status)) {
+    return 1;
+  }
+
+  if (['confirmed', 'approved'].includes(status)) {
+    return 2;
+  }
+
+  if (['completed', 'cancelled', 'canceled', 'rejected'].includes(status)) {
+    return 3;
+  }
+
+  return 4;
+};
+
+const sortAppointmentsByPriority = (first, second) => {
+  const priorityDifference = getAppointmentSortGroup(first) - getAppointmentSortGroup(second);
+  if (priorityDifference !== 0) return priorityDifference;
+
+  const firstDate = buildAppointmentDateTime(first)?.getTime() || 0;
+  const secondDate = buildAppointmentDateTime(second)?.getTime() || 0;
+  return firstDate - secondDate;
 };
 
 const formatRosterDate = (appointment) => {
@@ -104,13 +140,9 @@ function StaffDashboard() {
 
 
   const todayAppointments = useMemo(() => {
-    return appointments
+    return [...appointments]
       //.filter((appointment) => appointment.date === todayKey)
-      .sort((first, second) => {
-        const firstDate = buildAppointmentDateTime(first)?.getTime() || 0;
-        const secondDate = buildAppointmentDateTime(second)?.getTime() || 0;
-        return firstDate - secondDate;
-      });
+      .sort(sortAppointmentsByPriority);
   }, [appointments]);
 
   const pendingApprovals = todayAppointments.filter((appointment) => appointment.status === 'Pending').length;
@@ -281,7 +313,10 @@ function StaffDashboard() {
               <tbody>
                 {todayAppointments.map((appointment) => {
                   const services = appointment.services?.map((service) => service.name || service).join(', ') || 'Service details unavailable';
-                  const isStarted = buildAppointmentDateTime(appointment)?.getTime() <= Date.now();
+                  const startDateTime = buildAppointmentDateTime(appointment);
+                  const endDateTime = buildAppointmentDateTime(appointment, appointment.endTime);
+                  const isStarted = startDateTime?.getTime() <= Date.now();
+                  const isEnded = endDateTime?.getTime() <= Date.now();
 
                   return (
                     <tr key={appointment._id} className="border-b border-white/10 last:border-b-0 hover:bg-white/5">
@@ -327,22 +362,23 @@ function StaffDashboard() {
 
                           {appointment.status === 'Approved' && (
                             <>
-                              <GoldButton
-                                type="button"
-                                onClick={() => handleStatusUpdate(appointment._id, 'Completed')}
-                                disabled={!isStarted || actionKey === `${appointment._id}-Completed`}
-                                className="rounded-lg px-4 py-2 text-sm"
-                              >
-                                {actionKey === `${appointment._id}-Completed` ? 'Working...' : 'Complete'}
-                              </GoldButton>
-                              {!isStarted && (
+                              {isEnded ? (
+                                <GoldButton
+                                  type="button"
+                                  onClick={() => handleStatusUpdate(appointment._id, 'Completed')}
+                                  disabled={actionKey === `${appointment._id}-Completed`}
+                                  className="rounded-lg px-4 py-2 text-sm"
+                                >
+                                  {actionKey === `${appointment._id}-Completed` ? 'Working...' : 'Complete'}
+                                </GoldButton>
+                              ) : (
                                 <GoldButton
                                   type="button"
                                   variant="ghost"
                                   className="rounded-lg border border-white/10 bg-black/20 px-4 py-2 text-sm text-gray-400 hover:bg-black/20 hover:text-gray-400"
                                   disabled
                                 >
-                                  Start
+                                  {isStarted ? 'In Progress' : 'Start'}
                                 </GoldButton>
                               )}
                             </>

@@ -7,6 +7,17 @@ import { DarkSelect, GoldButton, StatusBadge } from '../../components/admin/Syst
 
 const finalStatuses = ['Completed', 'Rejected', 'Cancelled', 'No-Show'];
 
+const getStatusSortGroup = (status) => {
+  const normalizedStatus = String(status || '').trim().toLowerCase();
+
+  if (normalizedStatus === 'in progress') return 0;
+  if (['scheduled', 'pending'].includes(normalizedStatus)) return 1;
+  if (['confirmed', 'approved'].includes(normalizedStatus)) return 2;
+  if (['completed', 'cancelled', 'canceled', 'rejected', 'no-show'].includes(normalizedStatus)) return 3;
+
+  return 4;
+};
+
 function AppointmentsPage() {
   const [appointments, setAppointments] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -44,6 +55,40 @@ function AppointmentsPage() {
     const { hours, minutes } = timeTo24Hour(appointmentTime);
     const scheduledStart = new Date(year, month - 1, day, hours, minutes, 0, 0);
     return Date.now() >= scheduledStart.getTime();
+  };
+
+  const getAppointmentTimeStamp = (appointment) => {
+    if (!appointment?.date) return 0;
+
+    const dateKey = String(appointment.date).slice(0, 10);
+    const [year, month, day] = dateKey.split('-').map(Number);
+    if ([year, month, day].some(Number.isNaN)) return 0;
+
+    const { hours, minutes } = timeTo24Hour(appointment.startTime || appointment.time);
+    return new Date(year, month - 1, day, hours, minutes, 0, 0).getTime();
+  };
+
+  const getAppointmentSortGroup = (appointment) => {
+    const status = String(appointment?.status || '').trim().toLowerCase();
+    const startTimeStamp = getAppointmentTimeStamp(appointment);
+    const endTimeStamp = appointment?.endTime
+      ? getAppointmentTimeStamp({ ...appointment, startTime: appointment.endTime })
+      : 0;
+    const hasStarted = startTimeStamp > 0 && startTimeStamp <= Date.now();
+    const hasEnded = endTimeStamp > 0 && endTimeStamp <= Date.now();
+
+    if (['approved', 'confirmed'].includes(status) && hasStarted && !hasEnded) {
+      return 0;
+    }
+
+    return getStatusSortGroup(status);
+  };
+
+  const sortAppointmentsByPriority = (a, b) => {
+    const priorityDifference = getAppointmentSortGroup(a) - getAppointmentSortGroup(b);
+    if (priorityDifference !== 0) return priorityDifference;
+
+    return getAppointmentTimeStamp(a) - getAppointmentTimeStamp(b);
   };
 
   const getAllowedStatuses = (appointment) => {
@@ -192,24 +237,7 @@ function AppointmentsPage() {
 
         return statusMatches && dateMatches && searchMatches;
       })
-      .sort((a, b) => {
-        const statusPriority = {
-          Pending: 0,
-          Approved: 1,
-          Completed: 2,
-          Rejected: 3,
-          Cancelled: 4,
-          'No-Show': 5
-        };
-
-        const statusDifference = (statusPriority[a.status] ?? 99) - (statusPriority[b.status] ?? 99);
-        if (statusDifference !== 0) return statusDifference;
-
-        const dateDifference = new Date(a.date).getTime() - new Date(b.date).getTime();
-        if (dateDifference !== 0) return dateDifference;
-
-        return String(a.startTime || a.time || '').localeCompare(String(b.startTime || b.time || ''));
-      });
+      .sort(sortAppointmentsByPriority);
   }, [appointments, activeTab, dateFilter, searchQuery]);
 
   const tabs = isAdmin
