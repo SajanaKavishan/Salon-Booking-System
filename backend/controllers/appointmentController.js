@@ -1,6 +1,7 @@
 const Appointment = require('../models/appointmentModel');
 const Service = require('../models/Service'); // Import the Service model to interact with the services collection in the database
 const Staff = require('../models/Staff'); // Import the Staff model to interact with the staff collection
+const User = require('../models/User');
 const sendEmail = require('../utils/sendEmail'); // Import the sendEmail utility function to send email notifications to users about their appointment status updates
 const generateAvailableSlots = require('../utils/slotGenerator');
 const { ensureSettingsDocument, defaultSettings } = require('./settingsController');
@@ -346,6 +347,59 @@ const getStaffAppointments = async (req, res) => {
     } catch (error) {
         console.error('Get Staff Appointments Error:', error);
         res.status(500).json({ message: 'Server Error: Could not fetch staff appointments.' });
+    }
+};
+
+// @desc    Submit a verified review for a completed appointment
+// @route   POST /api/appointments/:id/review
+// @access  Private
+const submitAppointmentReview = async (req, res) => {
+    try {
+        const numericRating = Number(req.body.rating);
+        const feedback = typeof req.body.feedback === 'string' ? req.body.feedback.trim() : '';
+        const makePreferred = req.body.makePreferred === true;
+
+        if (!Number.isInteger(numericRating) || numericRating < 1 || numericRating > 5) {
+            return res.status(400).json({ message: 'Rating must be an integer between 1 and 5.' });
+        }
+
+        const appointment = await Appointment.findById(req.params.id);
+
+        if (!appointment) {
+            return res.status(404).json({ message: 'Appointment not found.' });
+        }
+
+        if (appointment.user.toString() !== req.user.id.toString()) {
+            return res.status(401).json({ message: 'You are not authorized to review this appointment.' });
+        }
+
+        if (Appointment.normalizeStatus(appointment.status) !== 'completed') {
+            return res.status(400).json({ message: 'Only completed appointments can be reviewed.' });
+        }
+
+        const isFiveStarReview = numericRating === 5;
+        const preferredStylist = appointment.stylist || appointment.staffId;
+
+        appointment.rating = numericRating;
+        appointment.feedback = feedback;
+        appointment.isReviewApproved = isFiveStarReview;
+
+        const updatedAppointment = await appointment.save();
+
+        // VIP consent gate: only update the preferred stylist when the customer explicitly opts in.
+        if (makePreferred && preferredStylist) {
+            await User.findByIdAndUpdate(req.user.id, {
+                preferredStylist,
+            });
+        }
+
+        return res.status(200).json({
+            message: 'Review submitted successfully.',
+            appointment: updatedAppointment,
+        });
+    } catch (error) {
+        console.error('Submit Appointment Review Error:', error);
+        return res.status(500).json({ message: 'Server Error: Could not submit appointment review.' });
     }
 };
 
@@ -724,6 +778,7 @@ module.exports = {
     getMyAppointments,
     getAllAppointments,
     getStaffAppointments,
+    submitAppointmentReview,
     deleteAppointment,
     updateAppointmentStatus,
     updateAppointmentStatusByStaff,

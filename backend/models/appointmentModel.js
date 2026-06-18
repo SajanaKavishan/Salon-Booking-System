@@ -97,6 +97,20 @@ const appointmentSchema = new mongoose.Schema({
         type: Boolean,
         default: false,
     },
+    rating: {
+        type: Number,
+        min: 1,
+        max: 5,
+    },
+    feedback: {
+        type: String,
+        trim: true,
+    },
+    // Reviews rated five stars can be published immediately; all others wait for admin moderation.
+    isReviewApproved: {
+        type: Boolean,
+        default: false,
+    },
 }, {
     timestamps: true,
     toJSON: {
