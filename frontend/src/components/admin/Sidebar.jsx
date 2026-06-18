@@ -190,7 +190,7 @@ function Sidebar({ isOpen = false, onClose = () => { } }) {
             <motion.button
               type="button"
               onClick={() => handleNavigate('/admin/messages')}
-              className="group flex w-full items-center gap-4 rounded-xl px-4 py-3 text-left text-base font-semibold uppercase tracking-widest text-neutral-400 transition-colors duration-300 hover:bg-white/5 hover:text-[#D4AF37]/60 md:gap-5 md:px-5 md:py-4 md:text-lg"
+              className="group flex w-full items-center gap-4 rounded-xl px-4 py-3 text-left text-base font-semibold tracking-widest text-neutral-400 transition-colors duration-300 hover:bg-white/5 hover:text-[#D4AF37]/60 md:gap-5 md:px-5 md:py-4 md:text-lg"
               whileHover={{ x: 2 }}
               transition={{ duration: 0.22, ease: 'easeOut' }}
             >
