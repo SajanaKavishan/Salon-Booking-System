@@ -4,9 +4,10 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import { useAppointments } from '../../context/AppointmentsContext';
+import ActiveBookingCard from '../../components/customer/ActiveBookingCard';
 
-const HISTORY_STATUSES = ['Completed', 'Rejected', 'Cancelled', 'No-Show'];
-const UPCOMING_STATUSES = ['Pending', 'Approved'];
+const HISTORY_STATUSES = ['completed', 'rejected', 'cancelled', 'canceled', 'no-show'];
+const UPCOMING_STATUSES = ['pending', 'approved', 'confirmed'];
 const HERO_IMAGE_URL = '/heroBg.jpg';
 
 const formatServices = (services, fallback = 'Service not available') => {
@@ -28,12 +29,14 @@ const formatDate = (date) => {
 };
 
 const statusClassName = (status) => {
-  if (status === 'Approved') return 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300';
-  if (status === 'Pending') return 'border-amber-400/20 bg-amber-400/10 text-amber-300';
-  if (status === 'Cancelled' || status === 'Rejected' || status === 'No-Show') {
+  const normalizedStatus = String(status || '').trim().toLowerCase();
+
+  if (normalizedStatus === 'approved' || normalizedStatus === 'confirmed') return 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300';
+  if (normalizedStatus === 'pending') return 'border-amber-400/20 bg-amber-400/10 text-amber-300';
+  if (['cancelled', 'canceled', 'rejected', 'no-show'].includes(normalizedStatus)) {
     return 'border-rose-400/20 bg-rose-400/10 text-rose-300';
   }
-  if (status === 'Completed') return 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300';
+  if (normalizedStatus === 'completed') return 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300';
   return 'border-white/10 bg-white/5 text-slate-300';
 };
 
@@ -152,14 +155,14 @@ function Dashboard() {
 
   const upcomingAppointments = useMemo(
     () => appointments
-      .filter((appt) => UPCOMING_STATUSES.includes(appt?.status))
+      .filter((appt) => UPCOMING_STATUSES.includes(String(appt?.status || '').trim().toLowerCase()))
       .sort((a, b) => new Date(a?.date).getTime() - new Date(b?.date).getTime()),
     [appointments]
   );
 
   const pastAppointments = useMemo(
     () => appointments
-      .filter((appt) => HISTORY_STATUSES.includes(appt?.status) && !appt?.isHiddenByCustomer)
+      .filter((appt) => HISTORY_STATUSES.includes(String(appt?.status || '').trim().toLowerCase()) && !appt?.isHiddenByCustomer)
       .sort((a, b) => new Date(b?.date).getTime() - new Date(a?.date).getTime()),
     [appointments]
   );
@@ -218,6 +221,17 @@ function Dashboard() {
     } finally {
       setIsCancelling(false);
     }
+  };
+
+  const handleAppointmentUpdated = (updatedAppointment) => {
+    if (!updatedAppointment?._id && !updatedAppointment?.id) return;
+
+    const updatedAppointmentId = updatedAppointment._id || updatedAppointment.id;
+    setAppointments((currentAppointments) => currentAppointments.map((appointment) => (
+      (appointment._id || appointment.id) === updatedAppointmentId
+        ? { ...appointment, ...updatedAppointment }
+        : appointment
+    )));
   };
 
   return (
@@ -349,66 +363,18 @@ function Dashboard() {
               <div className="h-36 animate-pulse rounded-xl border border-white/10 bg-white/[0.04]"></div>
             ) : upcomingAppointments.length > 0 ? (
               upcomingAppointments.slice(0, 2).map((appointment) => (
-                <article
+                <ActiveBookingCard
                   key={appointment._id || appointment.id}
-                  className="rounded-xl border border-white/10 border-l-[#d4af37] border-l-4 bg-[#0d1117] p-5 shadow-sm"
-                >
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div>
-                      <h3 className="text-lg font-bold text-white">{formatServices(appointment.services)}</h3>
-                      <div className="mt-4 grid gap-3 text-sm text-slate-400 sm:grid-cols-3">
-                        <span className="flex items-center gap-2">
-                          <svg className="h-4 w-4 text-slate-500" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4 20a8 8 0 0 1 16 0" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                          </svg>
-                          {getStylistDisplayName(appointment) || 'Any Available Artist'}
-                        </span>
-                        <span className="flex items-center gap-2">
-                          <svg className="h-4 w-4 text-slate-500" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <path d="M7 3v3M17 3v3M4.5 9h15M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                          </svg>
-                          {formatDate(appointment.date)}
-                        </span>
-                        <span className="flex items-center gap-2">
-                          <svg className="h-4 w-4 text-slate-500" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <path d="M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                          </svg>
-                          {appointment.startTime || 'Time pending'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-3">
-                      {(() => {
-                        const isCancellable = canCancelAppointment(appointment);
-
-                        return (
-                          <>
-                            <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusClassName(appointment.status)}`}>
-                              {appointment.status}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => navigate('/book')}
-                              className="rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-semibold text-white transition hover:border-[#d4af37]/40 hover:text-[#d4af37]"
-                            >
-                              Reschedule
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setAppointmentToCancel(appointment)}
-                              disabled={!isCancellable}
-                              title={isCancellable ? 'Cancel appointment' : 'Appointments can only be cancelled at least 2 hours before start time.'}
-                              className="rounded-lg px-3 py-2 text-sm font-semibold text-red-300 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:text-white/25 disabled:hover:bg-transparent"
-                            >
-                              Cancel
-                            </button>
-                          </>
-                        );
-                      })()}
-                    </div>
-                  </div>
-                </article>
+                  appointment={appointment}
+                  formatServices={formatServices}
+                  formatDate={formatDate}
+                  getStylistDisplayName={getStylistDisplayName}
+                  statusClassName={statusClassName}
+                  canCancelAppointment={canCancelAppointment}
+                  onCancel={() => setAppointmentToCancel(appointment)}
+                  onReschedule={() => navigate('/book')}
+                  onAppointmentUpdated={handleAppointmentUpdated}
+                />
               ))
             ) : (
               <div className="rounded-xl border border-dashed border-white/15 bg-[#0d1117] p-8 text-center">

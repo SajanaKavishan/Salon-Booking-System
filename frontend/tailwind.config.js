@@ -59,11 +59,16 @@ export default {
           "0%, 100%": { transform: "translate3d(0, 0, 0)", opacity: "0.75" },
           "50%": { transform: "translate3d(0, -12px, 0)", opacity: "1" },
         },
+        scaleIn: {
+          from: { transform: "scale(0.96)", opacity: "0" },
+          to: { transform: "scale(1)", opacity: "1" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "soft-float": "soft-float 6s ease-in-out infinite",
+        scaleIn: "scaleIn 0.18s ease-out",
       },
     },
   },

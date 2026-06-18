@@ -903,6 +903,8 @@ function BookAppointment({ userProfile, customerData }) {
 
           date: createdAppointment?.date || date,
 
+          bookingDate: createdAppointment?.bookingDate || date,
+
           startTime: createdAppointment?.startTime || getSlotStartLabel(timeSlot),
 
           endTime: createdAppointment?.endTime || '',
@@ -921,7 +923,13 @@ function BookAppointment({ userProfile, customerData }) {
 
           totalAmount: createdAppointment?.totalAmount || 0,
 
-          isHiddenByCustomer: false
+          isHiddenByCustomer: false,
+
+          isLate: Boolean(createdAppointment?.isLate),
+
+          lateMinutes: createdAppointment?.lateMinutes || 0,
+
+          adjustedEndTime: createdAppointment?.adjustedEndTime || ''
 
         };
 
@@ -953,7 +961,11 @@ function BookAppointment({ userProfile, customerData }) {
 
         
 
-        navigate('/dashboard');
+        navigate('/booking-success', {
+          state: {
+            appointment: appointmentToAdd
+          }
+        });
 
       } catch (error) {
 
