@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import { useAppointments } from '../../context/AppointmentsContext';
 import ActiveBookingCard from '../../components/customer/ActiveBookingCard';
+import AppointmentReviewModal from '../../components/customer/AppointmentReviewModal';
 import MoneyBundleIcon from '../../components/common/MoneyBundleIcon';
 
 const HISTORY_STATUSES = ['completed', 'rejected', 'cancelled', 'canceled', 'no-show'];
@@ -100,10 +101,40 @@ function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [appointmentToCancel, setAppointmentToCancel] = useState(null);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [dismissedReviewAppointmentId, setDismissedReviewAppointmentId] = useState(null);
+
+  const fetchAppointments = useCallback(async () => {
+    const token = localStorage.getItem('token');
+
+    if (!token) {
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const response = await axios.get('http://localhost:5000/api/appointments', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const apiAppointments = Array.isArray(response.data) ? response.data : [];
+
+      setAppointments((currentAppointments) => {
+        const appointmentIds = new Set(apiAppointments.map((a) => a._id || a.id));
+        const contextOnlyAppointments = currentAppointments.filter((a) => !appointmentIds.has(a._id || a.id));
+
+        return [...apiAppointments, ...contextOnlyAppointments];
+      });
+    } catch (error) {
+      console.error('Error fetching appointments:', error);
+      toast.error('Failed to load your appointments.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [setAppointments]);
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
-    const token = localStorage.getItem('token');
 
     if (storedUser) {
       try {
@@ -113,37 +144,8 @@ function Dashboard() {
       }
     }
 
-    if (!token) {
-      setIsLoading(false);
-      return;
-    }
-
-    const fetchAppointments = async () => {
-      try {
-        const response = await axios.get('http://localhost:5000/api/appointments', {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        });
-        const apiAppointments = Array.isArray(response.data) ? response.data : [];
-
-        // Merge API appointments with context appointments (avoid duplicates)
-        const appointmentIds = new Set(apiAppointments.map((a) => a._id || a.id));
-        const contextOnlyAppointments = appointments.filter((a) => !appointmentIds.has(a._id || a.id));
-        const mergedAppointments = [...apiAppointments, ...contextOnlyAppointments];
-
-        setAppointments(mergedAppointments);
-      } catch (error) {
-        console.error('Error fetching appointments:', error);
-        toast.error('Failed to load your appointments.');
-        // If API fails, we still have context appointments available
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     fetchAppointments();
-  }, []); 
+  }, [fetchAppointments]); 
 
   useEffect(() => {
     const handleProfileUpdated = (event) => {
@@ -172,6 +174,18 @@ function Dashboard() {
   const completedAppointments = useMemo(
     () => appointments.filter((appt) => appt?.status === 'Completed'),
     [appointments]
+  );
+
+  const pendingReviewAppointment = useMemo(
+    () => pastAppointments.find((appointment) => {
+      const appointmentId = appointment?._id || appointment?.id;
+      const normalizedStatus = String(appointment?.status || '').trim().toLowerCase();
+
+      return normalizedStatus === 'completed'
+        && appointment?.rating == null
+        && appointmentId !== dismissedReviewAppointmentId;
+    }),
+    [dismissedReviewAppointmentId, pastAppointments]
   );
 
   // Only sum prices of COMPLETED appointments for Total Spend metric
@@ -481,6 +495,14 @@ function Dashboard() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {pendingReviewAppointment && (
+        <AppointmentReviewModal
+          appointment={pendingReviewAppointment}
+          onClose={() => setDismissedReviewAppointmentId(pendingReviewAppointment._id || pendingReviewAppointment.id)}
+          onReviewSubmitted={fetchAppointments}
+        />
+      )}
     </div>
   );
 }
