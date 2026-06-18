@@ -7,6 +7,9 @@ const {
   getAllAppointments,
   getStaffAppointments,
   submitAppointmentReview,
+  getPublicReviews,
+  getAppointmentsReviews,
+  toggleReviewApproval,
   deleteAppointment,
   updateAppointmentStatus,
   updateAppointmentStatusByStaff,
@@ -24,6 +27,8 @@ router.get('/staff', protect, getStaffAppointments);
 router.get('/staff-schedule', protect, getStaffAppointments);
 router.get('/availability', getStaffAvailability);
 router.post('/shift-slots', protect, admin, shiftUpcomingAppointments);
+router.get('/reviews/public', getPublicReviews);
+router.get('/reviews/all', protect, admin, getAppointmentsReviews);
 
 // Utility functions to convert time formats for easier calculations when checking for blocked time slots
 const timeToMins = (timeStr) => {
@@ -105,6 +110,7 @@ router.get('/booked-times', async (req, res) => {
 // Routes with ID parameters - defined after specific routes to avoid conflicts
 router.route('/:id').delete(protect, deleteAppointment);
 router.post('/:id/review', protect, submitAppointmentReview);
+router.put('/:id/review-approve', protect, admin, toggleReviewApproval);
 router.route('/:id/running-late').post(protect, markAppointmentRunningLate);
 router.route('/:id/status').put(protect, staffOrAdmin, updateAppointmentStatus); // Admin and staff route to update the status of an appointment.
 router.route('/:id/staff-status').put(protect, staffOrAdmin, updateAppointmentStatusByStaff);

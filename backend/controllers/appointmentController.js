@@ -403,6 +403,71 @@ const submitAppointmentReview = async (req, res) => {
     }
 };
 
+// @desc    Get approved public appointment reviews
+// @route   GET /api/appointments/reviews/public
+// @access  Public
+const getPublicReviews = async (_req, res) => {
+    try {
+        const reviews = await Appointment.find({
+            rating: { $exists: true, $ne: null },
+            isReviewApproved: true,
+        })
+            .populate('user', 'name')
+            .populate('stylist', 'name')
+            .populate('services', 'name')
+            .sort({ createdAt: -1 });
+
+        return res.status(200).json(reviews);
+    } catch (error) {
+        console.error('Get Public Reviews Error:', error);
+        return res.status(500).json({ message: 'Server Error: Could not fetch public reviews.' });
+    }
+};
+
+// @desc    Get all appointment reviews for admin moderation
+// @route   GET /api/appointments/reviews/all
+// @access  Private/Admin
+const getAppointmentsReviews = async (_req, res) => {
+    try {
+        const reviews = await Appointment.find({
+            rating: { $exists: true, $ne: null },
+        })
+            .populate('user', 'name email')
+            .populate('stylist', 'name')
+            .populate('services', 'name')
+            .sort({ createdAt: -1 });
+
+        return res.status(200).json(reviews);
+    } catch (error) {
+        console.error('Get Appointment Reviews Error:', error);
+        return res.status(500).json({ message: 'Server Error: Could not fetch appointment reviews.' });
+    }
+};
+
+// @desc    Toggle review approval for an appointment
+// @route   PUT /api/appointments/:id/review-approve
+// @access  Private/Admin
+const toggleReviewApproval = async (req, res) => {
+    try {
+        const appointment = await Appointment.findById(req.params.id);
+
+        if (!appointment) {
+            return res.status(404).json({ message: 'Appointment not found.' });
+        }
+
+        appointment.isReviewApproved = !appointment.isReviewApproved;
+        const updatedAppointment = await appointment.save();
+
+        return res.status(200).json({
+            message: 'Review approval status updated successfully.',
+            appointment: updatedAppointment,
+        });
+    } catch (error) {
+        console.error('Toggle Review Approval Error:', error);
+        return res.status(500).json({ message: 'Server Error: Could not update review approval status.' });
+    }
+};
+
 // @desc    Cancel an appointment
 // @route   DELETE /api/appointments/:id
 // @access  Private
@@ -779,6 +844,9 @@ module.exports = {
     getAllAppointments,
     getStaffAppointments,
     submitAppointmentReview,
+    getPublicReviews,
+    getAppointmentsReviews,
+    toggleReviewApproval,
     deleteAppointment,
     updateAppointmentStatus,
     updateAppointmentStatusByStaff,
