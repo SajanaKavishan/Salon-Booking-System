@@ -120,13 +120,32 @@ function Layout() {
 
 
   const pageTitle = (() => {
-    if (location.pathname.startsWith('/booking') || location.pathname.startsWith('/book')) {
+    const path = location.pathname;
+
+    if (role === 'admin') {
+      if (path.startsWith('/admin/appointments')) return 'Appointments';
+      if (path.startsWith('/admin/services')) return 'Services Management';
+      if (path.startsWith('/admin/staff')) return 'Staff Management';
+      if (path.startsWith('/admin/analytics')) return 'Analytics';
+      if (path.startsWith('/admin/settings')) return 'Settings';
+      if (path.startsWith('/admin/messages')) return 'Messages';
+      return 'Admin Portal';
+    }
+
+    if (role === 'staff') {
+      if (path.startsWith('/staff/appointments')) return 'Appointments Log';
+      if (path.startsWith('/staff/roster-shifts')) return 'Roster & Shifts';
+      if (path.startsWith('/staff/profile')) return 'Staff Profile';
+      return 'Staff Portal';
+    }
+
+    if (path.startsWith('/booking') || path.startsWith('/book')) {
       return 'Booking Wizard';
     }
-    if (location.pathname.startsWith('/history')) {
+    if (path.startsWith('/history')) {
       return 'Booking History';
     }
-    if (location.pathname.startsWith('/profile')) {
+    if (path.startsWith('/profile')) {
       return 'My Profile';
     }
     return 'Customer Portal';

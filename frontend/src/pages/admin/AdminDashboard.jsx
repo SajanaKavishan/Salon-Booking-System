@@ -6,7 +6,7 @@ import { toast } from "react-toastify";
 
 import { useNavigate } from "react-router-dom";
 
-import { AlertTriangle, CalendarDays, Clock, DollarSign, Loader2, RotateCw, Users, XCircle } from "lucide-react";
+import { AlertTriangle, CalendarDays, Clock, Loader2, RotateCw, Users, XCircle } from "lucide-react";
 
 import {
   ResponsiveContainer,
@@ -19,6 +19,7 @@ import {
 } from "recharts";
 
 import { GoldButton, GlassCard } from "../../components/admin/SystemUI";
+import MoneyBundleIcon from "../../components/common/MoneyBundleIcon";
 
 
 
@@ -504,7 +505,7 @@ function AdminDashboard() {
 
           </div>
 
-          <DollarSign className="h-8 w-8 text-[#d4af37]" />
+          <MoneyBundleIcon className="h-8 w-8 text-[#d4af37]" />
 
         </GlassCard>
 

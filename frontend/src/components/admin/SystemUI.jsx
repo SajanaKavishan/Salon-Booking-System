@@ -1,8 +1,11 @@
 const mergeClasses = (...classes) => classes.filter(Boolean).join(' ');
 
 const statusClassMap = {
+  Scheduled: 'salon-status-scheduled',
   Pending: 'salon-status-pending',
+  Confirmed: 'salon-status-approved',
   Approved: 'salon-status-approved',
+  'In Progress': 'salon-status-progress',
   Completed: 'salon-status-completed',
   Rejected: 'salon-status-danger',
   Cancelled: 'salon-status-danger',

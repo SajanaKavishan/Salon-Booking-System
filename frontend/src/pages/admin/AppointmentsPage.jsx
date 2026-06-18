@@ -88,7 +88,7 @@ function AppointmentsPage() {
     const priorityDifference = getAppointmentSortGroup(a) - getAppointmentSortGroup(b);
     if (priorityDifference !== 0) return priorityDifference;
 
-    return getAppointmentTimeStamp(a) - getAppointmentTimeStamp(b);
+    return getAppointmentTimeStamp(b) - getAppointmentTimeStamp(a);
   };
 
   const getAllowedStatuses = (appointment) => {

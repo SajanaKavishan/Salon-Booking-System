@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
+import { RefreshCw } from 'lucide-react';
 import { toast } from 'react-toastify';
-import { GlassCard, GoldButton, StatusBadge } from '../../components/admin/SystemUI';
+import { GoldButton, StatusBadge } from '../../components/admin/SystemUI';
 
 const timeToMinutes = (timeStr) => {
   if (!timeStr || typeof timeStr !== 'string') return 0;
@@ -35,12 +36,12 @@ const buildAppointmentDateTime = (appointment, timeValue = appointment?.startTim
   return new Date(year, month - 1, day, hours, minutes, 0, 0);
 };
 
-const getAppointmentSortGroup = (appointment) => {
+const getAppointmentSortGroup = (appointment, currentTime = Date.now()) => {
   const status = String(appointment?.status || '').trim().toLowerCase();
   const startDateTime = buildAppointmentDateTime(appointment);
   const endDateTime = buildAppointmentDateTime(appointment, appointment?.endTime);
-  const hasStarted = startDateTime?.getTime() <= Date.now();
-  const hasEnded = endDateTime?.getTime() <= Date.now();
+  const hasStarted = startDateTime?.getTime() <= currentTime;
+  const hasEnded = endDateTime?.getTime() <= currentTime;
 
   if (status === 'in progress' || (['approved', 'confirmed'].includes(status) && hasStarted && !hasEnded)) {
     return 0;
@@ -61,13 +62,13 @@ const getAppointmentSortGroup = (appointment) => {
   return 4;
 };
 
-const sortAppointmentsByPriority = (first, second) => {
-  const priorityDifference = getAppointmentSortGroup(first) - getAppointmentSortGroup(second);
+const sortAppointmentsByPriority = (first, second, currentTime = Date.now()) => {
+  const priorityDifference = getAppointmentSortGroup(first, currentTime) - getAppointmentSortGroup(second, currentTime);
   if (priorityDifference !== 0) return priorityDifference;
 
   const firstDate = buildAppointmentDateTime(first)?.getTime() || 0;
   const secondDate = buildAppointmentDateTime(second)?.getTime() || 0;
-  return firstDate - secondDate;
+  return secondDate - firstDate;
 };
 
 const formatRosterDate = (appointment) => {
@@ -89,19 +90,72 @@ const formatRosterDate = (appointment) => {
   }).format(parsedDate);
 };
 
+const getAppointmentDateKey = (appointment) => (
+  String(appointment?.date || appointment?.bookingDate || '').slice(0, 10)
+);
+
+const getTodayDateKey = () => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, '0');
+  const day = String(today.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getServicesLabel = (appointment) => (
+  Array.isArray(appointment?.services) && appointment.services.length > 0
+    ? appointment.services.map((service) => service.name || service).join(', ')
+    : appointment?.service || 'Service details unavailable'
+);
+
 function StaffDashboard() {
   const [_user, setUser] = useState(null);
   const [appointments, setAppointments] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [actionKey, setActionKey] = useState('');
+  const [currentTime, setCurrentTime] = useState(Date.now());
   const staffName = localStorage.getItem('userName') || 'Staff';
 
-  useEffect(() => {
+  const fetchSchedule = useCallback(async ({ showLoading = false } = {}) => {
     const token = localStorage.getItem('token');
+
+    if (!token) {
+      setIsLoading(false);
+      setError('Authentication token not found. Please log in again.');
+      return;
+    }
+
+    try {
+      if (showLoading) setIsLoading(true);
+      setError(null);
+      const response = await axios.get('http://localhost:5000/api/appointments/staff', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      console.log("Get data from backend:", response.data);
+      setAppointments(response.data);
+      setCurrentTime(Date.now());
+    } catch (error) {
+      console.error('Error fetching staff appointments:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data,
+        url: error.config?.url
+      });
+      const errorMessage = error.response?.data?.message || 'Failed to load appointments. Please try again later.';
+      setError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
     const storedUser = localStorage.getItem('user');
 
-    if (!token || !storedUser) {
+    if (!storedUser) {
       setIsLoading(false);
       setError('Authentication token not found. Please log in again.');
       return;
@@ -110,48 +164,42 @@ function StaffDashboard() {
     const parsedUser = JSON.parse(storedUser);
     setUser(parsedUser);
 
-    const fetchSchedule = async () => {
-      try {
-        setError(null);
-        const response = await axios.get('http://localhost:5000/api/appointments/staff', {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        });
-        console.log("Get data from backend:", response.data); 
-        setAppointments(response.data);
-      } catch (error) {
-        console.error('Error fetching staff appointments:', {
-          message: error.message,
-          status: error.response?.status,
-          data: error.response?.data,
-          url: error.config?.url
-        });
-        const errorMessage = error.response?.data?.message || 'Failed to load appointments. Please try again later.';
-        setError(errorMessage);
-        toast.error(errorMessage);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     fetchSchedule();
+  }, [fetchSchedule]);
+
+  useEffect(() => {
+    const timerId = window.setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 60000);
+
+    return () => window.clearInterval(timerId);
   }, []);
 
 
   const todayAppointments = useMemo(() => {
+    const todayKey = getTodayDateKey();
+
     return [...appointments]
-      //.filter((appointment) => appointment.date === todayKey)
-      .sort(sortAppointmentsByPriority);
-  }, [appointments]);
+      .filter((appointment) => getAppointmentDateKey(appointment) === todayKey)
+      .sort((first, second) => sortAppointmentsByPriority(first, second, currentTime));
+  }, [appointments, currentTime]);
+
+  const inProgressAppointment = useMemo(
+    () => todayAppointments.find((appointment) => getAppointmentSortGroup(appointment, currentTime) === 0),
+    [todayAppointments, currentTime]
+  );
+
+  const nextScheduledAppointment = useMemo(() => (
+    todayAppointments.find((appointment) => {
+      const status = String(appointment?.status || '').trim().toLowerCase();
+      const startDateTime = buildAppointmentDateTime(appointment);
+      return ['scheduled', 'pending', 'confirmed', 'approved'].includes(status)
+        && startDateTime?.getTime() > currentTime;
+    })
+  ), [todayAppointments, currentTime]);
 
   const pendingApprovals = todayAppointments.filter((appointment) => appointment.status === 'Pending').length;
   const completedSessions = todayAppointments.filter((appointment) => appointment.status === 'Completed').length;
-  const activeClients = new Set(
-    todayAppointments
-      .map((appointment) => appointment.user?._id || appointment.user?.email || appointment.user?.name)
-      .filter(Boolean)
-  ).size;
 
   const handleStatusUpdate = async (appointmentId, status) => {
     try {
@@ -191,10 +239,98 @@ function StaffDashboard() {
     }
   };
 
+  const renderFocusAppointment = (title, appointment, emptyText, isActive = false, eyebrow = 'Active Status') => (
+    <div className={`${appointment ? 'min-h-[250px]' : 'min-h-[170px]'} rounded-2xl border p-6 shadow-xl backdrop-blur-md ${
+      isActive
+        ? 'border-emerald-400/20 bg-emerald-400/10'
+        : 'border-[#d4af37]/20 bg-[#d4af37]/10'
+    }`}>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className={`text-xs font-bold uppercase tracking-[0.18em] ${isActive ? 'text-emerald-300' : 'text-[#d4af37]'}`}>
+            {eyebrow}
+          </p>
+          <h2 className="mt-3 text-2xl font-serif text-white">{title}</h2>
+        </div>
+        <div className="flex items-center gap-2">
+          {appointment && (
+            isActive ? (
+              <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-emerald-300">
+                In Progress
+              </span>
+            ) : (
+              <StatusBadge status={appointment.status} />
+            )
+          )}
+          <button
+            type="button"
+            onClick={() => fetchSchedule()}
+            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-black/20 text-gray-300 transition hover:border-[#d4af37]/40 hover:text-[#d4af37]"
+            aria-label="Refresh queue"
+            title="Refresh queue"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      {appointment ? (
+        <div className="mt-6">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <p className="text-xs uppercase tracking-[0.16em] text-gray-500">Client</p>
+              <p className="mt-2 text-lg font-semibold text-white">{appointment.user?.name || 'Client'}</p>
+              <p className="mt-1 text-sm text-gray-400">{appointment.user?.phone || appointment.user?.email || 'No contact details'}</p>
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-[0.16em] text-gray-500">Time</p>
+              <p className="mt-2 text-lg font-semibold text-white">
+                {appointment.startTime} {appointment.endTime ? `- ${appointment.endTime}` : ''}
+              </p>
+              <p className="mt-1 text-sm text-gray-400">{formatRosterDate(appointment)}</p>
+            </div>
+            <div className="sm:col-span-2">
+              <p className="text-xs uppercase tracking-[0.16em] text-gray-500">Service</p>
+              <p className="mt-2 text-base font-semibold text-gray-100">{getServicesLabel(appointment)}</p>
+            </div>
+          </div>
+
+          <div className="mt-6 flex flex-wrap gap-2 border-t border-white/10 pt-4">
+            {appointment.user?.phone && (
+              <a
+                href={`tel:${appointment.user.phone}`}
+                className="inline-flex items-center rounded-lg border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-gray-200 transition hover:border-[#d4af37]/40 hover:text-[#d4af37]"
+              >
+                Contact Client
+              </a>
+            )}
+            {isActive && (
+              <GoldButton
+                type="button"
+                onClick={() => handleStatusUpdate(appointment._id, 'Completed')}
+                disabled={!appointment.endTime || buildAppointmentDateTime(appointment, appointment.endTime)?.getTime() > currentTime || actionKey === `${appointment._id}-Completed`}
+                className="rounded-lg px-4 py-2 text-sm"
+              >
+                {actionKey === `${appointment._id}-Completed` ? 'Working...' : 'Mark Complete'}
+              </GoldButton>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="mt-6">
+          <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-gray-400">
+            {emptyText}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
   const statCards = [
     {
       label: "Today's Appointments",
       value: todayAppointments.length,
+      subtitle: 'Scheduled for today',
       icon: (
         <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M7 3v3M17 3v3M4.5 9h15M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -204,6 +340,7 @@ function StaffDashboard() {
     {
       label: 'Pending Approvals',
       value: pendingApprovals,
+      subtitle: 'Waiting for confirmation',
       icon: (
         <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M12 8v4l2.5 2.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -213,6 +350,7 @@ function StaffDashboard() {
     {
       label: 'Completed Sessions',
       value: completedSessions,
+      subtitle: "Today's Finished Appointments",
       icon: (
         <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="m5 12 4.2 4.2L19 6.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -246,17 +384,37 @@ function StaffDashboard() {
               </div>
             </div>
             <p className="mt-5 text-xs uppercase tracking-[0.16em] text-gray-500">
-              {card.label === 'Completed Sessions' ? `${activeClients} active clients today` : 'Live staff metrics'}
+              {card.subtitle}
             </p>
           </div>
         ))}
       </section>
 
-      <section className="rounded-2xl border border-white/10 bg-[#111111]/70 p-6 shadow-xl backdrop-blur-md">
+      {!isLoading && todayAppointments.length > 0 && (
+        <section className="mb-8 grid grid-cols-1 gap-6 xl:grid-cols-2">
+          {renderFocusAppointment(
+            'In Progress',
+            inProgressAppointment,
+            'No appointment is currently in progress.',
+            true,
+            'Active Status'
+          )}
+          {renderFocusAppointment(
+            'Next Scheduled',
+            nextScheduledAppointment,
+            'No upcoming appointment is waiting in the queue.',
+            false,
+            'Next Up'
+          )}
+        </section>
+      )}
+
+      <section id="today-schedule" className="rounded-2xl border border-white/10 bg-[#111111]/70 p-6 shadow-xl backdrop-blur-md">
         <div className="mb-6 flex flex-col gap-2 border-b border-white/10 pb-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="text-2xl font-serif text-[#d4af37]">Today&apos;s Roster</h2>
-            <p className="mt-2 text-sm text-gray-400">Track upcoming clients and move appointments through the day.</p>
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-gray-500">Actionable Tasks</p>
+            <h2 className="mt-2 text-2xl font-serif text-[#d4af37]">Today&apos;s Schedule</h2>
+            <p className="mt-2 text-sm text-gray-400">Appointments are grouped by priority so the next action stays easy to spot.</p>
           </div>
           <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-gray-300">
             {todayAppointments.length} scheduled
@@ -312,11 +470,11 @@ function StaffDashboard() {
               </thead>
               <tbody>
                 {todayAppointments.map((appointment) => {
-                  const services = appointment.services?.map((service) => service.name || service).join(', ') || 'Service details unavailable';
+                  const services = getServicesLabel(appointment);
                   const startDateTime = buildAppointmentDateTime(appointment);
                   const endDateTime = buildAppointmentDateTime(appointment, appointment.endTime);
-                  const isStarted = startDateTime?.getTime() <= Date.now();
-                  const isEnded = endDateTime?.getTime() <= Date.now();
+                  const isStarted = startDateTime?.getTime() <= currentTime;
+                  const isEnded = endDateTime?.getTime() <= currentTime;
 
                   return (
                     <tr key={appointment._id} className="border-b border-white/10 last:border-b-0 hover:bg-white/5">

@@ -4,7 +4,6 @@ import { toast } from "react-toastify";
 import {
   CalendarCheck,
   ChevronDown,
-  DollarSign,
   Scissors,
   TrendingUp,
   UserPlus,
@@ -25,6 +24,7 @@ import {
 } from "recharts";
 
 import { GlassCard } from "../../components/admin/SystemUI";
+import MoneyBundleIcon from "../../components/common/MoneyBundleIcon";
 
 const STATUS_COLORS = {
   Approved: "#d4af37",
@@ -68,7 +68,7 @@ function Analytics() {
           : `Total Revenue (${selectedYear})`,
       value: `Rs. ${summary.revenue.toLocaleString()}`,
       detail: "Completed appointment revenue",
-      icon: DollarSign,
+      icon: MoneyBundleIcon,
     },
     {
       label: "Total Appointments",
