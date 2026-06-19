@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import { CheckCircle2, Loader2, MessageSquareQuote, RefreshCw, Star } from 'lucide-react';
+import { CheckCircle2, Loader2, MessageSquareQuote, RefreshCw, Star, Trash2 } from 'lucide-react';
 import { toast } from 'react-toastify';
 
 const API_BASE_URL = 'http://localhost:5000/api';
@@ -62,6 +62,7 @@ function ReviewManagement() {
   const [reviews, setReviews] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [updatingReviewId, setUpdatingReviewId] = useState(null);
+  const [deletingReviewId, setDeletingReviewId] = useState(null);
 
   const authConfig = useMemo(() => {
     const token = localStorage.getItem('token');
@@ -135,17 +136,32 @@ function ReviewManagement() {
     }
   };
 
+  const handleDelete = async (reviewId) => {
+    if (!reviewId || deletingReviewId || !authConfig) return;
+
+    setDeletingReviewId(reviewId);
+
+    try {
+      await axios.delete(`${API_BASE_URL}/appointments/${reviewId}/review`, authConfig);
+
+      setReviews((currentReviews) => currentReviews.filter((review) => getReviewId(review) !== reviewId));
+      toast.success('Review deleted');
+      fetchReviews();
+    } catch (error) {
+      console.error('Delete Review Error:', error);
+      toast.error(error.response?.data?.message || 'Could not delete review.');
+    } finally {
+      setDeletingReviewId(null);
+    }
+  };
+
   return (
     <div className="bg-zinc-950 min-h-screen text-zinc-100 p-6">
       <div className="mx-auto w-full max-w-7xl">
         <header className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/20 bg-amber-500/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-amber-300">
-              <MessageSquareQuote className="h-3.5 w-3.5" />
-              Live Review Engine
-            </div>
             <h1 className="mt-4 font-serif text-4xl font-bold tracking-tight text-white">
-              Review Management
+              Live Appointment Reviews
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-400">
               Moderate verified appointment reviews before they appear publicly across the homepage experience.
@@ -241,25 +257,41 @@ function ReviewManagement() {
                               </p>
                             </div>
 
-                            <button
-                              type="button"
-                              onClick={() => handleToggleApproval(reviewId)}
-                              disabled={isUpdating}
-                              className={
-                                isApproved
-                                  ? 'border border-emerald-500/30 text-emerald-400 bg-emerald-500/5 px-2.5 py-1 rounded-md text-xs flex items-center gap-1 hover:bg-emerald-500/10 transition-all disabled:cursor-not-allowed disabled:opacity-60'
-                                  : 'border border-zinc-800 text-zinc-400 px-2.5 py-1 rounded-md text-xs flex items-center gap-1 hover:bg-zinc-900 transition-all disabled:cursor-not-allowed disabled:opacity-60'
-                              }
-                            >
-                              {isUpdating ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                              ) : isApproved ? (
-                                <CheckCircle2 className="h-3.5 w-3.5" />
-                              ) : (
-                                <MessageSquareQuote className="h-3.5 w-3.5" />
-                              )}
-                              {isApproved ? '✨ Approved & Live' : '📁 Pending Review'}
-                            </button>
+                            <div className="flex shrink-0 items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleToggleApproval(reviewId)}
+                                disabled={isUpdating || deletingReviewId === reviewId}
+                                className={
+                                  isApproved
+                                    ? 'border border-emerald-500/30 text-emerald-400 bg-emerald-500/5 px-2.5 py-1 rounded-md text-xs flex items-center gap-1 hover:bg-emerald-500/10 transition-all disabled:cursor-not-allowed disabled:opacity-60'
+                                    : 'border border-zinc-800 text-zinc-400 px-2.5 py-1 rounded-md text-xs flex items-center gap-1 hover:bg-zinc-900 transition-all disabled:cursor-not-allowed disabled:opacity-60'
+                                }
+                              >
+                                {isUpdating ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : isApproved ? (
+                                  <CheckCircle2 className="h-3.5 w-3.5" />
+                                ) : (
+                                  <MessageSquareQuote className="h-3.5 w-3.5" />
+                                )}
+                                {isApproved ? '✨ Approved & Live' : '📁 Pending Review'}
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleDelete(reviewId)}
+                                disabled={deletingReviewId === reviewId || isUpdating}
+                                className="p-1.5 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-md transition-all disabled:cursor-not-allowed disabled:opacity-50"
+                                aria-label="Delete review"
+                              >
+                                {deletingReviewId === reviewId ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="w-4 h-4" />
+                                )}
+                              </button>
+                            </div>
                           </div>
 
                           <div className="mt-5 flex flex-wrap items-center gap-2 text-xs text-zinc-400">

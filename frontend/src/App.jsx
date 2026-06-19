@@ -24,6 +24,7 @@ import StaffPage from "./pages/admin/StaffPage";
 import ServicesPage from "./pages/admin/ServicesPage";
 import SettingsPage from "./pages/admin/SettingsPage";
 import Analytics from "./pages/admin/Analytics";
+import ReviewManagement from "./pages/admin/ReviewManagement";
 import { AppointmentsProvider } from "./context/AppointmentsContext";
 
 function App() {
@@ -87,6 +88,7 @@ function App() {
               <Route path="staff" element={<StaffPage />} />
               <Route path="services" element={<ServicesPage />} />
               <Route path="analytics" element={<Analytics />} />
+              <Route path="reviews" element={<ReviewManagement />} />
               <Route path="settings" element={<SettingsPage />} />
             </Route>
 

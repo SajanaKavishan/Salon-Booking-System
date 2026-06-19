@@ -468,6 +468,33 @@ const toggleReviewApproval = async (req, res) => {
     }
 };
 
+// @desc    Delete review data from an appointment
+// @route   DELETE /api/appointments/:id/review
+// @access  Private/Admin
+const deleteAppointmentReview = async (req, res) => {
+    try {
+        const appointment = await Appointment.findById(req.params.id);
+
+        if (!appointment) {
+            return res.status(404).json({ message: 'Appointment not found.' });
+        }
+
+        appointment.rating = undefined;
+        appointment.feedback = undefined;
+        appointment.isReviewApproved = false;
+
+        const updatedAppointment = await appointment.save();
+
+        return res.status(200).json({
+            message: 'Review deleted successfully.',
+            appointment: updatedAppointment,
+        });
+    } catch (error) {
+        console.error('Delete Appointment Review Error:', error);
+        return res.status(500).json({ message: 'Server Error: Could not delete appointment review.' });
+    }
+};
+
 // @desc    Cancel an appointment
 // @route   DELETE /api/appointments/:id
 // @access  Private
@@ -847,6 +874,7 @@ module.exports = {
     getPublicReviews,
     getAppointmentsReviews,
     toggleReviewApproval,
+    deleteAppointmentReview,
     deleteAppointment,
     updateAppointmentStatus,
     updateAppointmentStatusByStaff,

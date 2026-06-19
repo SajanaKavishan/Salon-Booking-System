@@ -149,7 +149,7 @@ function AppointmentReviewModal({ appointment, onClose, onReviewSubmitted }) {
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block text-sm font-semibold leading-5 text-amber-100">
-                  You rated {stylistName} 5 Stars! ✨
+                  You rated {stylistName} 5 Stars!
                 </span>
                 <span className="mt-1 block text-xs leading-5 text-zinc-400">
                   Would you like to set them as your Preferred Stylist? This will automatically pre-select them for your future bookings to save your time.

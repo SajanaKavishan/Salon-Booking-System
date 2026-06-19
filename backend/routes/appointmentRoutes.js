@@ -10,6 +10,7 @@ const {
   getPublicReviews,
   getAppointmentsReviews,
   toggleReviewApproval,
+  deleteAppointmentReview,
   deleteAppointment,
   updateAppointmentStatus,
   updateAppointmentStatusByStaff,
@@ -110,6 +111,7 @@ router.get('/booked-times', async (req, res) => {
 // Routes with ID parameters - defined after specific routes to avoid conflicts
 router.route('/:id').delete(protect, deleteAppointment);
 router.post('/:id/review', protect, submitAppointmentReview);
+router.delete('/:id/review', protect, admin, deleteAppointmentReview);
 router.put('/:id/review-approve', protect, admin, toggleReviewApproval);
 router.route('/:id/running-late').post(protect, markAppointmentRunningLate);
 router.route('/:id/status').put(protect, staffOrAdmin, updateAppointmentStatus); // Admin and staff route to update the status of an appointment.
