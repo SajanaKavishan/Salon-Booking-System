@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { motion } from 'framer-motion';
@@ -10,6 +10,7 @@ import ReviewMarquee from '../../components/home/ReviewMarquee';
 function Home() {
   const navigate = useNavigate();
   const [services, setServices] = useState([]);
+  const [publicReviews, setPublicReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const userRole = localStorage.getItem('userRole');
   const { settings } = useSalonSettings();
@@ -41,6 +42,54 @@ function Home() {
 
     fetchServices();
   }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchPublicReviews = async () => {
+      try {
+        const response = await axios.get('http://localhost:5000/api/appointments/reviews/public');
+        const approvedReviews = Array.isArray(response.data) ? response.data : [];
+
+        if (isMounted) {
+          setPublicReviews(approvedReviews);
+        }
+      } catch (error) {
+        console.error('Error fetching public reviews:', error);
+        if (isMounted) {
+          setPublicReviews([]);
+        }
+      }
+    };
+
+    fetchPublicReviews();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const reviewSummary = useMemo(() => {
+    const validReviews = publicReviews.filter((review) => Number.isFinite(Number(review?.rating)));
+    const totalReviews = validReviews.length;
+
+    if (totalReviews === 0) {
+      return {
+        averageRating: '0.0',
+        totalReviews: 0,
+        label: 'No client review yet',
+      };
+    }
+
+    const totalRating = validReviews.reduce((sum, review) => sum + Number(review.rating), 0);
+    const averageRating = (totalRating / totalReviews).toFixed(1);
+
+    return {
+      averageRating,
+      totalReviews,
+      label: `${averageRating} / 5 based on client reviews`,
+    };
+  }, [publicReviews]);
 
   const handlePrimaryCTA = () => {
     if (userRole === 'admin') {
@@ -293,7 +342,7 @@ function Home() {
             {
               icon: Star,
               label: 'Ratings',
-              value: '4.9 / 5 based on client reviews',
+              value: reviewSummary.label,
               hideOnMobile: false
             }
           ].map((item) => {
@@ -477,7 +526,7 @@ function Home() {
         </div>
       </motion.section>
 
-      <ReviewMarquee />
+      <ReviewMarquee reviews={publicReviews} />
 
       {/* Contact Section */}
       <motion.section
