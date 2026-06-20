@@ -15,17 +15,40 @@ const getStylistName = (appointment) => {
   return 'your stylist';
 };
 
-function AppointmentReviewModal({ appointment, onClose, onReviewSubmitted }) {
+const getStoredUser = () => {
+  try {
+    return JSON.parse(localStorage.getItem('user')) || null;
+  } catch {
+    return null;
+  }
+};
+
+function AppointmentReviewModal({ appointment, user, onClose, onReviewSubmitted }) {
   const [rating, setRating] = useState(0);
   const [hoveredRating, setHoveredRating] = useState(0);
   const [feedback, setFeedback] = useState('');
   const [makePreferred, setMakePreferred] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isClosed, setIsClosed] = useState(false);
 
   const appointmentId = getAppointmentId(appointment);
+  const resolvedUser = useMemo(() => user || getStoredUser(), [user]);
   const stylistName = useMemo(() => getStylistName(appointment), [appointment]);
   const displayedRating = hoveredRating || rating;
-  const showPreferredPrompt = rating === 5;
+  const showPreferredPrompt = rating === 5 && !resolvedUser?.preferredStylist;
+
+  const resetFormState = () => {
+    setRating(0);
+    setHoveredRating(0);
+    setFeedback('');
+    setMakePreferred(false);
+  };
+
+  const handleClose = () => {
+    if (isSubmitting) return;
+    setIsClosed(true);
+    onClose?.();
+  };
 
   const handleSubmitReview = async () => {
     if (!appointmentId || !rating || isSubmitting) return;
@@ -35,12 +58,12 @@ function AppointmentReviewModal({ appointment, onClose, onReviewSubmitted }) {
     try {
       const token = localStorage.getItem('token');
 
-      await axios.post(
+      const response = await axios.post(
         `http://localhost:5000/api/appointments/${appointmentId}/review`,
         {
           rating,
           feedback,
-          makePreferred,
+          makePreferred: showPreferredPrompt && makePreferred,
         },
         {
           headers: {
@@ -50,22 +73,28 @@ function AppointmentReviewModal({ appointment, onClose, onReviewSubmitted }) {
       );
 
       toast.success('Thank you for your feedback!');
-      onReviewSubmitted?.();
-      onClose?.();
+      window.setTimeout(() => {
+        resetFormState();
+        setIsSubmitting(false);
+        onReviewSubmitted?.(response.data?.appointment);
+        setIsClosed(true);
+        onClose?.();
+      }, 500);
     } catch (error) {
       console.error('Submit Review Error:', error);
       toast.error(error.response?.data?.message || 'Unable to submit your review right now.');
-    } finally {
       setIsSubmitting(false);
     }
   };
+
+  if (isClosed) return null;
 
   return (
     <div
       className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
       role="presentation"
       onClick={() => {
-        if (!isSubmitting) onClose?.();
+        handleClose();
       }}
     >
       <div
@@ -77,7 +106,7 @@ function AppointmentReviewModal({ appointment, onClose, onReviewSubmitted }) {
       >
         <button
           type="button"
-          onClick={onClose}
+          onClick={handleClose}
           disabled={isSubmitting}
           className="absolute right-4 top-4 rounded-lg p-2 text-zinc-500 transition hover:bg-white/5 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
           aria-label="Close review modal"
@@ -85,11 +114,7 @@ function AppointmentReviewModal({ appointment, onClose, onReviewSubmitted }) {
           <X className="h-4 w-4" />
         </button>
 
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-amber-500/25 bg-amber-500/10 text-amber-400 shadow-[0_16px_36px_rgba(245,158,11,0.14)]">
-          <Star className="h-5 w-5 fill-amber-400" />
-        </div>
-
-        <h2 id="appointment-review-title" className="mt-5 text-xl font-semibold text-white">
+        <h2 id="appointment-review-title" className="text-xl font-semibold text-white">
           Rate Your Experience
         </h2>
         <p className="mt-2 text-sm leading-6 text-zinc-400">
@@ -182,7 +207,7 @@ function AppointmentReviewModal({ appointment, onClose, onReviewSubmitted }) {
           className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg bg-amber-500 px-4 py-3 text-sm font-semibold text-black shadow-lg shadow-amber-500/15 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
-          {isSubmitting ? 'Submitting Review...' : 'Submit Review'}
+          {isSubmitting ? 'Submitting...' : 'Submit Review'}
         </button>
       </div>
     </div>

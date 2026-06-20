@@ -7,10 +7,12 @@ import { useAppointments } from '../../context/AppointmentsContext';
 import ActiveBookingCard from '../../components/customer/ActiveBookingCard';
 import AppointmentReviewModal from '../../components/customer/AppointmentReviewModal';
 import MoneyBundleIcon from '../../components/common/MoneyBundleIcon';
+import StylistOnboardingModal from '../../components/customer/StylistOnboardingModal';
 
 const HISTORY_STATUSES = ['completed', 'rejected', 'cancelled', 'canceled', 'no-show'];
 const UPCOMING_STATUSES = ['pending', 'approved', 'confirmed'];
 const HERO_IMAGE_URL = '/heroBg.jpg';
+const REVIEW_PROMPT_STORAGE_PREFIX = 'salonDismissedReviewPrompts';
 
 const formatServices = (services, fallback = 'Service not available') => {
   if (!Array.isArray(services) || services.length === 0) return fallback;
@@ -80,6 +82,19 @@ const getStylistDisplayName = (appointment) => {
   return 'Any Available Artist';
 };
 
+const hasPreferredStylist = (currentUser) => {
+  const preferredStylist = currentUser?.preferredStylist;
+
+  if (!preferredStylist) return false;
+  if (typeof preferredStylist === 'string') {
+    const normalizedValue = preferredStylist.trim().toLowerCase();
+    return Boolean(normalizedValue && normalizedValue !== 'not selected');
+  }
+  if (typeof preferredStylist === 'object') return Boolean(preferredStylist._id || preferredStylist.id || preferredStylist.name);
+
+  return false;
+};
+
 const canCancelAppointment = (appointment) => {
   if (!appointment?.date || !appointment?.startTime) return false;
 
@@ -94,6 +109,30 @@ const canCancelAppointment = (appointment) => {
   return hoursUntilAppointment >= 2;
 };
 
+const getUserStorageId = (currentUser) => (
+  currentUser?._id || currentUser?.id || currentUser?.email || 'current'
+);
+
+const getReviewPromptStorageKey = (currentUser) => (
+  `${REVIEW_PROMPT_STORAGE_PREFIX}:${getUserStorageId(currentUser)}`
+);
+
+const readDismissedReviewPromptIds = (currentUser) => {
+  try {
+    const parsedIds = JSON.parse(localStorage.getItem(getReviewPromptStorageKey(currentUser)) || '[]');
+    return Array.isArray(parsedIds) ? parsedIds.filter(Boolean) : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveDismissedReviewPromptIds = (currentUser, appointmentIds) => {
+  localStorage.setItem(
+    getReviewPromptStorageKey(currentUser),
+    JSON.stringify(Array.from(new Set(appointmentIds.filter(Boolean))))
+  );
+};
+
 function Dashboard() {
   const navigate = useNavigate();
   const { appointments, setAppointments } = useAppointments();
@@ -101,7 +140,9 @@ function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [appointmentToCancel, setAppointmentToCancel] = useState(null);
   const [isCancelling, setIsCancelling] = useState(false);
-  const [dismissedReviewAppointmentId, setDismissedReviewAppointmentId] = useState(null);
+  const [dismissedReviewAppointmentIds, setDismissedReviewAppointmentIds] = useState([]);
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
+  const [hasDismissedOnboarding, setHasDismissedOnboarding] = useState(false);
 
   const fetchAppointments = useCallback(async () => {
     const token = localStorage.getItem('token');
@@ -156,6 +197,15 @@ function Dashboard() {
     return () => window.removeEventListener('profileUpdated', handleProfileUpdated);
   }, []);
 
+  useEffect(() => {
+    if (!user || hasDismissedOnboarding || hasPreferredStylist(user)) return;
+    setIsOnboardingOpen(true);
+  }, [hasDismissedOnboarding, user]);
+
+  useEffect(() => {
+    setDismissedReviewAppointmentIds(readDismissedReviewPromptIds(user));
+  }, [user]);
+
   const upcomingAppointments = useMemo(
     () => appointments
       .filter((appt) => UPCOMING_STATUSES.includes(String(appt?.status || '').trim().toLowerCase()))
@@ -183,9 +233,9 @@ function Dashboard() {
 
       return normalizedStatus === 'completed'
         && appointment?.rating == null
-        && appointmentId !== dismissedReviewAppointmentId;
+        && !dismissedReviewAppointmentIds.includes(appointmentId);
     }),
-    [dismissedReviewAppointmentId, pastAppointments]
+    [dismissedReviewAppointmentIds, pastAppointments]
   );
 
   // Only sum prices of COMPLETED appointments for Total Spend metric
@@ -247,6 +297,37 @@ function Dashboard() {
         ? { ...appointment, ...updatedAppointment }
         : appointment
     )));
+  };
+
+  const markReviewPromptSeen = useCallback((appointmentId) => {
+    if (!appointmentId) return;
+
+    setDismissedReviewAppointmentIds((currentIds) => {
+      const nextIds = Array.from(new Set([...currentIds, appointmentId]));
+      saveDismissedReviewPromptIds(user, nextIds);
+      return nextIds;
+    });
+  }, [user]);
+
+  const handleCloseOnboarding = () => {
+    setHasDismissedOnboarding(true);
+    setIsOnboardingOpen(false);
+  };
+
+  const handleStylistSelected = (updatedUser) => {
+    if (updatedUser) {
+      setUser(updatedUser);
+    } else {
+      try {
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) setUser(JSON.parse(storedUser));
+      } catch {
+        setUser((currentUser) => currentUser);
+      }
+    }
+
+    setHasDismissedOnboarding(true);
+    setIsOnboardingOpen(false);
   };
 
   return (
@@ -499,10 +580,22 @@ function Dashboard() {
       {pendingReviewAppointment && (
         <AppointmentReviewModal
           appointment={pendingReviewAppointment}
-          onClose={() => setDismissedReviewAppointmentId(pendingReviewAppointment._id || pendingReviewAppointment.id)}
-          onReviewSubmitted={fetchAppointments}
+          user={user}
+          onClose={() => markReviewPromptSeen(pendingReviewAppointment._id || pendingReviewAppointment.id)}
+          onReviewSubmitted={(updatedAppointment) => {
+            markReviewPromptSeen(pendingReviewAppointment._id || pendingReviewAppointment.id);
+            handleAppointmentUpdated(updatedAppointment);
+            fetchAppointments();
+          }}
         />
       )}
+
+      <StylistOnboardingModal
+        isOpen={isOnboardingOpen}
+        onClose={handleCloseOnboarding}
+        user={user}
+        onStylistSelected={handleStylistSelected}
+      />
     </div>
   );
 }
