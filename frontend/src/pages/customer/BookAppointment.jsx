@@ -74,7 +74,9 @@ function BookAppointment({ userProfile, customerData }) {
 
   const [hasLoadedAvailability, setHasLoadedAvailability] = useState(false);
 
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [agreedToPolicy, setAgreedToPolicy] = useState(false);
 
   const [isOptionsLoading, setIsOptionsLoading] = useState(true);
 
@@ -707,6 +709,8 @@ function BookAppointment({ userProfile, customerData }) {
 
     const canMoveToReview = Boolean(date && timeSlot && stylist);
 
+    const canConfirmBooking = agreedToPolicy && !isSubmitting && canMoveToReview && selectedServices.length > 0;
+
 
 
     useEffect(() => {
@@ -805,7 +809,7 @@ function BookAppointment({ userProfile, customerData }) {
 
 
 
-      setIsLoading(true);
+      setIsSubmitting(true);
 
 
 
@@ -823,7 +827,7 @@ function BookAppointment({ userProfile, customerData }) {
 
           toast.error('Weekend bookings are currently unavailable.');
 
-          setIsLoading(false);
+          setIsSubmitting(false);
 
           return;
 
@@ -941,7 +945,7 @@ function BookAppointment({ userProfile, customerData }) {
 
 
 
-        toast.success('Great! Your appointment has been booked successfully.');
+        toast.success('Booking Confirmed! Your appointment is locked into the calendar. 🎉');
 
         
 
@@ -957,15 +961,13 @@ function BookAppointment({ userProfile, customerData }) {
 
         setHasUserSelectedStylist(false);
 
+        setAgreedToPolicy(false);
+
         setStep(1);
 
         
 
-        navigate('/booking-success', {
-          state: {
-            appointment: appointmentToAdd
-          }
-        });
+        navigate('/customer/dashboard');
 
       } catch (error) {
 
@@ -975,7 +977,7 @@ function BookAppointment({ userProfile, customerData }) {
 
       } finally {
 
-        setIsLoading(false);
+        setIsSubmitting(false);
 
       }
 
@@ -985,7 +987,21 @@ function BookAppointment({ userProfile, customerData }) {
 
     const handleConfirmBookingClick = () => {
 
-      // Wait for user profile to hydrate before opening verification modal
+      if (isSubmitting) {
+
+        return;
+
+      }
+
+      if (!agreedToPolicy) {
+
+        toast.error('Please agree to the Salon DEES Grace Period Policy before confirming.');
+
+        return;
+
+      }
+
+      // Wait for user profile to hydrate before confirming the booking.
 
       if (!isUserProfileHydrated) {
 
@@ -1001,15 +1017,7 @@ function BookAppointment({ userProfile, customerData }) {
 
       const currentPhone = user?.phone || user?.mobile || user?.phoneNumber || '';
 
-      
-
-      // Show phone verification modal
-
-      setPhoneVerificationStep('confirm');
-
-      setPhoneVerificationInput('');
-
-      setIsPhoneVerificationModalOpen(true);
+      handleBooking(currentPhone);
 
     };
 
@@ -1271,7 +1279,7 @@ function BookAppointment({ userProfile, customerData }) {
 
 
 
-            <div className={`min-h-0 flex-1 pr-1 ${step === 3 ? 'overflow-hidden' : 'overflow-y-auto'}`}>
+              <div className={`min-h-0 flex-1 pr-1 ${step === 3 ? 'overflow-hidden' : 'overflow-y-auto'} ${step === 4 ? '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden' : ''}`}>
 
               {isOptionsLoading ? (
 
@@ -1772,11 +1780,9 @@ function BookAppointment({ userProfile, customerData }) {
 
                     {step === 4 && (
 
-                      <div className="grid gap-6 lg:grid-cols-[1.35fr_0.85fr]">
+                      <div className="grid grid-cols-1 items-start gap-4 overflow-hidden sm:gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.85fr)] lg:gap-6">
 
-                        <div className="rounded-[2rem] border border-white/8 bg-white/[0.02] p-6 lg:p-7">
-
-                          <p className="text-[0.65rem] uppercase tracking-[0.35em] text-white/40">Review Dossier</p>
+                        <div className="order-1 min-w-0 rounded-[2rem] border border-white/8 bg-white/[0.02] p-5 sm:p-6 md:order-none lg:p-7">
 
                           <h2 className="mt-3 font-brand text-3xl text-white">Final composition</h2>
 
@@ -1866,9 +1872,9 @@ function BookAppointment({ userProfile, customerData }) {
 
 
 
-                        <aside className="space-y-4 rounded-[2rem] border border-[#D4AF37]/20 bg-[linear-gradient(180deg,rgba(212,175,55,0.08),rgba(255,255,255,0.02))] p-6 lg:p-7">
+                        <aside className="order-2 h-fit min-w-0 self-start rounded-[2rem] border border-[#D4AF37]/20 bg-[linear-gradient(180deg,rgba(212,175,55,0.08),rgba(255,255,255,0.02))] p-5 shadow-[0_18px_45px_rgba(0,0,0,0.22)] sm:p-6 md:order-none lg:p-7">
 
-                          <p className="text-[0.65rem] uppercase tracking-[0.35em] text-[#D4AF37]">Investment Summary</p>
+                          <p className="text-[0.65rem] uppercase tracking-[0.35em] text-[#D4AF37]">Appointment Summary</p>
 
                           <div className="space-y-4 border-b border-white/8 pb-5">
 
@@ -1899,6 +1905,46 @@ function BookAppointment({ userProfile, customerData }) {
                           </div>
 
                         </aside>
+
+                        <div className="order-3 rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-4 shadow-[0_18px_45px_rgba(0,0,0,0.18)] md:order-none lg:col-span-2">
+
+                          <h3 className="text-sm font-semibold text-amber-400">Salon DEES Grace Period Policy</h3>
+
+                          <p className="mt-3 text-sm leading-6 text-zinc-300">
+
+                            To respect the time of both our stylists and other clients, we offer a maximum 15-minute grace period. If you expect to arrive later than 15 minutes, please notify the salon immediately.
+
+                          </p>
+
+                          <label className="mt-4 flex cursor-pointer items-start gap-3">
+
+                            <input
+
+                              type="checkbox"
+
+                              checked={agreedToPolicy}
+
+                              onChange={(event) => setAgreedToPolicy(event.target.checked)}
+
+                              className="peer sr-only"
+
+                            />
+
+                            <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-zinc-700 bg-black/40 text-[0.65rem] font-bold text-black transition peer-checked:border-amber-400 peer-checked:bg-amber-400 peer-focus-visible:ring-2 peer-focus-visible:ring-amber-400/40">
+
+                              {agreedToPolicy ? '✓' : ''}
+
+                            </span>
+
+                            <span className="cursor-pointer select-none text-sm font-medium text-zinc-300">
+
+                              I have read and agree to the Salon DEES Grace Period Policy.
+
+                            </span>
+
+                          </label>
+
+                        </div>
 
                       </div>
 
@@ -1964,17 +2010,17 @@ function BookAppointment({ userProfile, customerData }) {
 
                   onClick={handleConfirmBookingClick}
 
-                  disabled={isLoading || !canMoveToReview || selectedServices.length === 0}
+                  disabled={!canConfirmBooking}
 
-                  whileHover={{ scale: 1.03 }}
+                  whileHover={canConfirmBooking ? { scale: 1.03 } : undefined}
 
-                  whileTap={{ scale: 0.98 }}
+                  whileTap={canConfirmBooking ? { scale: 0.98 } : undefined}
 
-                  className="rounded-full bg-[#D4AF37] px-8 py-3 text-xs font-semibold uppercase tracking-[0.38em] text-black shadow-[0_18px_36px_rgba(212,175,55,0.18)] transition disabled:cursor-not-allowed disabled:opacity-60"
+                  className="rounded-full bg-[#D4AF37] px-8 py-3 text-xs font-semibold uppercase tracking-[0.38em] text-black shadow-[0_18px_36px_rgba(212,175,55,0.28),0_0_30px_rgba(212,175,55,0.16)] transition hover:bg-amber-300 hover:shadow-[0_20px_44px_rgba(212,175,55,0.32),0_0_42px_rgba(212,175,55,0.22)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-[#D4AF37] disabled:hover:shadow-[0_18px_36px_rgba(212,175,55,0.18)]"
 
                 >
 
-                  {isLoading ? <Spinner /> : 'Confirm Appointment'}
+                  {isSubmitting ? <Spinner /> : 'Confirm Appointment'}
 
                 </motion.button>
 

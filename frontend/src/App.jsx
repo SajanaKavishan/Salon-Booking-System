@@ -6,7 +6,6 @@ import Register from "./pages/auth/Register";
 import Dashboard from "./pages/customer/Dashboard";
 import RoleProfile from "./pages/shared/RoleProfile";
 import BookAppointment from "./pages/customer/BookAppointment";
-import BookingSuccess from "./pages/customer/BookingSuccess";
 import History from "./pages/customer/History";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import StaffDashboard from "./pages/staff/StaffDashboard";
@@ -56,10 +55,10 @@ function App() {
               }
             >
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/customer/dashboard" element={<Dashboard />} />
               <Route path="/book" element={<BookAppointment userProfile={userProfile} />} />
               <Route path="/booking" element={<BookAppointment userProfile={userProfile} />} />
               <Route path="/customer/book" element={<BookAppointment userProfile={userProfile} />} />
-              <Route path="/booking-success" element={<BookingSuccess />} />
               <Route path="/history" element={<History />} />
             </Route>
 
