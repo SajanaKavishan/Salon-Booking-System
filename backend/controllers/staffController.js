@@ -1,4 +1,5 @@
 const Staff = require('../models/Staff');
+const Appointment = require('../models/appointmentModel');
 const {
   normalizeOffDays,
   normalizeWorkingHours,
@@ -11,6 +12,69 @@ const getStaff = async (req, res) => {
     const staff = await Staff.find();
     res.status(200).json(staff);
   } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Get staff performance metrics from approved appointment reviews
+// @route   GET /api/staff/performance
+const getStaffPerformance = async (req, res) => {
+  try {
+    const staff = await Staff.aggregate([
+      {
+        $lookup: {
+          from: Appointment.collection.name,
+          let: { staffId: '$_id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ['$isReviewApproved', true] },
+                    { $ne: ['$rating', null] },
+                    {
+                      $or: [
+                        { $eq: ['$stylist', '$$staffId'] },
+                        { $eq: ['$staffId', '$$staffId'] },
+                      ],
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+          as: 'approvedReviews',
+        },
+      },
+      {
+        $addFields: {
+          totalReviewsCount: { $size: '$approvedReviews' },
+          averageRating: {
+            $cond: [
+              { $gt: [{ $size: '$approvedReviews' }, 0] },
+              { $round: [{ $avg: '$approvedReviews.rating' }, 1] },
+              0,
+            ],
+          },
+        },
+      },
+      {
+        $project: {
+          approvedReviews: 0,
+        },
+      },
+      {
+        $sort: {
+          averageRating: -1,
+          totalReviewsCount: -1,
+          name: 1,
+        },
+      },
+    ]);
+
+    res.status(200).json(staff);
+  } catch (error) {
+    console.error('Get Staff Performance Error:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -90,4 +154,4 @@ const deleteStaff = async (req, res) => {
   }
 };
 
-module.exports = { getStaff, addStaff, updateStaff, deleteStaff };
+module.exports = { getStaff, getStaffPerformance, addStaff, updateStaff, deleteStaff };

@@ -172,7 +172,7 @@ const createAppointment = async (req, res) => {
                 const existingAppointments = await Appointment.find({
                     date: date,
                     stylist: s._id,
-                    status: { $nin: ['cancelled', 'Rejected', 'Cancelled'] }
+                    status: { $nin: ['cancelled', 'rejected', 'Rejected', 'Cancelled'] }
                 });
 
                 let hasOverlap = false;
@@ -203,7 +203,7 @@ const createAppointment = async (req, res) => {
                 const existingAppointments = await Appointment.find({
                     date: date,
                     stylist: stylistId,
-                    status: { $nin: ['cancelled', 'Rejected', 'Cancelled'] }
+                    status: { $nin: ['cancelled', 'rejected', 'Rejected', 'Cancelled'] }
                 });
 
                 let hasOverlap = false;
@@ -534,7 +534,7 @@ const deleteAppointment = async (req, res) => {
             });
         }
 
-        if (['cancelled', 'completed'].includes(Appointment.normalizeStatus(appointment.status))) {
+        if (['cancelled', 'rejected', 'completed'].includes(Appointment.normalizeStatus(appointment.status))) {
             return res.status(400).json({ message: `This appointment is already ${appointment.status.toLowerCase()}.` });
         }
 
@@ -561,7 +561,7 @@ const updateAppointmentStatus = async (req, res) => {
         const { status } = req.body;
         
         // Validate status value
-        const validStatuses = ['pending', 'confirmed', 'cancelled', 'completed'];
+        const validStatuses = ['pending', 'confirmed', 'cancelled', 'rejected', 'completed'];
         const normalizedStatus = Appointment.normalizeStatus(status);
         if (!status || !validStatuses.includes(normalizedStatus)) {
             return res.status(400).json({ 

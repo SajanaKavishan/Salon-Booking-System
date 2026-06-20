@@ -13,6 +13,8 @@ const getImageUrl = (imageUrl) => {
   return `${BACKEND_BASE_URL}${imageUrl.startsWith('/') ? '' : '/'}${imageUrl}`;
 };
 
+const formatRating = (rating) => Number(rating || 0).toFixed(1);
+
 function StylistOnboardingModal({ isOpen, onClose, user, onStylistSelected }) {
   const [stylists, setStylists] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -28,7 +30,7 @@ function StylistOnboardingModal({ isOpen, onClose, user, onStylistSelected }) {
       setIsLoading(true);
 
       try {
-        const response = await axios.get(`${BACKEND_BASE_URL}/api/staff`);
+        const response = await axios.get(`${BACKEND_BASE_URL}/api/staff/performance`);
         const activeStylists = Array.isArray(response.data)
           ? response.data.filter((staff) => (
               staff?.name
@@ -59,7 +61,15 @@ function StylistOnboardingModal({ isOpen, onClose, user, onStylistSelected }) {
   }, [isOpen]);
 
   const sortedStylists = useMemo(
-    () => [...stylists].sort((first, second) => String(first?.name || '').localeCompare(String(second?.name || ''))),
+    () => [...stylists].sort((first, second) => {
+      const ratingDifference = Number(second?.averageRating || 0) - Number(first?.averageRating || 0);
+      if (ratingDifference !== 0) return ratingDifference;
+
+      const reviewDifference = Number(second?.totalReviewsCount || 0) - Number(first?.totalReviewsCount || 0);
+      if (reviewDifference !== 0) return reviewDifference;
+
+      return String(first?.name || '').localeCompare(String(second?.name || ''));
+    }),
     [stylists]
   );
 
@@ -190,6 +200,12 @@ function StylistOnboardingModal({ isOpen, onClose, user, onStylistSelected }) {
 
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-semibold text-white">{stylist.name}</span>
+                      <span className="mt-1 flex items-center gap-1 text-sm font-semibold text-amber-400">
+                        <span aria-hidden="true">★</span>
+                        <span>
+                          {formatRating(stylist.averageRating)} ({stylist.totalReviewsCount || 0} reviews)
+                        </span>
+                      </span>
                       {stylist.specialty && (
                         <span className="mt-2 inline-flex max-w-full rounded-full border border-[#D4AF37]/25 bg-[#D4AF37]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#D4AF37]">
                           <span className="truncate">{stylist.specialty}</span>

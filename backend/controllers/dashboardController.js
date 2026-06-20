@@ -18,10 +18,10 @@ const MONTH_NAMES = [
   'Nov',
   'Dec',
 ];
-const ANALYTICS_STATUSES = ['confirmed', 'pending', 'cancelled'];
+const ANALYTICS_STATUSES = ['completed', 'rejected', 'cancelled'];
 const STATUS_LABELS = {
-  confirmed: 'Approved',
-  pending: 'Pending',
+  completed: 'Completed',
+  rejected: 'Rejected',
   cancelled: 'Cancelled',
 };
 
@@ -313,7 +313,15 @@ const getAppointmentStatus = async (req, res) => {
     const statusCounts = await Appointment.aggregate([
       {
         $match: {
-          status: { $in: [...ANALYTICS_STATUSES, 'Approved', 'Pending', 'Cancelled', 'Rejected'] },
+          status: {
+            $in: [
+              ...ANALYTICS_STATUSES,
+              'Completed',
+              'Rejected',
+              'Cancelled',
+              'Canceled',
+            ],
+          },
         },
       },
       {

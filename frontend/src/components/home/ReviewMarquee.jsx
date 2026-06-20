@@ -91,10 +91,14 @@ function ReviewCard({ review }) {
   );
 }
 
-function ReviewMarquee() {
-  const [reviews, setReviews] = useState([]);
+function ReviewMarquee({ reviews: providedReviews }) {
+  const [fetchedReviews, setFetchedReviews] = useState([]);
+  const hasProvidedReviews = Array.isArray(providedReviews);
+  const reviews = hasProvidedReviews ? providedReviews : fetchedReviews;
 
   useEffect(() => {
+    if (hasProvidedReviews) return undefined;
+
     let isMounted = true;
 
     const fetchPublicReviews = async () => {
@@ -103,12 +107,12 @@ function ReviewMarquee() {
         const publicReviews = Array.isArray(response.data) ? response.data : [];
 
         if (isMounted) {
-          setReviews(publicReviews);
+          setFetchedReviews(publicReviews);
         }
       } catch (error) {
         console.error('Fetch Public Reviews Error:', error);
         if (isMounted) {
-          setReviews([]);
+          setFetchedReviews([]);
         }
       }
     };
@@ -118,7 +122,7 @@ function ReviewMarquee() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [hasProvidedReviews]);
 
   const marqueeReviews = useMemo(() => [...reviews, ...reviews], [reviews]);
 

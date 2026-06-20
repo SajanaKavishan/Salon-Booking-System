@@ -4,8 +4,11 @@ import { toast } from "react-toastify";
 import {
   CalendarCheck,
   ChevronDown,
+  Loader2,
   Scissors,
+  Star,
   TrendingUp,
+  UserRound,
   UserPlus,
 } from "lucide-react";
 import {
@@ -27,13 +30,13 @@ import { GlassCard } from "../../components/admin/SystemUI";
 import MoneyBundleIcon from "../../components/common/MoneyBundleIcon";
 
 const STATUS_COLORS = {
-  Approved: "#d4af37",
-  Pending: "#ffffff",
+  Completed: "#22c55e",
   Cancelled: "#525252",
   Rejected: "#ef4444",
 };
 
 const DEFAULT_STATUS_COLOR = "#737373";
+const DISPLAYED_STATUS_NAMES = ["Completed", "Rejected", "Cancelled"];
 
 const tooltipStyle = {
   backgroundColor: "#111",
@@ -42,6 +45,152 @@ const tooltipStyle = {
   boxShadow: "0 16px 40px rgba(0, 0, 0, 0.45)",
 };
 
+const BACKEND_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000").replace(/\/$/, "");
+
+const formatRating = (rating) => Number(rating || 0).toFixed(1);
+
+const normalizeAppointmentStatusData = (statuses) => {
+  const statusTotals = DISPLAYED_STATUS_NAMES.reduce((totals, status) => {
+    totals[status] = 0;
+    return totals;
+  }, {});
+
+  (Array.isArray(statuses) ? statuses : []).forEach((status) => {
+    const name = String(status?.name || "").trim().toLowerCase();
+    const value = Number(status?.value) || 0;
+
+    if (name === "completed") statusTotals.Completed += value;
+    if (name === "rejected") statusTotals.Rejected += value;
+    if (name === "cancelled" || name === "canceled") {
+      statusTotals.Cancelled += value;
+    }
+  });
+
+  return DISPLAYED_STATUS_NAMES.map((name) => ({
+    name,
+    value: statusTotals[name],
+  }));
+};
+
+const getImageUrl = (imageUrl) => {
+  if (!imageUrl) return "";
+  if (/^https?:\/\//i.test(imageUrl) || imageUrl.startsWith("data:")) return imageUrl;
+  return `${BACKEND_BASE_URL}${imageUrl.startsWith("/") ? "" : "/"}${imageUrl}`;
+};
+
+function StaffAvatar({ staff, className = "" }) {
+  const imageSrc = getImageUrl(staff?.imageUrl || staff?.profileImage);
+
+  return (
+    <span className={`relative flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-zinc-900 text-zinc-500 ${className}`}>
+      <UserRound className="h-1/2 w-1/2" />
+      {imageSrc && (
+        <img
+          src={imageSrc}
+          alt={staff?.name || "Stylist"}
+          className="absolute inset-0 h-full w-full object-cover"
+          onError={(event) => {
+            event.currentTarget.style.display = "none";
+          }}
+        />
+      )}
+    </span>
+  );
+}
+
+function StylistLeaderboard({ staffPerformanceData, isLoading }) {
+  const champion = staffPerformanceData[0];
+  const runnersUp = staffPerformanceData.slice(1, 7);
+
+  return (
+    <GlassCard className="border border-white/[0.05] bg-white/[0.02] p-5 shadow-2xl backdrop-blur-xl sm:p-6">
+      <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#d4af37]">
+            Stylist Leaderboard
+          </p>
+          <h2 className="mt-2 text-2xl font-semibold text-white">Top Rated Performance</h2>
+          <p className="mt-1 text-sm text-neutral-500">
+            Ranked by approved customer review ratings.
+          </p>
+        </div>
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 text-sm text-zinc-400">
+          <Loader2 className="h-4 w-4 animate-spin text-[#d4af37]" />
+          Loading stylist leaderboard...
+        </div>
+      ) : !champion ? (
+        <div className="rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/30 p-6 text-sm text-zinc-500">
+          No stylist performance data is available yet.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+          <article className="relative flex flex-col items-center rounded-2xl border border-amber-500/30 bg-gradient-to-b from-amber-500/10 to-transparent p-6 text-center">
+            <span className="absolute right-4 top-4 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-amber-300">
+              1st Rank
+            </span>
+
+            <StaffAvatar
+              staff={champion}
+              className="mt-8 h-28 w-28 ring-4 ring-amber-400/50 shadow-[0_0_38px_rgba(251,191,36,0.16)]"
+            />
+
+            <h3 className="mt-6 max-w-full truncate font-serif text-2xl font-semibold text-white">
+              {champion.name}
+            </h3>
+            <p className="mt-1 text-sm text-zinc-500">{champion.specialty || "Stylist"}</p>
+
+            <div className="mt-4 flex items-center gap-2 text-3xl font-bold text-amber-400">
+              <Star className="h-7 w-7 fill-amber-400" />
+              {formatRating(champion.averageRating)}
+            </div>
+            <p className="mt-2 text-sm text-zinc-500">
+              {champion.totalReviewsCount || 0} Reviews
+            </p>
+          </article>
+
+          <div className="md:col-span-2">
+            {runnersUp.length === 0 ? (
+              <div className="flex h-full min-h-48 items-center justify-center rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/20 p-6 text-sm text-zinc-500">
+                More ranked stylists will appear as reviews come in.
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {runnersUp.map((staff, index) => {
+                  const rank = index + 2;
+
+                  return (
+                    <article
+                      key={staff._id || staff.id || staff.name}
+                      className="flex items-center justify-between rounded-xl border border-zinc-800/80 bg-zinc-900/30 p-3 transition-all duration-200 hover:bg-zinc-900/60"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <StaffAvatar staff={staff} className="h-11 w-11 border border-zinc-800" />
+                        <span className="w-9 shrink-0 text-sm font-bold text-zinc-500">#{rank}</span>
+                        <div className="min-w-0">
+                          <h3 className="truncate text-sm font-semibold text-white">{staff.name}</h3>
+                          <p className="truncate text-xs text-zinc-500">{staff.specialty || "Stylist"}</p>
+                        </div>
+                      </div>
+
+                      <div className="ml-4 flex shrink-0 items-center gap-2 rounded-lg bg-zinc-800 px-3 py-1 text-sm font-bold text-zinc-200">
+                        <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                        {formatRating(staff.averageRating)}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </GlassCard>
+  );
+}
+
 function Analytics() {
   const currentYear = new Date().getFullYear();
   const [summary, setSummary] = useState({
@@ -49,6 +198,8 @@ function Analytics() {
     appointments: 0,
     clients: 0,
   });
+  const [staffPerformanceData, setStaffPerformanceData] = useState([]);
+  const [isStaffPerformanceLoading, setIsStaffPerformanceLoading] = useState(true);
   const [trendData, setTrendData] = useState([]);
   const [topServicesData, setTopServicesData] = useState([]);
   const [statusData, setStatusData] = useState([]);
@@ -177,7 +328,7 @@ function Analytics() {
               : []
           );
           setStatusData(
-            Array.isArray(statusResponse.data) ? statusResponse.data : []
+            normalizeAppointmentStatusData(statusResponse.data)
           );
         }
       } catch (error) {
@@ -199,6 +350,36 @@ function Analytics() {
       isMounted = false;
     };
   }, [currentYear, selectedYear]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchStaffPerformance = async () => {
+      try {
+        const response = await axios.get(`${BACKEND_BASE_URL}/api/staff/performance`);
+
+        if (isMounted) {
+          setStaffPerformanceData(Array.isArray(response.data) ? response.data : []);
+        }
+      } catch (error) {
+        console.error("Staff performance fetch error:", error);
+
+        if (isMounted) {
+          toast.error(error.response?.data?.message || "Failed to load stylist leaderboard.");
+        }
+      } finally {
+        if (isMounted) {
+          setIsStaffPerformanceLoading(false);
+        }
+      }
+    };
+
+    fetchStaffPerformance();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-6 sm:space-y-8">
@@ -589,6 +770,11 @@ function Analytics() {
           </div>
         </GlassCard>
       </section>
+
+      <StylistLeaderboard
+        staffPerformanceData={staffPerformanceData}
+        isLoading={isStaffPerformanceLoading}
+      />
     </div>
   );
 }
