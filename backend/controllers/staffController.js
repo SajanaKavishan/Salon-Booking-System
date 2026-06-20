@@ -1,5 +1,5 @@
 const Staff = require('../models/Staff');
-const Appointment = require('../models/appointmentModel');
+const { aggregateStaffPerformance } = require('./analyticsController');
 const {
   normalizeOffDays,
   normalizeWorkingHours,
@@ -20,57 +20,7 @@ const getStaff = async (req, res) => {
 // @route   GET /api/staff/performance
 const getStaffPerformance = async (req, res) => {
   try {
-    const staff = await Staff.aggregate([
-      {
-        $lookup: {
-          from: Appointment.collection.name,
-          let: { staffId: '$_id' },
-          pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $and: [
-                    { $eq: ['$isReviewApproved', true] },
-                    { $ne: ['$rating', null] },
-                    {
-                      $or: [
-                        { $eq: ['$stylist', '$$staffId'] },
-                        { $eq: ['$staffId', '$$staffId'] },
-                      ],
-                    },
-                  ],
-                },
-              },
-            },
-          ],
-          as: 'approvedReviews',
-        },
-      },
-      {
-        $addFields: {
-          totalReviewsCount: { $size: '$approvedReviews' },
-          averageRating: {
-            $cond: [
-              { $gt: [{ $size: '$approvedReviews' }, 0] },
-              { $round: [{ $avg: '$approvedReviews.rating' }, 1] },
-              0,
-            ],
-          },
-        },
-      },
-      {
-        $project: {
-          approvedReviews: 0,
-        },
-      },
-      {
-        $sort: {
-          averageRating: -1,
-          totalReviewsCount: -1,
-          name: 1,
-        },
-      },
-    ]);
+    const staff = await aggregateStaffPerformance(req.query);
 
     res.status(200).json(staff);
   } catch (error) {

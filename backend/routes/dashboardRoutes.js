@@ -1,11 +1,13 @@
 const express = require('express');
 const {
-  getAnalyticsSummary,
-  getAppointmentStatus,
   getDashboardSummary,
-  getTopServices,
   getWeeklyAnalytics,
 } = require('../controllers/dashboardController');
+const {
+  getAnalyticsSummary,
+  getAppointmentStatus,
+  getTopServices,
+} = require('../controllers/analyticsController');
 const { protect, admin } = require('../middleware/authMiddleware');
 
 const router = express.Router();

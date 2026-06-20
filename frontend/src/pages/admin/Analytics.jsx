@@ -37,6 +37,12 @@ const STATUS_COLORS = {
 
 const DEFAULT_STATUS_COLOR = "#737373";
 const DISPLAYED_STATUS_NAMES = ["Completed", "Rejected", "Cancelled"];
+const FILTER_RANGE_OPTIONS = [
+  { value: "FULL_YEAR", label: "Full year" },
+  { value: "YTD", label: "Year to date" },
+  { value: "LAST_30_DAYS", label: "Last 30 days" },
+  { value: "LAST_7_DAYS", label: "Last 7 days" },
+];
 
 const tooltipStyle = {
   backgroundColor: "#111",
@@ -48,6 +54,9 @@ const tooltipStyle = {
 const BACKEND_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000").replace(/\/$/, "");
 
 const formatRating = (rating) => Number(rating || 0).toFixed(1);
+const getRangeLabel = (range) =>
+  FILTER_RANGE_OPTIONS.find((option) => option.value === range)?.label ||
+  "Year to date";
 
 const normalizeAppointmentStatusData = (statuses) => {
   const statusTotals = DISPLAYED_STATUS_NAMES.reduce((totals, status) => {
@@ -103,7 +112,7 @@ function StylistLeaderboard({ staffPerformanceData, isLoading }) {
   const runnersUp = staffPerformanceData.slice(1, 7);
 
   return (
-    <GlassCard className="border border-white/[0.05] bg-white/[0.02] p-5 shadow-2xl backdrop-blur-xl sm:p-6">
+    <GlassCard className="relative overflow-hidden border border-white/[0.05] bg-white/[0.02] p-5 shadow-2xl backdrop-blur-xl sm:p-6">
       <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#d4af37]">
@@ -116,7 +125,7 @@ function StylistLeaderboard({ staffPerformanceData, isLoading }) {
         </div>
       </div>
 
-      {isLoading ? (
+      {isLoading && !champion ? (
         <div className="flex items-center gap-3 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 text-sm text-zinc-400">
           <Loader2 className="h-4 w-4 animate-spin text-[#d4af37]" />
           Loading stylist leaderboard...
@@ -193,28 +202,34 @@ function StylistLeaderboard({ staffPerformanceData, isLoading }) {
 
 function Analytics() {
   const currentYear = new Date().getFullYear();
+  const [filterYear, setFilterYear] = useState("2026");
+  const [filterRange, setFilterRange] = useState("YTD");
   const [summary, setSummary] = useState({
     revenue: 0,
     appointments: 0,
     clients: 0,
   });
   const [staffPerformanceData, setStaffPerformanceData] = useState([]);
-  const [isStaffPerformanceLoading, setIsStaffPerformanceLoading] = useState(true);
+  const [isAnalyticsLoading, setIsAnalyticsLoading] = useState(true);
+  const [hasLoadedAnalytics, setHasLoadedAnalytics] = useState(false);
   const [trendData, setTrendData] = useState([]);
   const [topServicesData, setTopServicesData] = useState([]);
   const [statusData, setStatusData] = useState([]);
-  const [revenueRange, setRevenueRange] = useState("ytd");
   const [isRevenueRangeOpen, setIsRevenueRangeOpen] = useState(false);
-  const [selectedYear, setSelectedYear] = useState(currentYear);
   const [availableYears, setAvailableYears] = useState([currentYear]);
   const [isYearOpen, setIsYearOpen] = useState(false);
   const revenueRangeRef = useRef(null);
   const yearRef = useRef(null);
+  const selectedYear = Number(filterYear);
+  const rangeLabel = getRangeLabel(filterRange);
+  const shouldShowSummaryLoader = isAnalyticsLoading;
 
   const summaryMetrics = [
     {
       label:
-        selectedYear === currentYear
+        filterRange === "LAST_7_DAYS" || filterRange === "LAST_30_DAYS"
+          ? `Total Revenue (${rangeLabel})`
+          : selectedYear === currentYear && filterRange === "YTD"
           ? "Total Revenue (YTD)"
           : `Total Revenue (${selectedYear})`,
       value: `Rs. ${summary.revenue.toLocaleString()}`,
@@ -240,14 +255,6 @@ function Analytics() {
     [statusData]
   );
 
-  const displayedTrendData = useMemo(() => {
-    if (selectedYear !== currentYear || revenueRange === "full-year") {
-      return trendData;
-    }
-
-    return trendData.slice(0, new Date().getMonth() + 1);
-  }, [currentYear, revenueRange, selectedYear, trendData]);
-
   useEffect(() => {
     const handleOutsideClick = (event) => {
       if (
@@ -271,6 +278,7 @@ function Analytics() {
 
     const fetchAnalytics = async () => {
       try {
+        setIsAnalyticsLoading(true);
         const token = localStorage.getItem("token");
 
         if (!token) {
@@ -279,26 +287,29 @@ function Analytics() {
 
         const config = {
           headers: { Authorization: `Bearer ${token}` },
+          params: { year: filterYear, range: filterRange },
         };
 
         const [
           summaryResponse,
           topServicesResponse,
           statusResponse,
+          staffPerformanceResponse,
         ] = await Promise.all([
           axios.get(
-            "http://localhost:5000/api/dashboard/analytics-summary",
-            {
-              ...config,
-              params: { year: selectedYear },
-            }
-          ),
-          axios.get(
-            "http://localhost:5000/api/dashboard/top-services",
+            `${BACKEND_BASE_URL}/api/dashboard/analytics-summary`,
             config
           ),
           axios.get(
-            "http://localhost:5000/api/dashboard/appointment-status",
+            `${BACKEND_BASE_URL}/api/dashboard/top-services`,
+            config
+          ),
+          axios.get(
+            `${BACKEND_BASE_URL}/api/dashboard/appointment-status`,
+            config
+          ),
+          axios.get(
+            `${BACKEND_BASE_URL}/api/staff/performance`,
             config
           ),
         ]);
@@ -330,6 +341,12 @@ function Analytics() {
           setStatusData(
             normalizeAppointmentStatusData(statusResponse.data)
           );
+          setStaffPerformanceData(
+            Array.isArray(staffPerformanceResponse.data)
+              ? staffPerformanceResponse.data
+              : []
+          );
+          setHasLoadedAnalytics(true);
         }
       } catch (error) {
         console.error("Analytics data fetch error:", error);
@@ -341,6 +358,10 @@ function Analytics() {
               "Failed to load analytics data."
           );
         }
+      } finally {
+        if (isMounted) {
+          setIsAnalyticsLoading(false);
+        }
       }
     };
 
@@ -349,50 +370,118 @@ function Analytics() {
     return () => {
       isMounted = false;
     };
-  }, [currentYear, selectedYear]);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const fetchStaffPerformance = async () => {
-      try {
-        const response = await axios.get(`${BACKEND_BASE_URL}/api/staff/performance`);
-
-        if (isMounted) {
-          setStaffPerformanceData(Array.isArray(response.data) ? response.data : []);
-        }
-      } catch (error) {
-        console.error("Staff performance fetch error:", error);
-
-        if (isMounted) {
-          toast.error(error.response?.data?.message || "Failed to load stylist leaderboard.");
-        }
-      } finally {
-        if (isMounted) {
-          setIsStaffPerformanceLoading(false);
-        }
-      }
-    };
-
-    fetchStaffPerformance();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  }, [filterRange, filterYear]);
 
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-6 sm:space-y-8">
-      <header>
-        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.24em] text-[#d4af37]">
-          Performance Overview
-        </p>
-        <h1 className="font-serif text-3xl font-bold tracking-tight text-white sm:text-4xl">
-          Comprehensive Analytics
-        </h1>
-        <p className="mt-3 max-w-2xl text-sm leading-6 text-neutral-400 sm:text-base">
-          In-depth insights into salon performance and revenue
-        </p>
+      <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.24em] text-[#d4af37]">
+            Performance Overview
+          </p>
+          <h1 className="font-serif text-3xl font-bold tracking-tight text-white sm:text-4xl">
+            Comprehensive Analytics
+          </h1>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-neutral-400 sm:text-base">
+            In-depth insights into salon performance and revenue
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <div ref={yearRef} className="relative w-fit">
+            <button
+              type="button"
+              onClick={() => setIsYearOpen((isOpen) => !isOpen)}
+              className="flex min-h-10 items-center gap-2.5 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-neutral-300 transition hover:border-[#d4af37]/30 hover:text-white"
+              aria-haspopup="listbox"
+              aria-expanded={isYearOpen}
+            >
+              <CalendarCheck size={16} className="text-[#d4af37]" />
+              {filterYear}
+              <ChevronDown
+                size={16}
+                className={`transition-transform ${
+                  isYearOpen ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+
+            {isYearOpen && (
+              <div
+                className="absolute right-0 top-full z-30 mt-2 max-h-52 w-32 overflow-y-auto rounded-xl border border-white/10 bg-[#111]/95 p-1.5 shadow-2xl backdrop-blur-xl"
+                role="listbox"
+                aria-label="Analytics year"
+              >
+                {availableYears.map((year) => (
+                  <button
+                    key={year}
+                    type="button"
+                    onClick={() => {
+                      setFilterYear(String(year));
+                      setIsYearOpen(false);
+                    }}
+                    className={`w-full rounded-lg px-3.5 py-2.5 text-left text-sm transition ${
+                      filterYear === String(year)
+                        ? "bg-[#d4af37]/10 text-[#d4af37]"
+                        : "text-neutral-400 hover:bg-white/5 hover:text-white"
+                    }`}
+                    role="option"
+                    aria-selected={filterYear === String(year)}
+                  >
+                    {year}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div ref={revenueRangeRef} className="relative w-fit">
+            <button
+              type="button"
+              onClick={() => setIsRevenueRangeOpen((isOpen) => !isOpen)}
+              className="flex min-h-10 items-center gap-2.5 rounded-full border border-[#d4af37]/20 bg-[#d4af37]/10 px-4 py-2 text-sm font-semibold text-[#d4af37] transition hover:border-[#d4af37]/40 hover:bg-[#d4af37]/15"
+              aria-haspopup="listbox"
+              aria-expanded={isRevenueRangeOpen}
+            >
+              <TrendingUp size={16} />
+              {rangeLabel}
+              <ChevronDown
+                size={16}
+                className={`transition-transform ${
+                  isRevenueRangeOpen ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+
+            {isRevenueRangeOpen && (
+              <div
+                className="absolute right-0 top-full z-20 mt-2 w-44 overflow-hidden rounded-xl border border-white/10 bg-[#111]/95 p-1.5 shadow-2xl backdrop-blur-xl"
+                role="listbox"
+                aria-label="Analytics range"
+              >
+                {FILTER_RANGE_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => {
+                      setFilterRange(option.value);
+                      setIsRevenueRangeOpen(false);
+                    }}
+                    className={`w-full rounded-lg px-3.5 py-2.5 text-left text-sm transition ${
+                      filterRange === option.value
+                        ? "bg-[#d4af37]/10 text-[#d4af37]"
+                        : "text-neutral-400 hover:bg-white/5 hover:text-white"
+                    }`}
+                    role="option"
+                    aria-selected={filterRange === option.value}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </header>
 
       <section
@@ -409,7 +498,7 @@ function Analytics() {
               <div>
                 <p className="text-sm font-medium text-neutral-400">{label}</p>
                 <p className="mt-3 text-3xl font-bold tracking-tight text-white">
-                  {value}
+                  {shouldShowSummaryLoader ? "..." : value}
                 </p>
                 <p className="mt-2 text-xs text-neutral-500">{detail}</p>
               </div>
@@ -421,120 +510,17 @@ function Analytics() {
         ))}
       </section>
 
-      <GlassCard className="border border-white/[0.05] bg-white/[0.02] p-5 shadow-2xl backdrop-blur-xl sm:p-6">
+      <GlassCard className="relative overflow-hidden border border-white/[0.05] bg-white/[0.02] p-5 shadow-2xl backdrop-blur-xl sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-xl font-semibold text-white">Revenue Trends</h2>
             <p className="mt-1 text-sm text-neutral-500">
-              {selectedYear === currentYear && revenueRange === "ytd"
+              {filterRange === "LAST_7_DAYS" || filterRange === "LAST_30_DAYS"
+                ? `Daily completed appointment revenue over the ${rangeLabel.toLowerCase()}`
+                : selectedYear === currentYear && filterRange === "YTD"
                 ? "Monthly revenue from January through the current month"
                 : `Monthly revenue across ${selectedYear}`}
             </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div ref={yearRef} className="relative w-fit">
-              <button
-                type="button"
-                onClick={() => setIsYearOpen((isOpen) => !isOpen)}
-                className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-neutral-300 transition hover:border-[#d4af37]/30 hover:text-white"
-                aria-haspopup="listbox"
-                aria-expanded={isYearOpen}
-              >
-                <CalendarCheck size={14} className="text-[#d4af37]" />
-                {selectedYear}
-                <ChevronDown
-                  size={14}
-                  className={`transition-transform ${
-                    isYearOpen ? "rotate-180" : ""
-                  }`}
-                />
-              </button>
-
-              {isYearOpen && (
-                <div
-                  className="absolute right-0 top-full z-30 mt-2 max-h-52 w-28 overflow-y-auto rounded-xl border border-white/10 bg-[#111]/95 p-1 shadow-2xl backdrop-blur-xl"
-                  role="listbox"
-                  aria-label="Revenue chart year"
-                >
-                  {availableYears.map((year) => (
-                    <button
-                      key={year}
-                      type="button"
-                      onClick={() => {
-                        setSelectedYear(year);
-                        setRevenueRange(
-                          year === currentYear ? "ytd" : "full-year"
-                        );
-                        setIsYearOpen(false);
-                      }}
-                      className={`w-full rounded-lg px-3 py-2 text-left text-xs transition ${
-                        selectedYear === year
-                          ? "bg-[#d4af37]/10 text-[#d4af37]"
-                          : "text-neutral-400 hover:bg-white/5 hover:text-white"
-                      }`}
-                      role="option"
-                      aria-selected={selectedYear === year}
-                    >
-                      {year}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div ref={revenueRangeRef} className="relative w-fit">
-              <button
-                type="button"
-                onClick={() => setIsRevenueRangeOpen((isOpen) => !isOpen)}
-                className="flex items-center gap-2 rounded-full border border-[#d4af37]/20 bg-[#d4af37]/10 px-3 py-1.5 text-xs font-medium text-[#d4af37] transition hover:border-[#d4af37]/40 hover:bg-[#d4af37]/15"
-                aria-haspopup="listbox"
-                aria-expanded={isRevenueRangeOpen}
-              >
-                <TrendingUp size={14} />
-                {selectedYear === currentYear && revenueRange === "ytd"
-                  ? "Year to date"
-                  : "Full year"}
-                <ChevronDown
-                  size={14}
-                  className={`transition-transform ${
-                    isRevenueRangeOpen ? "rotate-180" : ""
-                  }`}
-                />
-              </button>
-
-              {isRevenueRangeOpen && (
-                <div
-                  className="absolute right-0 top-full z-20 mt-2 w-36 overflow-hidden rounded-xl border border-white/10 bg-[#111]/95 p-1 shadow-2xl backdrop-blur-xl"
-                  role="listbox"
-                  aria-label="Revenue chart range"
-                >
-                  {[
-                    ...(selectedYear === currentYear
-                      ? [{ value: "ytd", label: "Year to date" }]
-                      : []),
-                    { value: "full-year", label: "Full year" },
-                  ].map((option) => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => {
-                        setRevenueRange(option.value);
-                        setIsRevenueRangeOpen(false);
-                      }}
-                      className={`w-full rounded-lg px-3 py-2 text-left text-xs transition ${
-                        revenueRange === option.value
-                          ? "bg-[#d4af37]/10 text-[#d4af37]"
-                          : "text-neutral-400 hover:bg-white/5 hover:text-white"
-                      }`}
-                      role="option"
-                      aria-selected={revenueRange === option.value}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
         </div>
 
@@ -547,7 +533,7 @@ function Analytics() {
             initialDimension={{ width: 1, height: 350 }}
           >
             <AreaChart
-              data={displayedTrendData}
+              data={trendData}
               margin={{ top: 10, right: 10, left: -12, bottom: 0 }}
             >
               <defs>
@@ -612,7 +598,7 @@ function Analytics() {
       </GlassCard>
 
       <section className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <GlassCard className="min-w-0 rounded-2xl border border-white/[0.05] bg-white/[0.02] p-6 shadow-2xl backdrop-blur-xl">
+        <GlassCard className="relative min-w-0 overflow-hidden rounded-2xl border border-white/[0.05] bg-white/[0.02] p-6 shadow-2xl backdrop-blur-xl">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#d4af37]/10 text-[#d4af37]">
               <Scissors size={19} />
@@ -622,7 +608,7 @@ function Analytics() {
                 Top 5 Booked Services
               </h2>
               <p className="text-xs text-neutral-500">
-                Most frequently requested salon services
+                Most requested salon services for {rangeLabel.toLowerCase()}
               </p>
             </div>
           </div>
@@ -676,7 +662,7 @@ function Analytics() {
           </div>
         </GlassCard>
 
-        <GlassCard className="min-w-0 rounded-2xl border border-white/[0.05] bg-white/[0.02] p-6 shadow-2xl backdrop-blur-xl">
+        <GlassCard className="relative min-w-0 overflow-hidden rounded-2xl border border-white/[0.05] bg-white/[0.02] p-6 shadow-2xl backdrop-blur-xl">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#d4af37]/10 text-[#d4af37]">
               <CalendarCheck size={19} />
@@ -686,7 +672,7 @@ function Analytics() {
                 Appointment Status
               </h2>
               <p className="text-xs text-neutral-500">
-                Distribution across all appointments
+                Final appointment outcomes for {rangeLabel.toLowerCase()}
               </p>
             </div>
           </div>
@@ -773,7 +759,7 @@ function Analytics() {
 
       <StylistLeaderboard
         staffPerformanceData={staffPerformanceData}
-        isLoading={isStaffPerformanceLoading}
+        isLoading={isAnalyticsLoading && !hasLoadedAnalytics}
       />
     </div>
   );
