@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { ArrowRight, Clock, MapPin, Star } from 'lucide-react';
 import { useSalonSettings } from '../../hooks/useSalonSettings';
 import ServicesCarousel from '../../components/home/ServicesCarousel';
+import ReviewMarquee from '../../components/home/ReviewMarquee';
 
 function Home() {
   const navigate = useNavigate();
@@ -475,6 +476,8 @@ function Home() {
           </motion.div>
         </div>
       </motion.section>
+
+      <ReviewMarquee />
 
       {/* Contact Section */}
       <motion.section
