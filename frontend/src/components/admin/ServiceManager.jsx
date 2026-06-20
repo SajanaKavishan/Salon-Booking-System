@@ -8,6 +8,7 @@ function ServiceManager() {
   const fieldClassName = 'w-full bg-black/50 border border-gray-700 rounded-lg p-3 text-white focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] outline-none transition-all';
   const [services, setServices] = useState([]);
   const [formData, setFormData] = useState({ name: '', price: '', duration: '', image: '' });
+  const [isAddingService, setIsAddingService] = useState(false);
   const [activeMenuId, setActiveMenuId] = useState(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -36,6 +37,9 @@ function ServiceManager() {
 
   const handleAddService = async (e) => {
     e.preventDefault();
+    if (isAddingService) return;
+
+    setIsAddingService(true);
     try {
       const response = await axios.post('http://localhost:5000/api/services', {
         ...formData,
@@ -47,6 +51,8 @@ function ServiceManager() {
       toast.success('Service added successfully!');
     } catch (error) {
       toast.error(error.response?.data?.message || 'Failed to add service');
+    } finally {
+      setIsAddingService(false);
     }
   };
 
@@ -103,8 +109,12 @@ function ServiceManager() {
           <input type="number" name="duration" placeholder="Duration (Mins)" value={formData.duration} onChange={handleInputChange} required className={fieldClassName} />
           <input type="text" name="image" placeholder="Image URL" value={formData.image} onChange={handleInputChange} className={fieldClassName} />
           <div className="md:col-span-2 lg:col-span-4">
-            <GoldButton type="submit" className="rounded-lg px-5 py-3 font-bold shadow-[0_0_20px_rgba(212,175,55,0.28)] hover:shadow-[0_0_28px_rgba(212,175,55,0.4)]">
-              + Add Service
+            <GoldButton
+              type="submit"
+              disabled={isAddingService}
+              className="rounded-lg px-5 py-3 font-bold shadow-[0_0_20px_rgba(212,175,55,0.28)] hover:shadow-[0_0_28px_rgba(212,175,55,0.4)] disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {isAddingService ? 'Adding Service...' : '+ Add Service'}
             </GoldButton>
           </div>
         </form>

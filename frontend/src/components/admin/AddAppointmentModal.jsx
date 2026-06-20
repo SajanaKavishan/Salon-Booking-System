@@ -271,10 +271,10 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain bg-black/80 px-4 py-6 sm:px-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <form
         onSubmit={handleSubmit}
-        className="relative mx-auto min-h-full w-full max-w-5xl rounded-[28px] bg-[#070707] text-white shadow-[0_0_0_1px_rgba(212,175,55,0.18),0_28px_90px_rgba(0,0,0,0.7)]"
+        className="relative h-fit max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-[28px] bg-[#070707] text-white shadow-[0_0_0_1px_rgba(212,175,55,0.18),0_28px_90px_rgba(0,0,0,0.7)]"
       >
         <div className="absolute -left-12 top-8 h-48 w-48 rounded-full bg-[#D4AF37]/10 blur-3xl" />
 

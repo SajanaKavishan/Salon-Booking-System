@@ -11,6 +11,7 @@ function StaffManager() {
   const [showPassword, setShowPassword] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
   const [imagePreview, setImagePreview] = useState("");
+  const [isAddingStaff, setIsAddingStaff] = useState(false);
   const fileInputRef = useRef(null);
   const [activeMenuId, setActiveMenuId] = useState(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -92,6 +93,9 @@ function StaffManager() {
 
   const handleAddStaff = async (e) => {
     e.preventDefault();
+    if (isAddingStaff) return;
+
+    setIsAddingStaff(true);
     try {
       const token = localStorage.getItem("token");
       const authHeaders = token ? { headers: { Authorization: `Bearer ${token}` } } : undefined;
@@ -127,11 +131,13 @@ function StaffManager() {
 
       const response = await axios.post("http://localhost:5000/api/staff", payload);
       setStaffList((currentStaff) => [...currentStaff, response.data]);
-      setFormData({ name: "", email: "", password: "", specialty: "", offDays: "" });
+      setFormData({ name: "", email: "", password: "", specialty: "", offDays: "", workingHours: "" });
       clearSelectedImage();
       toast.success("Staff member added successfully!");
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to add staff");
+    } finally {
+      setIsAddingStaff(false);
     }
   };
 
@@ -278,8 +284,12 @@ function StaffManager() {
           </div>
 
           <div className="md:col-span-2 xl:col-span-3">
-            <GoldButton type="submit" className="rounded-lg px-5 py-3 font-bold shadow-[0_0_20px_rgba(212,175,55,0.28)] hover:shadow-[0_0_28px_rgba(212,175,55,0.4)]">
-              + Add Staff
+            <GoldButton
+              type="submit"
+              disabled={isAddingStaff}
+              className="rounded-lg px-5 py-3 font-bold shadow-[0_0_20px_rgba(212,175,55,0.28)] hover:shadow-[0_0_28px_rgba(212,175,55,0.4)] disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {isAddingStaff ? "Adding Staff..." : "+ Add Staff"}
             </GoldButton>
           </div>
         </form>

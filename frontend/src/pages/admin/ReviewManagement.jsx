@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import { Check, Globe, Loader2, RefreshCw, Star, Trash2 } from 'lucide-react';
+import { Check, Globe, Loader2, Star, Trash2 } from 'lucide-react';
 import { toast } from 'react-toastify';
 
 const API_BASE_URL = 'http://localhost:5000/api';
@@ -168,15 +168,6 @@ function ReviewManagement() {
             </p>
           </div>
 
-          <button
-            type="button"
-            onClick={fetchReviews}
-            disabled={isLoading}
-            className="inline-flex w-fit items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/70 px-4 py-2.5 text-sm font-semibold text-zinc-200 transition hover:border-amber-500/40 hover:text-amber-300 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-            Refresh
-          </button>
         </header>
 
         <section className="mb-6 grid gap-4 sm:grid-cols-3">
