@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { registerUser, googleLogin, getMe, updateUserProfile } = require('../controllers/userController');
+const { registerUser, googleLogin, getMe, updateUserProfile, completeOnboarding } = require('../controllers/userController');
 const { registerStaff, login } = require('../controllers/authController');
 const { protect, admin } = require('../middleware/authMiddleware'); // Import the protect middleware to secure the /me route   
 
@@ -14,5 +14,6 @@ router.post('/google-login', googleLogin); // New route for handling Google logi
 router.get('/me', protect, getMe);
 router.get('/profile', protect, getMe); // Alias for legacy frontend calls to GET /api/users/profile
 router.put('/profile', protect, updateUserProfile); // New route for updating user profile, also protected by the protect middleware. The updateUserProfile function will handle the logic for updating the user's profile information.
+router.patch('/complete-onboarding', protect, completeOnboarding);
 
 module.exports = router;

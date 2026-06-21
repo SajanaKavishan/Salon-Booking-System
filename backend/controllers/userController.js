@@ -81,6 +81,7 @@ const registerUser = async (req, res) => { // Register a new user
                 phone: user.phone,
                 preferredStylist: user.preferredStylist,
                 profileImage: user.profileImage || '',
+                isFirstLogin: user.isFirstLogin,
                 role: user.role,
                 token: generateToken(user._id), 
             });
@@ -105,6 +106,7 @@ const loginUser = async (req, res) => { // Authenticate a user and return their 
                 phone: user.phone || '',
                 preferredStylist: user.preferredStylist || '',
                 profileImage: user.profileImage || '',
+                isFirstLogin: user.isFirstLogin,
                 role: user.role,
                 token: generateToken(user._id), //Create a token for the user
             });
@@ -139,6 +141,7 @@ const googleLogin = async (req, res) => {
           phone: user.phone || '',
           preferredStylist: user.preferredStylist || '',
           profileImage: user.profileImage || '',
+          isFirstLogin: user.isFirstLogin,
           role: user.role,
           token: generateToken(user._id),
         });
@@ -166,6 +169,7 @@ const googleLogin = async (req, res) => {
           phone: user.phone || '',
           preferredStylist: user.preferredStylist || '',
           profileImage: user.profileImage || '',
+          isFirstLogin: user.isFirstLogin,
           role: user.role,
           token: generateToken(user._id),
         });
@@ -313,10 +317,40 @@ const updateUserProfile = async (req, res) => {
   }
 };
 
+// Mark the premium customer onboarding flow as complete for the authenticated user.
+const completeOnboarding = async (req, res) => {
+  try {
+    const resolvedPreferredStylist = await resolvePreferredStylistId(req.body?.preferredStylist);
+    const updates = { isFirstLogin: false };
+
+    if (resolvedPreferredStylist !== undefined) {
+      updates.preferredStylist = resolvedPreferredStylist;
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      updates,
+      { new: true }
+    ).select('-password');
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    return res.status(200).json({
+      message: 'Onboarding completed successfully.',
+      user,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = { // Export all the controller functions to be used in the routes
     registerUser,
     loginUser,
     googleLogin, 
     getMe,
-    updateUserProfile
+    updateUserProfile,
+    completeOnboarding
 };

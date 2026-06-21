@@ -115,6 +115,7 @@ const login = async (req, res) => {
       preferredStylist: user.preferredStylist || '',
       profileImage,
       imageUrl: profileImage,
+      isFirstLogin: user.isFirstLogin,
       specialty,
       workingHours,
       offDays,

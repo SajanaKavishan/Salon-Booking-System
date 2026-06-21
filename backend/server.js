@@ -94,7 +94,8 @@ app.post("/api/login", async (req, res) => { // Basic login route for testing pu
                     name: user.name,
                     phone: user.phone || '', 
                     preferredStylist: user.preferredStylist || '', 
-                    profileImage: user.profileImage || '' 
+                    profileImage: user.profileImage || '',
+                    isFirstLogin: user.isFirstLogin,
                 } 
             });
         } else {
