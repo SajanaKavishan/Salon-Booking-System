@@ -17,6 +17,7 @@ function Navbar() {
   if (
     location.pathname === '/login' ||
     location.pathname === '/register' ||
+    location.pathname === '/onboarding' ||
     location.pathname.startsWith('/admin') ||
     location.pathname.startsWith('/staff') ||
     location.pathname === '/dashboard' ||

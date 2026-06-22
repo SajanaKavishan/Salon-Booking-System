@@ -4,6 +4,7 @@ import Home from "./pages/auth/Home";
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
 import Dashboard from "./pages/customer/Dashboard";
+import Onboarding from "./pages/customer/Onboarding";
 import RoleProfile from "./pages/shared/RoleProfile";
 import BookAppointment from "./pages/customer/BookAppointment";
 import History from "./pages/customer/History";
@@ -47,6 +48,15 @@ function App() {
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route
+              path="/onboarding"
+              element={
+                <CustomerRoute>
+                  <Onboarding />
+                </CustomerRoute>
+              }
+            />
+
             <Route
               element={
                 <CustomerRoute>

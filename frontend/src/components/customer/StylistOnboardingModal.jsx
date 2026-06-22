@@ -19,7 +19,7 @@ function StylistOnboardingModal({ isOpen, onClose, user, onStylistSelected }) {
   const [stylists, setStylists] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [selectedStylistId, setSelectedStylistId] = useState('');
+  const [selectedStylistId, setSelectedStylistId] = useState(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -60,6 +60,13 @@ function StylistOnboardingModal({ isOpen, onClose, user, onStylistSelected }) {
     };
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) {
+      setSelectedStylistId(null);
+      setIsSaving(false);
+    }
+  }, [isOpen]);
+
   const sortedStylists = useMemo(
     () => [...stylists].sort((first, second) => {
       const ratingDifference = Number(second?.averageRating || 0) - Number(first?.averageRating || 0);
@@ -73,18 +80,28 @@ function StylistOnboardingModal({ isOpen, onClose, user, onStylistSelected }) {
     [stylists]
   );
 
+  const selectedStylist = useMemo(
+    () => sortedStylists.find((stylist) => getStaffId(stylist) === selectedStylistId),
+    [selectedStylistId, sortedStylists]
+  );
+
   const handleClose = () => {
     if (!isSaving) {
       onClose?.();
     }
   };
 
-  const handleStylistSelect = async (stylist) => {
-    const preferredStylist = getStaffId(stylist);
+  const handleStylistSelect = (stylist) => {
+    const stylistId = getStaffId(stylist);
 
-    if (!preferredStylist || isSaving) return;
+    if (!stylistId || isSaving) return;
 
-    setSelectedStylistId(preferredStylist);
+    setSelectedStylistId(stylistId);
+  };
+
+  const handleConfirmSelection = async () => {
+    if (!selectedStylist || !selectedStylistId || isSaving) return;
+
     setIsSaving(true);
 
     try {
@@ -97,7 +114,7 @@ function StylistOnboardingModal({ isOpen, onClose, user, onStylistSelected }) {
 
       const response = await axios.put(
         `${BACKEND_BASE_URL}/api/users/profile`,
-        { preferredStylist },
+        { preferredStylist: selectedStylistId },
         {
           headers: {
             Authorization: `Bearer ${token}`
@@ -108,13 +125,13 @@ function StylistOnboardingModal({ isOpen, onClose, user, onStylistSelected }) {
       const updatedUser = {
         ...(user || {}),
         ...(response.data || {}),
-        preferredStylist: response.data?.preferredStylist || preferredStylist
+        preferredStylist: response.data?.preferredStylist || selectedStylistId
       };
 
       localStorage.setItem('user', JSON.stringify(updatedUser));
       window.dispatchEvent(new CustomEvent('profileUpdated', { detail: updatedUser }));
 
-      toast.success(`${stylist.name} is now your preferred stylist.`);
+      toast.success(`${selectedStylist.name} is now your preferred stylist.`);
       onStylistSelected?.(updatedUser);
       onClose?.();
     } catch (error) {
@@ -122,7 +139,6 @@ function StylistOnboardingModal({ isOpen, onClose, user, onStylistSelected }) {
       toast.error(error.response?.data?.message || 'Unable to save your preferred stylist right now.');
     } finally {
       setIsSaving(false);
-      setSelectedStylistId('');
     }
   };
 
@@ -138,7 +154,7 @@ function StylistOnboardingModal({ isOpen, onClose, user, onStylistSelected }) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="stylist-onboarding-title"
-        className="relative w-full max-w-2xl rounded-2xl border border-zinc-800 bg-zinc-950 p-6 shadow-2xl animate-scaleIn sm:p-8"
+        className="relative flex w-full max-w-2xl flex-col space-y-6 rounded-2xl border border-zinc-800 bg-zinc-950 p-8 pb-28 shadow-2xl animate-scaleIn"
         onClick={(event) => event.stopPropagation()}
       >
         <button
@@ -151,18 +167,24 @@ function StylistOnboardingModal({ isOpen, onClose, user, onStylistSelected }) {
           <X className="h-4 w-4" />
         </button>
 
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-[#D4AF37]/25 bg-[#D4AF37]/10 text-[#D4AF37] shadow-[0_16px_36px_rgba(212,175,55,0.12)]">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-[#D4AF37]/25 bg-[#D4AF37]/10 text-[#D4AF37] shadow-[0_16px_36px_rgba(212,175,55,0.12)]">
           <Sparkles className="h-5 w-5" />
         </div>
 
-        <h2 id="stylist-onboarding-title" className="mt-5 font-serif text-2xl font-semibold text-white sm:text-3xl">
-          Welcome to SalonDees Luxury Experience! ✨
-        </h2>
-        <p className="mt-3 max-w-xl text-sm leading-6 text-zinc-400">
-          Choose your preferred stylist to pre-select them for all your future appointments. You can always change this later.
-        </p>
+        <div className="space-y-3">
+          <h2
+            id="stylist-onboarding-title"
+            className="flex items-center justify-center gap-2 text-balance text-center text-2xl font-bold tracking-tight text-zinc-100"
+          >
+            <span aria-hidden="true">✨</span>
+            <span>Welcome to SalonDees Luxury Experience!</span>
+          </h2>
+          <p className="mx-auto max-w-xl text-center text-sm leading-6 text-zinc-400">
+            Choose your preferred stylist to pre-select them for all your future appointments. You can always change this later.
+          </p>
+        </div>
 
-        <div className="mt-7">
+        <div>
           {isLoading ? (
             <div className="grid gap-3 sm:grid-cols-2">
               {[1, 2, 3, 4].map((item) => (
@@ -182,7 +204,11 @@ function StylistOnboardingModal({ isOpen, onClose, user, onStylistSelected }) {
                     type="button"
                     onClick={() => handleStylistSelect(stylist)}
                     disabled={isSaving || !stylistId}
-                    className="group flex min-h-24 items-center gap-4 rounded-xl border border-white/10 bg-white/[0.025] p-4 text-left transition hover:border-[#D4AF37]/45 hover:bg-[#D4AF37]/[0.06] disabled:cursor-not-allowed disabled:opacity-60"
+                    className={`group flex min-h-24 items-center gap-4 rounded-xl p-4 text-left transition-all disabled:cursor-not-allowed ${
+                      isSelected
+                        ? 'border border-amber-500/80 bg-zinc-900/80 opacity-100 shadow-[0_0_20px_rgba(245,158,11,0.1)]'
+                        : 'border border-zinc-800 bg-zinc-900/30 opacity-60 hover:border-zinc-700 hover:opacity-100'
+                    }`}
                   >
                     <span className="relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full border border-[#D4AF37]/25 bg-[#D4AF37]/10 text-[#D4AF37]">
                       <UserRound className="h-6 w-6" />
@@ -213,8 +239,14 @@ function StylistOnboardingModal({ isOpen, onClose, user, onStylistSelected }) {
                       )}
                     </span>
 
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 text-zinc-500 transition group-hover:border-[#D4AF37]/35 group-hover:text-[#D4AF37]">
-                      {isSelected && isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                    <span
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition-all ${
+                        isSelected
+                          ? 'border-amber-500 bg-amber-500 text-neutral-950 shadow-[0_0_18px_rgba(245,158,11,0.25)]'
+                          : 'border-zinc-700 bg-zinc-950/80 text-transparent group-hover:border-zinc-500'
+                      }`}
+                    >
+                      <Check className="h-4 w-4" />
                     </span>
                   </button>
                 );
@@ -227,18 +259,31 @@ function StylistOnboardingModal({ isOpen, onClose, user, onStylistSelected }) {
           )}
         </div>
 
-        <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs leading-5 text-zinc-500">
-            Your choice keeps booking faster and more personal.
-          </p>
+        <p className="pr-0 text-center text-xs leading-5 text-zinc-500 sm:pr-56 sm:text-left">
+          Your choice keeps booking faster and more personal.
+        </p>
+
+        <div className="absolute bottom-8 left-8 right-8 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
           <button
             type="button"
             onClick={handleClose}
             disabled={isSaving}
-            className="rounded-lg border border-white/10 px-5 py-3 text-sm font-semibold text-zinc-300 transition hover:border-[#D4AF37]/40 hover:text-[#D4AF37] disabled:cursor-not-allowed disabled:opacity-50"
+            className="px-4 py-2.5 text-sm font-medium text-zinc-500 transition-all hover:text-zinc-300 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Skip for Now
           </button>
+
+          {selectedStylistId && (
+            <button
+              type="button"
+              onClick={handleConfirmSelection}
+              disabled={isSaving}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-5 py-2.5 font-bold text-neutral-950 shadow-lg transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+              {isSaving ? 'Confirming...' : 'Confirm Selection'}
+            </button>
+          )}
         </div>
       </div>
     </div>

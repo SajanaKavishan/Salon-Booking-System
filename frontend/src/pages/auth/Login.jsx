@@ -34,9 +34,10 @@ function Login() {
 
   const { email, password } = formData;
 
-  const getRedirectPath = (role) => {
+  const getRedirectPath = (role, isFirstLogin = false) => {
     if (role === 'admin') return '/admin';
     if (role === 'staff') return '/staff/dashboard';
+    if (isFirstLogin) return '/onboarding';
 
     const next = searchParams.get('next');
     if (next?.startsWith('/') && !next.startsWith('//')) return next;
@@ -44,8 +45,8 @@ function Login() {
     return '/booking';
   };
 
-  const redirectAfterLogin = (role) => {
-    const redirectPath = getRedirectPath(role);
+  const redirectAfterLogin = (role, isFirstLogin = false) => {
+    const redirectPath = getRedirectPath(role, isFirstLogin);
     const serviceId = searchParams.get('serviceId');
 
     navigate(
@@ -72,7 +73,7 @@ function Login() {
         email: email.trim(),
         password,
       });
-      const { token, role = 'customer', name, email: responseEmail, _id: id, phone = '', preferredStylist = '', profileImage = '' } = response.data;
+      const { token, role = 'customer', name, email: responseEmail, _id: id, phone = '', preferredStylist = '', profileImage = '', isFirstLogin = false } = response.data;
 
       localStorage.setItem('token', token);
       localStorage.setItem('userRole', role);
@@ -86,12 +87,13 @@ function Login() {
           phone,
           preferredStylist,
           profileImage,
+          isFirstLogin,
           role,
         })
       );
 
       toast.success('Welcome back to Salon DEES!');
-      redirectAfterLogin(role);
+      redirectAfterLogin(role, isFirstLogin);
     } catch (error) {
       toast.error(error.response?.data?.message || 'Login failed. Check your email and password.');
     } finally {
@@ -119,12 +121,13 @@ function Login() {
             phone: response.data.phone || '',
             preferredStylist: response.data.preferredStylist || '',
             profileImage: response.data.profileImage || '',
+            isFirstLogin: response.data.isFirstLogin || false,
             role: response.data.role,
           })
         );
 
         toast.success('Successfully logged in with Google!');
-        redirectAfterLogin(response.data.role);
+        redirectAfterLogin(response.data.role, response.data.isFirstLogin || false);
       } catch {
         toast.error('Google login failed on our server. Please try again.');
       } finally {

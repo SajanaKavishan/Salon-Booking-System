@@ -48,6 +48,8 @@ function Register() {
       const response = await axios.post('http://localhost:5000/api/users/register', formData);
 
       localStorage.setItem('token', response.data.token);
+      localStorage.setItem('userRole', response.data.role || 'customer');
+      localStorage.setItem('userName', response.data.name || '');
       localStorage.setItem(
         'user',
         JSON.stringify({
@@ -57,12 +59,13 @@ function Register() {
           phone: response.data.phone,
           preferredStylist: response.data.preferredStylist || '',
           profileImage: response.data.profileImage || '',
+          isFirstLogin: response.data.isFirstLogin ?? true,
           role: response.data.role || 'customer',
         })
       );
 
       toast.success('Registration successful!');
-      navigate('/dashboard');
+      navigate('/onboarding');
     } catch (error) {
       toast.error(error.response?.data?.message || 'Registration failed. Please try again.');
     } finally {
