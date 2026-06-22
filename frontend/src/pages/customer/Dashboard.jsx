@@ -7,7 +7,6 @@ import { useAppointments } from '../../context/AppointmentsContext';
 import ActiveBookingCard from '../../components/customer/ActiveBookingCard';
 import AppointmentReviewModal from '../../components/customer/AppointmentReviewModal';
 import MoneyBundleIcon from '../../components/common/MoneyBundleIcon';
-import StylistOnboardingModal from '../../components/customer/StylistOnboardingModal';
 
 const HISTORY_STATUSES = ['completed', 'rejected', 'cancelled', 'canceled', 'no-show'];
 const UPCOMING_STATUSES = ['pending', 'approved', 'confirmed'];
@@ -82,19 +81,6 @@ const getStylistDisplayName = (appointment) => {
   return 'Any Available Artist';
 };
 
-const hasPreferredStylist = (currentUser) => {
-  const preferredStylist = currentUser?.preferredStylist;
-
-  if (!preferredStylist) return false;
-  if (typeof preferredStylist === 'string') {
-    const normalizedValue = preferredStylist.trim().toLowerCase();
-    return Boolean(normalizedValue && normalizedValue !== 'not selected');
-  }
-  if (typeof preferredStylist === 'object') return Boolean(preferredStylist._id || preferredStylist.id || preferredStylist.name);
-
-  return false;
-};
-
 const canCancelAppointment = (appointment) => {
   if (!appointment?.date || !appointment?.startTime) return false;
 
@@ -141,8 +127,6 @@ function Dashboard() {
   const [appointmentToCancel, setAppointmentToCancel] = useState(null);
   const [isCancelling, setIsCancelling] = useState(false);
   const [dismissedReviewAppointmentIds, setDismissedReviewAppointmentIds] = useState([]);
-  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
-  const [hasDismissedOnboarding, setHasDismissedOnboarding] = useState(false);
 
   const fetchAppointments = useCallback(async () => {
     const token = localStorage.getItem('token');
@@ -196,11 +180,6 @@ function Dashboard() {
     window.addEventListener('profileUpdated', handleProfileUpdated);
     return () => window.removeEventListener('profileUpdated', handleProfileUpdated);
   }, []);
-
-  useEffect(() => {
-    if (!user || hasDismissedOnboarding || hasPreferredStylist(user)) return;
-    setIsOnboardingOpen(true);
-  }, [hasDismissedOnboarding, user]);
 
   useEffect(() => {
     setDismissedReviewAppointmentIds(readDismissedReviewPromptIds(user));
@@ -308,27 +287,6 @@ function Dashboard() {
       return nextIds;
     });
   }, [user]);
-
-  const handleCloseOnboarding = () => {
-    setHasDismissedOnboarding(true);
-    setIsOnboardingOpen(false);
-  };
-
-  const handleStylistSelected = (updatedUser) => {
-    if (updatedUser) {
-      setUser(updatedUser);
-    } else {
-      try {
-        const storedUser = localStorage.getItem('user');
-        if (storedUser) setUser(JSON.parse(storedUser));
-      } catch {
-        setUser((currentUser) => currentUser);
-      }
-    }
-
-    setHasDismissedOnboarding(true);
-    setIsOnboardingOpen(false);
-  };
 
   return (
     <div className="mx-auto min-h-screen w-full max-w-7xl bg-[#070707] text-white">
@@ -590,12 +548,6 @@ function Dashboard() {
         />
       )}
 
-      <StylistOnboardingModal
-        isOpen={isOnboardingOpen}
-        onClose={handleCloseOnboarding}
-        user={user}
-        onStylistSelected={handleStylistSelected}
-      />
     </div>
   );
 }

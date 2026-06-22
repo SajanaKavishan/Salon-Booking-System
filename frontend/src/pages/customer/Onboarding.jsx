@@ -520,7 +520,7 @@ function Onboarding() {
   };
 
   return (
-    <main className="flex min-h-screen w-screen overflow-x-hidden bg-[#050506] text-white lg:h-screen lg:overflow-hidden">
+    <main className="flex h-auto min-h-screen w-screen overflow-x-hidden bg-[#050506] text-white lg:h-screen lg:overflow-hidden">
       <AnimatePresence mode="wait">
         <motion.section
           key={currentStep}
@@ -528,9 +528,9 @@ function Onboarding() {
           initial="initial"
           animate="animate"
           exit="exit"
-          className="relative flex min-h-screen w-full flex-col overflow-x-hidden bg-[#050506] lg:block lg:h-full lg:min-h-0 lg:overflow-hidden"
+          className="relative flex h-auto min-h-screen w-full flex-col overflow-x-hidden bg-[#050506] lg:block lg:h-full lg:min-h-0 lg:overflow-hidden"
         >
-          <div className="relative z-0 h-[42vh] min-h-[17rem] w-full shrink-0 overflow-hidden lg:hidden">
+          <div className="relative z-0 h-[40vh] min-h-[15rem] w-full shrink-0 overflow-hidden sm:h-[45vh] sm:min-h-[17rem] lg:hidden">
             <img
               src={activeStep.image}
               alt=""
@@ -599,7 +599,7 @@ function Onboarding() {
           
           {/* 👑 WRAPPER ALIGNED TO TRULY SNAPS TO THE ABSOLUTE RIGHT EDGE */}
           <div
-            className={`relative z-10 flex w-full flex-1 items-center justify-center px-6 py-10 sm:px-8 lg:h-full lg:flex-none lg:px-12 lg:py-16 ${
+            className={`relative z-10 flex w-full flex-1 items-center justify-center px-6 pb-12 pt-6 sm:px-8 sm:pb-14 lg:h-full lg:flex-none lg:px-12 lg:py-16 lg:pb-16 ${
               currentStep === 1
                 ? 'lg:w-1/2 lg:ml-auto lg:pl-0 lg:pr-[8%] xl:pr-[10%]'
                 : currentStep === 2
