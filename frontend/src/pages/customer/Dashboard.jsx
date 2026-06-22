@@ -6,11 +6,11 @@ import { toast } from 'react-toastify';
 import { useAppointments } from '../../context/AppointmentsContext';
 import ActiveBookingCard from '../../components/customer/ActiveBookingCard';
 import AppointmentReviewModal from '../../components/customer/AppointmentReviewModal';
+import DashboardHeader from '../../components/customer/DashboardHeader';
 import MoneyBundleIcon from '../../components/common/MoneyBundleIcon';
 
 const HISTORY_STATUSES = ['completed', 'rejected', 'cancelled', 'canceled', 'no-show'];
 const UPCOMING_STATUSES = ['pending', 'approved', 'confirmed'];
-const HERO_IMAGE_URL = '/heroBg.jpg';
 const REVIEW_PROMPT_STORAGE_PREFIX = 'salonDismissedReviewPrompts';
 
 const formatServices = (services, fallback = 'Service not available') => {
@@ -291,82 +291,12 @@ function Dashboard() {
   return (
     <div className="mx-auto min-h-screen w-full max-w-7xl bg-[#070707] text-white">
       <section className="min-w-0">
-        <div className="relative mb-8 w-full overflow-hidden rounded-2xl border border-[#D4AF37]/20 bg-gradient-to-r from-[#0a0a0a] via-[#111111] to-[#1a170c] p-6 shadow-2xl shadow-black/30 sm:p-8">
-          <div
-            className="pointer-events-none absolute inset-0 opacity-30"
-            style={{
-              backgroundImage: 'radial-gradient(circle, rgba(212,175,55,0.45) 1px, transparent 1px)',
-              backgroundSize: '18px 18px',
-              maskImage: 'linear-gradient(90deg, black 0%, transparent 34%)',
-              WebkitMaskImage: 'linear-gradient(90deg, black 0%, transparent 34%)'
-            }}
-          ></div>
-          <div
-            className="pointer-events-none absolute inset-y-0 right-0 hidden w-[58%] bg-cover bg-center opacity-50 md:block"
-            style={{ backgroundImage: `url("${HERO_IMAGE_URL}")` }}
-          ></div>
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-[#0a0a0a]/95 via-45% to-[#0a0a0a]/42"></div>
-          <div
-            className="pointer-events-none absolute left-[26%] top-[-70%] h-[230%] w-[34rem] -rotate-[32deg] opacity-75"
-            style={{
-              backgroundImage: [
-                'linear-gradient(90deg, transparent 0%, rgba(212,175,55,0.08) 34%, rgba(212,175,55,0.14) 50%, rgba(212,175,55,0.06) 66%, transparent 100%)',
-                'radial-gradient(circle, rgba(212,175,55,0.5) 0.7px, transparent 1px)',
-                'radial-gradient(circle, rgba(255,231,150,0.28) 0.5px, transparent 1px)'
-              ].join(', '),
-              backgroundSize: '100% 100%, 9px 9px, 15px 15px',
-              backgroundPosition: '0 0, 0 0, 4px 7px',
-              filter: 'blur(0.25px)',
-              maskImage: 'linear-gradient(90deg, transparent 0%, black 28%, black 72%, transparent 100%)',
-              WebkitMaskImage: 'linear-gradient(90deg, transparent 0%, black 28%, black 72%, transparent 100%)'
-            }}
-          ></div>
-          <div
-            className="pointer-events-none absolute left-[38%] top-[-62%] h-[210%] w-[18rem] -rotate-[32deg] opacity-45"
-            style={{
-              backgroundImage: 'radial-gradient(circle, rgba(212,175,55,0.45) 0.55px, transparent 1px)',
-              backgroundSize: '7px 7px',
-              maskImage: 'linear-gradient(90deg, transparent 0%, black 36%, black 64%, transparent 100%)',
-              WebkitMaskImage: 'linear-gradient(90deg, transparent 0%, black 36%, black 64%, transparent 100%)'
-            }}
-          ></div>
-
-          <div className="relative flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <h1 className="font-serif text-3xl text-white">
-                Welcome back, <span className="text-[#D4AF37]">{firstName}</span>
-              </h1>
-              <p className="mt-2 text-sm text-neutral-400">
-                Ready for your next premium grooming session?
-              </p>
-              <div className="mt-7 text-sm text-neutral-400">
-                {nextAppointment ? (
-                  <div>
-                    <p>Your next appointment is on</p>
-                    <p className="mt-3 inline-flex flex-wrap items-center gap-2 font-semibold text-[#D4AF37]">
-                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path d="M7 3v3M17 3v3M4.5 9h15M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                      <span>{formatDate(nextAppointment.date)}</span>
-                      <span className="h-1 w-1 rounded-full bg-[#D4AF37]"></span>
-                      <span>{nextAppointment.startTime || 'Time pending'}</span>
-                    </p>
-                  </div>
-                ) : (
-                  <p>No upcoming bookings yet.</p>
-                )}
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => navigate('/book')}
-              className="w-full rounded-lg bg-[#D4AF37] px-6 py-3 text-sm font-bold text-black shadow-lg shadow-[#D4AF37]/15 transition hover:bg-[#b8952e] sm:w-fit"
-            >
-              + Book New Appointment
-            </button>
-          </div>
-        </div>
+        <DashboardHeader
+          firstName={firstName}
+          nextAppointment={nextAppointment}
+          formatDate={formatDate}
+          onBook={() => navigate('/book')}
+        />
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
           <div className="bg-[#111111] border-neutral-850 rounded-xl p-5 flex items-center gap-5">

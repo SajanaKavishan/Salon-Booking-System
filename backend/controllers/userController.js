@@ -2,6 +2,8 @@ const User = require('../models/userModel');
 const Staff = require('../models/Staff');
 const LeaveRequest = require('../models/LeaveRequest');
 const Notification = require('../models/Notification');
+const Service = require('../models/Service');
+const generateAvailableSlots = require('../utils/slotGenerator');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -28,6 +30,62 @@ const formatLeaveDate = (startDate, endDate = startDate) => {
   const end = formatter.format(new Date(endDate));
   return start === end ? start : `${start} - ${end}`;
 };
+
+const NO_PREFERRED_STYLIST_BANNER_MESSAGE = 'Ready to elevate your aesthetic? Explore our master stylists and reserve your luxury grooming experience today.';
+
+const toDateString = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+};
+
+const getTodayDateString = () => {
+  const today = new Date();
+  return toDateString(today);
+};
+
+const getPreferredStaff = async (preferredStylist) => {
+  if (!preferredStylist || !mongoose.isValidObjectId(preferredStylist)) return null;
+
+  return Staff.findOne({
+    $or: [
+      { userId: preferredStylist },
+      { _id: preferredStylist },
+    ],
+  }).lean();
+};
+
+const timeToMinutes = (value) => {
+  if (typeof value !== 'string') return null;
+
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i);
+  if (!match) return null;
+
+  let hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const period = match[3]?.toUpperCase();
+
+  if (Number.isNaN(hours) || Number.isNaN(minutes) || minutes > 59) return null;
+
+  if (period) {
+    if (hours < 1 || hours > 12) return null;
+    if (hours === 12) hours = 0;
+    if (period === 'PM') hours += 12;
+  } else if (hours > 23) {
+    return null;
+  }
+
+  return hours * 60 + minutes;
+};
+
+const getCurrentMinutes = () => {
+  const now = new Date();
+  return now.getHours() * 60 + now.getMinutes();
+};
+
+const getFirstName = (name) => String(name || 'Your stylist').trim().split(/\s+/)[0];
 
 const resolvePreferredStylistId = async (preferredStylist) => {
   if (preferredStylist === null || preferredStylist === '') return null;
@@ -346,11 +404,83 @@ const completeOnboarding = async (req, res) => {
   }
 };
 
+const getDashboardBanner = async (req, res) => {
+  try {
+    const preferredStaff = await getPreferredStaff(req.user?.preferredStylist);
+
+    if (!preferredStaff) {
+      return res.status(200).json({
+        scenario: 'no_preferred_stylist',
+        message: NO_PREFERRED_STYLIST_BANNER_MESSAGE,
+        slotsOpen: 0,
+        hasPreferredStylist: false,
+      });
+    }
+
+    const shortestService = await Service.findOne({})
+      .sort({ duration: 1 })
+      .select('duration')
+      .lean();
+    const serviceDuration = Number.isInteger(shortestService?.duration) && shortestService.duration > 0
+      ? shortestService.duration
+      : 60;
+
+    const slots = await generateAvailableSlots({
+      staffId: preferredStaff._id,
+      date: getTodayDateString(),
+      serviceDuration,
+    });
+    const actualSlotsOpen = slots.length;
+    const displaySlotsOpen = Math.min(actualSlotsOpen, 4);
+
+    if (displaySlotsOpen > 0) {
+      return res.status(200).json({
+        scenario: 'slots_available',
+        message: `Your preferred stylist, ${preferredStaff.name}, has only ${displaySlotsOpen} slot${displaySlotsOpen === 1 ? '' : 's'} left today! Book now to secure your session.`,
+        stylistName: preferredStaff.name,
+        slotsOpen: displaySlotsOpen,
+        actualSlotsOpen,
+        hasPreferredStylist: true,
+      });
+    }
+
+    const stylistFirstName = getFirstName(preferredStaff.name);
+    const workingEndMinutes = timeToMinutes(preferredStaff.workingHours?.end || '17:00');
+    const isPastWorkingHours = workingEndMinutes !== null && getCurrentMinutes() > workingEndMinutes;
+
+    if (isPastWorkingHours) {
+      return res.status(200).json({
+        scenario: 'closed_for_day',
+        message: `${stylistFirstName}'s styling hours have concluded for today. Explore availability and reserve your premier slot for tomorrow or later this week.`,
+        stylistName: preferredStaff.name,
+        slotsOpen: 0,
+        actualSlotsOpen,
+        hasPreferredStylist: true,
+      });
+    }
+
+    return res.status(200).json({
+      scenario: 'fully_booked',
+      message: `${stylistFirstName} is fully booked today with premium grooming sessions. Secure your exclusive slot for tomorrow or later this week to ensure your look stays effortless.`,
+      stylistName: preferredStaff.name,
+      slotsOpen: 0,
+      actualSlotsOpen,
+      hasPreferredStylist: true,
+    });
+  } catch (error) {
+    console.error('Dashboard Banner Error:', error);
+    return res.status(500).json({
+      message: 'Server Error: Could not build dashboard banner.',
+    });
+  }
+};
+
 module.exports = { // Export all the controller functions to be used in the routes
     registerUser,
     loginUser,
     googleLogin, 
     getMe,
     updateUserProfile,
-    completeOnboarding
+    completeOnboarding,
+    getDashboardBanner
 };
