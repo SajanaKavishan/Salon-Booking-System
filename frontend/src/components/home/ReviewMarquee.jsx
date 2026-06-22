@@ -71,9 +71,6 @@ function ReviewCard({ review }) {
           <span className="truncate">{getClientName(review)}</span>
           <VerifiedSeal />
         </h3>
-        <p className="mt-1 truncate text-[11px] font-medium text-zinc-500 tracking-wide uppercase">
-          Verified Customer
-        </p>
       </div>
 
       <div className="mt-4">
