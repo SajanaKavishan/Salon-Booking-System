@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import { RefreshCw } from 'lucide-react';
+import { DollarSign, RefreshCw } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { GoldButton, StatusBadge } from '../../components/admin/SystemUI';
 
@@ -102,6 +102,44 @@ const getTodayDateKey = () => {
   return `${year}-${month}-${day}`;
 };
 
+const getCurrentWeekRange = () => {
+  const now = new Date();
+  const dayIndex = now.getDay();
+  const mondayOffset = dayIndex === 0 ? -6 : 1 - dayIndex;
+  const start = new Date(now);
+  start.setDate(now.getDate() + mondayOffset);
+  start.setHours(0, 0, 0, 0);
+
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  end.setHours(23, 59, 59, 999);
+
+  return { start, end };
+};
+
+const getAppointmentDate = (appointment) => {
+  const rawDate = appointment?.bookingDate || appointment?.date;
+  if (!rawDate) return null;
+
+  const dateKey = String(rawDate).slice(0, 10);
+  const [year, month, day] = dateKey.split('-').map(Number);
+  const parsedDate = [year, month, day].some(Number.isNaN)
+    ? new Date(rawDate)
+    : new Date(year, month - 1, day);
+
+  return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
+};
+
+const isCompletedAppointment = (appointment) => (
+  String(appointment?.status || '').trim().toLowerCase() === 'completed'
+);
+
+const formatCurrency = (amount) => (
+  `Rs. ${new Intl.NumberFormat('en-LK', {
+    maximumFractionDigits: 0,
+  }).format(Number(amount) || 0)}`
+);
+
 const getServicesLabel = (appointment) => (
   Array.isArray(appointment?.services) && appointment.services.length > 0
     ? appointment.services.map((service) => service.name || service).join(', ')
@@ -198,8 +236,23 @@ function StaffDashboard() {
     })
   ), [todayAppointments, currentTime]);
 
-  const pendingApprovals = todayAppointments.filter((appointment) => appointment.status === 'Pending').length;
-  const completedSessions = todayAppointments.filter((appointment) => appointment.status === 'Completed').length;
+  const pendingApprovals = todayAppointments.filter((appointment) => (
+    String(appointment?.status || '').trim().toLowerCase() === 'pending'
+  )).length;
+  const completedSessions = todayAppointments.filter(isCompletedAppointment).length;
+  const weeklyEarnings = useMemo(() => {
+    const { start, end } = getCurrentWeekRange();
+
+    return appointments.reduce((total, appointment) => {
+      const appointmentDate = getAppointmentDate(appointment);
+      if (!isCompletedAppointment(appointment) || !appointmentDate) return total;
+
+      const appointmentTime = appointmentDate.getTime();
+      if (appointmentTime < start.getTime() || appointmentTime > end.getTime()) return total;
+
+      return total + Number(appointment.totalAmount || 0);
+    }, 0);
+  }, [appointments]);
 
   const handleStatusUpdate = async (appointmentId, status) => {
     try {
@@ -356,6 +409,12 @@ function StaffDashboard() {
           <path d="m5 12 4.2 4.2L19 6.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       )
+    },
+    {
+      label: "This Week's Earnings",
+      value: formatCurrency(weeklyEarnings),
+      subtitle: 'UPDATED REAL-TIME',
+      icon: <DollarSign className="h-5 w-5" />
     }
   ];
 
@@ -368,7 +427,7 @@ function StaffDashboard() {
         <p className="mt-3 text-base text-gray-400">Here is your schedule for today.</p>
       </header>
 
-      <section className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-3">
+      <section className="mb-8 grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4">
         {statCards.map((card) => (
           <div
             key={card.label}

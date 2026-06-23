@@ -320,6 +320,173 @@ const getAllAppointments = async (req, res) => {
     }
 };
 
+const getStaffAppointmentQuery = async (user) => {
+    if (user.role !== 'staff') return {};
+
+    const staffMembers = await Staff.find({ name: user.name }).select('_id');
+    const staffIds = staffMembers.map((staffMember) => staffMember._id);
+
+    return {
+        $or: [
+            { stylist: { $in: staffIds } },
+            { staffId: { $in: staffIds } },
+        ],
+    };
+};
+
+const formatDateKey = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+
+    return `${year}-${month}-${day}`;
+};
+
+const startOfDay = (date) => {
+    const nextDate = new Date(date);
+    nextDate.setHours(0, 0, 0, 0);
+    return nextDate;
+};
+
+const endOfDay = (date) => {
+    const nextDate = new Date(date);
+    nextDate.setHours(23, 59, 59, 999);
+    return nextDate;
+};
+
+const STAFF_EARNINGS_RANGE_LABELS = {
+    FULL_YEAR: 'Full year',
+    YTD: 'Year to date',
+    LAST_30_DAYS: 'Last 30 days',
+    LAST_7_DAYS: 'Last 7 days',
+};
+
+const normalizeStaffEarningsRange = (range) => {
+    const normalizedRange = String(range || 'YTD')
+        .trim()
+        .toUpperCase()
+        .replace(/[\s-]+/g, '_');
+
+    if (['FULL_YEAR', 'FULLYEAR', 'YEAR'].includes(normalizedRange)) return 'FULL_YEAR';
+    if (['LAST_30_DAYS', 'LAST_30', '30_DAYS', 'MONTH'].includes(normalizedRange)) return 'LAST_30_DAYS';
+    if (['LAST_7_DAYS', 'LAST_7', '7_DAYS', 'WEEK'].includes(normalizedRange)) return 'LAST_7_DAYS';
+    return 'YTD';
+};
+
+const getStaffEarningsWindow = ({ year, range } = {}) => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const requestedYear = Number(year ?? currentYear);
+
+    if (!Number.isInteger(requestedYear) || requestedYear < 2000 || requestedYear > currentYear) {
+        const error = new Error(`Year must be between 2000 and ${currentYear}.`);
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const normalizedRange = normalizeStaffEarningsRange(range);
+    const isRollingRange = ['LAST_7_DAYS', 'LAST_30_DAYS'].includes(normalizedRange);
+
+    if (isRollingRange) {
+        const days = normalizedRange === 'LAST_7_DAYS' ? 7 : 30;
+        const startDate = startOfDay(now);
+        startDate.setDate(startDate.getDate() - (days - 1));
+
+        return {
+            year: requestedYear,
+            range: normalizedRange,
+            label: STAFF_EARNINGS_RANGE_LABELS[normalizedRange],
+            startDate,
+            endDate: endOfDay(now),
+        };
+    }
+
+    const startDate = startOfDay(new Date(requestedYear, 0, 1));
+    const endDate = normalizedRange === 'YTD' && requestedYear === currentYear
+        ? endOfDay(now)
+        : endOfDay(new Date(requestedYear, 11, 31));
+
+    return {
+        year: requestedYear,
+        range: normalizedRange,
+        label: STAFF_EARNINGS_RANGE_LABELS[normalizedRange],
+        startDate,
+        endDate,
+    };
+};
+
+const getAppointmentDateValue = (appointment) => {
+    if (appointment.bookingDate instanceof Date && !Number.isNaN(appointment.bookingDate.getTime())) {
+        return appointment.bookingDate;
+    }
+
+    if (appointment.date) {
+        const parsedDate = new Date(`${String(appointment.date).slice(0, 10)}T00:00:00.000Z`);
+        return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
+    }
+
+    return null;
+};
+
+const buildStaffRevenueTrends = (appointments, window) => {
+    const revenueByPeriod = new Map();
+
+    appointments.forEach((appointment) => {
+        const appointmentDate = getAppointmentDateValue(appointment);
+        if (!appointmentDate) return;
+
+        const key = ['FULL_YEAR', 'YTD'].includes(window.range)
+            ? String(appointmentDate.getMonth())
+            : formatDateKey(appointmentDate);
+
+        revenueByPeriod.set(
+            key,
+            (revenueByPeriod.get(key) || 0) + Number(appointment.totalAmount || 0)
+        );
+    });
+
+    if (['FULL_YEAR', 'YTD'].includes(window.range)) {
+        const endMonth = window.range === 'YTD' ? window.endDate.getMonth() : 11;
+
+        return ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+            .slice(0, endMonth + 1)
+            .map((month, index) => ({
+                label: month,
+                revenue: revenueByPeriod.get(String(index)) || 0,
+            }));
+    }
+
+    const trends = [];
+    const cursor = startOfDay(window.startDate);
+
+    while (cursor <= window.endDate) {
+        const key = formatDateKey(cursor);
+        trends.push({
+            label: cursor.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+            revenue: revenueByPeriod.get(key) || 0,
+        });
+        cursor.setDate(cursor.getDate() + 1);
+    }
+
+    return trends;
+};
+
+const buildStaffAvailableYears = async (staffQuery, currentYear) => {
+    const appointments = await Appointment.find({
+        ...staffQuery,
+        status: 'completed',
+    }).select('bookingDate date');
+
+    const years = appointments
+        .map(getAppointmentDateValue)
+        .filter(Boolean)
+        .map((date) => date.getFullYear())
+        .filter((year) => Number.isInteger(year) && year <= currentYear);
+
+    return Array.from(new Set([currentYear, ...years]))
+        .sort((firstYear, secondYear) => secondYear - firstYear);
+};
+
 // @desc    Get appointments assigned to the logged in staff member
 // @route   GET /api/appointments/staff-schedule
 // @access  Private/Staff
@@ -329,12 +496,7 @@ const getStaffAppointments = async (req, res) => {
             return res.status(401).json({ message: 'Unauthorized' });
         }
 
-        let query = {};
-        if (req.user.role === 'staff') {
-            const staffMembers = await Staff.find({ name: req.user.name });
-            const staffIds = staffMembers.map(s => s._id);
-            query = { stylist: { $in: staffIds } };
-        }
+        const query = await getStaffAppointmentQuery(req.user);
 
         const appointments = await Appointment.find(query)
             .populate('user', 'name email phone')
@@ -347,6 +509,65 @@ const getStaffAppointments = async (req, res) => {
     } catch (error) {
         console.error('Get Staff Appointments Error:', error);
         res.status(500).json({ message: 'Server Error: Could not fetch staff appointments.' });
+    }
+};
+
+// @desc    Get staff earnings summary
+// @route   GET /api/appointments/staff/earnings-summary
+// @access  Private/Staff
+const getStaffEarningsSummary = async (req, res) => {
+    try {
+        if (req.user.role !== 'staff' && req.user.role !== 'admin') {
+            return res.status(401).json({ message: 'Unauthorized' });
+        }
+
+        const window = getStaffEarningsWindow(req.query);
+        const staffQuery = await getStaffAppointmentQuery(req.user);
+        const currentYear = new Date().getFullYear();
+        const [appointments, availableYears] = await Promise.all([
+            Appointment.find({
+                ...staffQuery,
+                status: 'completed',
+                $or: [
+                    {
+                        bookingDate: {
+                            $gte: window.startDate,
+                            $lte: window.endDate,
+                        },
+                    },
+                    {
+                        date: {
+                            $gte: formatDateKey(window.startDate),
+                            $lte: formatDateKey(window.endDate),
+                        },
+                    },
+                ],
+            }).select('bookingDate date totalAmount'),
+            buildStaffAvailableYears(staffQuery, currentYear),
+        ]);
+
+        const totalRevenue = appointments.reduce((sum, appointment) => (
+            sum + Number(appointment.totalAmount || 0)
+        ), 0);
+        const completedServices = appointments.length;
+
+        return res.status(200).json({
+            range: window.range,
+            rangeLabel: window.label,
+            selectedYear: window.year,
+            availableYears,
+            totalRevenue,
+            completedServices,
+            averageServiceValue: completedServices > 0 ? totalRevenue / completedServices : 0,
+            revenueTrends: buildStaffRevenueTrends(appointments, window),
+        });
+    } catch (error) {
+        console.error('Get Staff Earnings Summary Error:', error);
+        return res.status(error.statusCode || 500).json({
+            message: error.statusCode
+                ? error.message
+                : 'Server Error: Could not fetch staff earnings summary.',
+        });
     }
 };
 
@@ -905,6 +1126,7 @@ module.exports = {
     getMyAppointments,
     getAllAppointments,
     getStaffAppointments,
+    getStaffEarningsSummary,
     submitAppointmentReview,
     getPublicReviews,
     getAppointmentsReviews,

@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { DollarSign } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import { useAppointments } from '../../context/AppointmentsContext';
 import ActiveBookingCard from '../../components/customer/ActiveBookingCard';
 import AppointmentReviewModal from '../../components/customer/AppointmentReviewModal';
 import DashboardHeader from '../../components/customer/DashboardHeader';
-import MoneyBundleIcon from '../../components/common/MoneyBundleIcon';
 
 const HISTORY_STATUSES = ['completed', 'rejected', 'cancelled', 'canceled', 'no-show'];
 const UPCOMING_STATUSES = ['pending', 'approved', 'confirmed'];
@@ -301,7 +301,7 @@ function Dashboard() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
           <div className="bg-[#111111] border-neutral-850 rounded-xl p-5 flex items-center gap-5">
             <div className="w-12 h-12 rounded-lg bg-[#D4AF37]/10 text-[#D4AF37] flex items-center justify-center">
-              <MoneyBundleIcon className="h-6 w-6" strokeWidth={1.8} />
+              <DollarSign className="h-6 w-6" strokeWidth={1.8} />
             </div>
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-400">Total Spend</p>

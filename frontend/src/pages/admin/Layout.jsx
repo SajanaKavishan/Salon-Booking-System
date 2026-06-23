@@ -226,6 +226,7 @@ function Layout() {
     if (role === 'staff') {
       if (path.startsWith('/staff/appointments')) return 'Appointments Log';
       if (path.startsWith('/staff/roster-shifts')) return 'Roster & Shifts';
+      if (path.startsWith('/staff/earnings')) return 'Earnings';
       if (path.startsWith('/staff/profile')) return 'Staff Profile';
       return 'Staff Portal';
     }

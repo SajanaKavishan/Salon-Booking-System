@@ -4,6 +4,7 @@ import { toast } from "react-toastify";
 import {
   CalendarCheck,
   ChevronDown,
+  DollarSign,
   Loader2,
   Scissors,
   Star,
@@ -27,7 +28,6 @@ import {
 } from "recharts";
 
 import { GlassCard } from "../../components/admin/SystemUI";
-import MoneyBundleIcon from "../../components/common/MoneyBundleIcon";
 
 const STATUS_COLORS = {
   Completed: "#22c55e",
@@ -234,7 +234,7 @@ function Analytics() {
           : `Total Revenue (${selectedYear})`,
       value: `Rs. ${summary.revenue.toLocaleString()}`,
       detail: "Completed appointment revenue",
-      icon: MoneyBundleIcon,
+      icon: DollarSign,
     },
     {
       label: "Total Appointments",

@@ -6,6 +6,7 @@ const {
   getMyAppointments,
   getAllAppointments,
   getStaffAppointments,
+  getStaffEarningsSummary,
   submitAppointmentReview,
   getPublicReviews,
   getAppointmentsReviews,
@@ -24,6 +25,7 @@ const Appointment = require('../models/appointmentModel'); // Import the Appoint
 // Routes for appointments. Both routes are protected, meaning that only authenticated users can access them. The createAppointment route allows users to create a new appointment, while the getMyAppointments route allows users to retrieve their own appointments.
 router.route('/').post(protect, createAppointment).get(protect, getMyAppointments);
 router.get('/all', protect, admin, getAllAppointments);
+router.get('/staff/earnings-summary', protect, staffOrAdmin, getStaffEarningsSummary);
 router.get('/staff', protect, getStaffAppointments);
 router.get('/staff-schedule', protect, getStaffAppointments);
 router.get('/availability', getStaffAvailability);

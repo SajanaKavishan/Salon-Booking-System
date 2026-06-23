@@ -59,6 +59,11 @@ const staffSidebarItems = [
     label: 'Roster & Shifts',
     to: '/staff/roster-shifts',
     icon: 'M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z'
+  },
+  {
+    label: 'Earnings',
+    to: '/staff/earnings',
+    icon: 'M5 19V9m7 10V5m7 14v-7M3 19h18M7 9l4 4 4-7 4 5'
   }
 ];
 

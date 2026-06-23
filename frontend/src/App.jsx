@@ -11,6 +11,7 @@ import History from "./pages/customer/History";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import StaffDashboard from "./pages/staff/StaffDashboard";
 import RosterShifts from "./pages/staff/RosterShifts";
+import StaffEarnings from "./pages/staff/StaffEarnings";
 import ProtectedRoute from "./routes/ProtectedRoute";
 import CustomerRoute from "./routes/CustomerRoute";
 import Navbar from "./components/common/Navbar";
@@ -113,6 +114,7 @@ function App() {
               <Route path="dashboard" element={<StaffDashboard />} />
               <Route path="appointments" element={<AppointmentsPage />} />
               <Route path="roster-shifts" element={<RosterShifts />} />
+              <Route path="earnings" element={<StaffEarnings />} />
             </Route>
             <Route 
               path="/admin/messages" 
