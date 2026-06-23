@@ -141,7 +141,7 @@ function Layout() {
     }
 
     if (path.startsWith('/booking') || path.startsWith('/book')) {
-      return 'Booking Wizard';
+      return 'Book Appointment';
     }
     if (path.startsWith('/history')) {
       return 'Booking History';

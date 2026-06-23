@@ -68,7 +68,6 @@ function ActiveBookingCard({
   statusClassName,
   canCancelAppointment,
   onCancel,
-  onReschedule,
   onAppointmentUpdated
 }) {
   const [currentTime, setCurrentTime] = useState(() => new Date());
@@ -125,14 +124,6 @@ function ActiveBookingCard({
                 I'm Running Late
               </button>
             )}
-
-            <button
-              type="button"
-              onClick={onReschedule}
-              className="rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-semibold text-white transition hover:border-[#d4af37]/40 hover:text-[#d4af37]"
-            >
-              Reschedule
-            </button>
 
             <button
               type="button"

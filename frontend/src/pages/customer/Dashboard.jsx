@@ -354,7 +354,6 @@ function Dashboard() {
                   statusClassName={statusClassName}
                   canCancelAppointment={canCancelAppointment}
                   onCancel={() => setAppointmentToCancel(appointment)}
-                  onReschedule={() => navigate('/book')}
                   onAppointmentUpdated={handleAppointmentUpdated}
                 />
               ))

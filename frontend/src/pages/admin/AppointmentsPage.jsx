@@ -25,6 +25,7 @@ function AppointmentsPage() {
   const [dateFilter, setDateFilter] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [currentTime, setCurrentTime] = useState(() => new Date());
   const userRole = localStorage.getItem('userRole') || 'customer';
   const isAdmin = userRole === 'admin';
 
@@ -46,15 +47,32 @@ function AppointmentsPage() {
     return { hours, minutes: rawMinutes };
   };
 
-  const isPastStartTime = (appointmentDate, appointmentTime) => {
-    if (!appointmentDate || !appointmentTime) return false;
+  const getAppointmentDateTime = (appointmentDate, appointmentTime) => {
+    if (!appointmentDate || !appointmentTime) return null;
 
     const [year, month, day] = String(appointmentDate).split('-').map(Number);
-    if ([year, month, day].some(Number.isNaN)) return false;
+    if ([year, month, day].some(Number.isNaN)) return null;
 
     const { hours, minutes } = timeTo24Hour(appointmentTime);
-    const scheduledStart = new Date(year, month - 1, day, hours, minutes, 0, 0);
-    return Date.now() >= scheduledStart.getTime();
+    return new Date(year, month - 1, day, hours, minutes, 0, 0);
+  };
+
+  const isWithinNoShowWindow = (appointment) => {
+    const scheduledStart = getAppointmentDateTime(appointment.date, appointment.startTime);
+    if (!scheduledStart) return false;
+
+    const startTime = scheduledStart.getTime();
+    const noShowWindowEnd = startTime + 30 * 60 * 1000;
+    const now = currentTime.getTime();
+
+    return now >= startTime && now <= noShowWindowEnd;
+  };
+
+  const canCompleteAppointment = (appointment) => {
+    const scheduledEnd = getAppointmentDateTime(appointment.date, appointment.endTime);
+    if (!scheduledEnd) return false;
+
+    return currentTime.getTime() >= scheduledEnd.getTime() - 10 * 60 * 1000;
   };
 
   const getAppointmentTimeStamp = (appointment) => {
@@ -96,11 +114,13 @@ function AppointmentsPage() {
 
     if (finalStatuses.includes(currentStatus)) return [currentStatus];
     if (!isAdmin) {
+      if (currentStatus === 'Pending') {
+        return ['Pending', 'Approved', 'Rejected'];
+      }
       if (currentStatus === 'Approved') {
         const options = ['Approved'];
-        if (isPastStartTime(appointment.date, appointment.startTime)) {
-          options.push('Completed', 'No-Show');
-        }
+        if (isWithinNoShowWindow(appointment)) options.push('No-Show');
+        if (canCompleteAppointment(appointment)) options.push('Completed');
         return options;
       }
       return [currentStatus];
@@ -108,10 +128,9 @@ function AppointmentsPage() {
 
     if (currentStatus === 'Pending') return ['Pending', 'Approved', 'Rejected'];
     if (currentStatus === 'Approved') {
-      const options = ['Approved', 'No-Show'];
-      if (isPastStartTime(appointment.date, appointment.startTime)) {
-        options.push('Completed');
-      }
+      const options = ['Approved'];
+      if (isWithinNoShowWindow(appointment)) options.push('No-Show');
+      if (canCompleteAppointment(appointment)) options.push('Completed');
       return options;
     }
 
@@ -148,6 +167,14 @@ function AppointmentsPage() {
   useEffect(() => {
     fetchAppointments();
   }, [fetchAppointments]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setCurrentTime(new Date());
+    }, 30000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   const handleAppointmentCreated = (appointment) => {
     if (appointment) {
@@ -238,11 +265,11 @@ function AppointmentsPage() {
         return statusMatches && dateMatches && searchMatches;
       })
       .sort(sortAppointmentsByPriority);
-  }, [appointments, activeTab, dateFilter, searchQuery]);
+  }, [appointments, activeTab, dateFilter, searchQuery, currentTime]);
 
   const tabs = isAdmin
-    ? ['Pending', 'Approved', 'Completed', 'Rejected', 'All']
-    : ['Approved', 'Completed', 'No-Show', 'All'];
+    ? ['Pending', 'Approved', 'Completed', 'Rejected', 'No-Show', 'All']
+    : ['Pending', 'Approved', 'Completed', 'Rejected', 'No-Show', 'All'];
 
   const getServicesLabel = (appointment) => (
     appointment.services && appointment.services.length > 0
