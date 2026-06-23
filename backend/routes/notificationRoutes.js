@@ -1,35 +1,74 @@
 const express = require('express');
 const router = express.Router();
 const Notification = require('../models/Notification');
-const { protect } = require('../middleware/authMiddleware'); 
+const { protect } = require('../middleware/authMiddleware');
 
-// 1. fetch all notifications for the logged-in user (including global notifications)
+const hasUserReadNotification = (notification, userId) => {
+    if (notification.user) {
+        return Boolean(notification.isRead);
+    }
+
+    return Array.isArray(notification.readBy)
+        && notification.readBy.some((readerId) => readerId?.toString() === userId);
+};
+
+const toViewerNotification = (notification, userId) => {
+    const normalizedNotification = notification.toObject
+        ? notification.toObject()
+        : notification;
+    const { readBy, ...publicNotification } = normalizedNotification;
+
+    return {
+        ...publicNotification,
+        isRead: hasUserReadNotification(normalizedNotification, userId)
+    };
+};
+
+// Fetch notifications for the logged-in user, including global notifications.
 router.get('/', protect, async (req, res) => {
     try {
+        const userId = req.user._id.toString();
         const notifications = await Notification.find({
             $or: [{ user: req.user._id }, { user: null }]
-        }).sort({ createdAt: -1 }); // අලුත්ම ඒවා උඩට එන්න
-        
-        res.status(200).json(notifications);
+        }).sort({ createdAt: -1 });
+
+        return res.status(200).json(
+            notifications.map((notification) => toViewerNotification(notification, userId))
+        );
     } catch (error) {
-        res.status(500).json({ message: "Server Error" });
+        console.error('Error fetching notifications:', error);
+        return res.status(500).json({ message: 'Server Error' });
     }
 });
 
-// 2. mark a notification as read
+// Mark a user-specific or global notification as read for the logged-in user.
 router.put('/:id/read', protect, async (req, res) => {
     try {
-        const notification = await Notification.findOneAndUpdate(
-            { _id: req.params.id, user: req.user._id },
-            { isRead: true },
-            { new: true }
-        );
+        const userId = req.user._id.toString();
+        const notification = await Notification.findOne({
+            _id: req.params.id,
+            $or: [{ user: req.user._id }, { user: null }]
+        });
+
         if (!notification) {
-            return res.status(404).json({ message: "Notification not found" });
+            return res.status(404).json({ message: 'Notification not found' });
         }
-        res.status(200).json({ message: "Marked as read" });
+
+        if (notification.user) {
+            notification.isRead = true;
+        } else {
+            notification.readBy.addToSet(req.user._id);
+        }
+
+        const updatedNotification = await notification.save();
+
+        return res.status(200).json({
+            message: 'Marked as read',
+            notification: toViewerNotification(updatedNotification, userId)
+        });
     } catch (error) {
-        res.status(500).json({ message: "Server Error" });
+        console.error('Error marking notification as read:', error);
+        return res.status(500).json({ message: 'Server Error' });
     }
 });
 

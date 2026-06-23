@@ -126,7 +126,9 @@ const approveLeave = async (req, res) => {
                         type: 'RESCHEDULE_REQUIRED',
                         message: `We're sorry! Your stylist had an emergency leave on ${formatLeaveDate(appointment.date)}. Please reschedule your booking.`,
                         meta: {
-                            actionUrl: '/booking',
+                            actionUrl: '/book',
+                            staffId: appointment.staffId?.toString(),
+                            stylistId: appointment.staffId?.toString(),
                             originalServices: appointment.services.map((serviceId) => serviceId.toString())
                         }
                     })),

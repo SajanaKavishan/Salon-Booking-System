@@ -6,7 +6,11 @@ const notificationSchema = new mongoose.Schema({
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null }, 
     meta: { type: mongoose.Schema.Types.Mixed, default: () => ({}) },
     isRead: { type: Boolean, default: false },
+    readBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     createdAt: { type: Date, default: Date.now }
 }, { timestamps: true });
+
+notificationSchema.index({ user: 1, createdAt: -1 });
+notificationSchema.index({ readBy: 1 });
 
 module.exports = mongoose.model('Notification', notificationSchema);
