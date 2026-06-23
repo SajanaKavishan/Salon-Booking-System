@@ -1013,11 +1013,9 @@ function BookAppointment({ userProfile, customerData }) {
 
       
 
-      // Get current phone from user profile
-
-      const currentPhone = user?.phone || user?.mobile || user?.phoneNumber || '';
-
-      handleBooking(currentPhone);
+      setPhoneVerificationStep('confirm');
+      setPhoneVerificationInput('');
+      setIsPhoneVerificationModalOpen(true);
 
     };
 

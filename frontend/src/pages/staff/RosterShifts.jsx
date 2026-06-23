@@ -15,6 +15,7 @@ export default function RosterShifts() {
   const [leaveHistory, setLeaveHistory] = useState([]);
   const [currentWeek, setCurrentWeek] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [isLoading, setIsLoading] = useState(true);
+  const [isSubmittingLeave, setIsSubmittingLeave] = useState(false);
   const [currentStaffData, setCurrentStaffData] = useState(null);
 
   useEffect(() => {
@@ -167,11 +168,15 @@ export default function RosterShifts() {
 
   const handleLeaveSubmit = async (e) => {
     e.preventDefault();
+    if (isSubmittingLeave) return;
+
     try {
       if (!leaveForm.startDate || !leaveForm.reason) {
         toast.error("Please fill in all required fields.");
         return;
       }
+
+      setIsSubmittingLeave(true);
       const token = localStorage.getItem("token");
       const res = await axios.post(
         "http://localhost:5000/api/roster/leaves",
@@ -198,6 +203,8 @@ export default function RosterShifts() {
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to submit leave request.");
       console.error(error);
+    } finally {
+      setIsSubmittingLeave(false);
     }
   };
 
@@ -357,8 +364,20 @@ export default function RosterShifts() {
                   rows="3"
                 ></textarea>
               </div>
-              <GoldButton type="submit" className="w-full rounded-lg px-5 py-3 font-bold shadow-[0_0_20px_rgba(212,175,55,0.28)] hover:shadow-[0_0_28px_rgba(212,175,55,0.4)] flex items-center justify-center gap-2">
-                <PlusCircle className="w-5 h-5" /> Submit Leave Request
+              <GoldButton
+                type="submit"
+                disabled={isSubmittingLeave}
+                className="w-full rounded-lg px-5 py-3 font-bold shadow-[0_0_20px_rgba(212,175,55,0.28)] hover:shadow-[0_0_28px_rgba(212,175,55,0.4)] flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSubmittingLeave ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" /> Submitting...
+                  </>
+                ) : (
+                  <>
+                    <PlusCircle className="w-5 h-5" /> Submit Leave Request
+                  </>
+                )}
               </GoldButton>
             </form>
           </GlassCard>

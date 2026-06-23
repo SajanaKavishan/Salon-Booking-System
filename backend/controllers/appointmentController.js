@@ -534,7 +534,7 @@ const deleteAppointment = async (req, res) => {
             });
         }
 
-        if (['cancelled', 'rejected', 'completed'].includes(Appointment.normalizeStatus(appointment.status))) {
+        if (['cancelled', 'rejected', 'completed', 'no-show'].includes(Appointment.normalizeStatus(appointment.status))) {
             return res.status(400).json({ message: `This appointment is already ${appointment.status.toLowerCase()}.` });
         }
 
@@ -561,7 +561,7 @@ const updateAppointmentStatus = async (req, res) => {
         const { status } = req.body;
         
         // Validate status value
-        const validStatuses = ['pending', 'confirmed', 'cancelled', 'rejected', 'completed'];
+        const validStatuses = ['pending', 'confirmed', 'cancelled', 'rejected', 'completed', 'no-show'];
         const normalizedStatus = Appointment.normalizeStatus(status);
         if (!status || !validStatuses.includes(normalizedStatus)) {
             return res.status(400).json({ 
@@ -677,9 +677,10 @@ const updateAppointmentStatus = async (req, res) => {
 const updateAppointmentStatusByStaff = async (req, res) => {
     try {
         const { status } = req.body;
-        const allowedStatuses = ['Completed', 'No-Show', 'completed', 'cancelled'];
+        const requestedStatus = Appointment.normalizeStatus(status);
+        const allowedStatuses = ['confirmed', 'rejected', 'completed', 'no-show'];
 
-        if (!allowedStatuses.includes(status)) {
+        if (!allowedStatuses.includes(requestedStatus)) {
             return res.status(400).json({ message: 'This status transition is not allowed for staff.' });
         }
 
@@ -698,26 +699,60 @@ const updateAppointmentStatusByStaff = async (req, res) => {
         if (req.user.role === 'staff') {
             const staffMembers = await Staff.find({ name: req.user.name });
             const staffIds = staffMembers.map(s => s._id.toString());
-            if (!appointment.stylist || !staffIds.includes(appointment.stylist.toString())) {
+            const assignedStaffId = appointment.stylist || appointment.staffId;
+            if (!assignedStaffId || !staffIds.includes(assignedStaffId.toString())) {
                 return res.status(401).json({ message: 'You are not assigned to this appointment.' });
             }
         }
 
-        if (Appointment.normalizeStatus(appointment.status) !== 'confirmed') {
-            return res.status(400).json({ message: 'Only approved appointments can be completed or marked no-show.' });
+        const currentStatus = Appointment.normalizeStatus(appointment.status);
+
+        if (['confirmed', 'rejected'].includes(requestedStatus)) {
+            if (currentStatus !== 'pending') {
+                return res.status(400).json({ message: 'Only pending appointments can be approved or rejected.' });
+            }
+
+            appointment.status = requestedStatus;
+            const updatedAppointment = await appointment.save();
+
+            return res.status(200).json({
+                message: 'Status updated successfully!',
+                appointment: updatedAppointment
+            });
         }
 
         const [year, month, day] = appointment.date.split('-').map(Number);
         const appointmentStartMinutes = timeToMinutes(appointment.startTime);
+        const appointmentEndMinutes = timeToMinutes(appointment.endTime);
         const startHours = Math.floor(appointmentStartMinutes / 60);
         const startMinutes = appointmentStartMinutes % 60;
         const appointmentStart = new Date(year, month - 1, day, startHours, startMinutes, 0, 0);
+        const endHours = Math.floor(appointmentEndMinutes / 60);
+        const endMinutes = appointmentEndMinutes % 60;
+        const appointmentEnd = new Date(year, month - 1, day, endHours, endMinutes, 0, 0);
+        const now = Date.now();
 
-        if (Date.now() < appointmentStart.getTime()) {
-            return res.status(400).json({ message: 'This appointment cannot be updated before its start time.' });
+        if (currentStatus !== 'confirmed') {
+            return res.status(400).json({ message: 'Only approved appointments can be completed or marked no-show.' });
         }
 
-        appointment.status = Appointment.normalizeStatus(status);
+        if (requestedStatus === 'no-show') {
+            const noShowWindowEnds = appointmentStart.getTime() + 30 * 60 * 1000;
+
+            if (now < appointmentStart.getTime() || now > noShowWindowEnds) {
+                return res.status(400).json({ message: 'No-show can only be marked within 30 minutes after the appointment start time.' });
+            }
+        }
+
+        if (requestedStatus === 'completed') {
+            const completeWindowStarts = appointmentEnd.getTime() - 10 * 60 * 1000;
+
+            if (now < completeWindowStarts) {
+                return res.status(400).json({ message: 'Appointments can only be completed from 10 minutes before the end time.' });
+            }
+        }
+
+        appointment.status = requestedStatus;
         const updatedAppointment = await appointment.save();
 
         res.status(200).json({

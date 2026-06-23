@@ -8,7 +8,8 @@ const STATUS_ALIASES = {
     canceled: 'cancelled',
     rejected: 'rejected',
     completed: 'completed',
-    'no-show': 'cancelled',
+    'no-show': 'no-show',
+    noshow: 'no-show',
 };
 
 const STATUS_DISPLAY_NAMES = {
@@ -17,6 +18,7 @@ const STATUS_DISPLAY_NAMES = {
     cancelled: 'Cancelled',
     rejected: 'Rejected',
     completed: 'Completed',
+    'no-show': 'No-Show',
 };
 
 const normalizeBookingStatus = (status) => {
@@ -56,7 +58,7 @@ const appointmentSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['pending', 'confirmed', 'cancelled', 'rejected', 'completed'],
+        enum: ['pending', 'confirmed', 'cancelled', 'rejected', 'completed', 'no-show'],
         default: 'pending',
         set: normalizeBookingStatus,
     },
