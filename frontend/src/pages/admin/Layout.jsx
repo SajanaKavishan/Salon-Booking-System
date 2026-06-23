@@ -1,8 +1,45 @@
 import React, { useEffect, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Menu } from 'lucide-react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from '../../components/admin/Sidebar';
 import RoleProfile from '../shared/RoleProfile';
+
+const formatRelativeTime = (dateValue) => {
+  if (!dateValue) return 'Just now';
+
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return 'Just now';
+
+  const seconds = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
+  if (seconds < 60) return 'Just now';
+
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: date.getFullYear() === new Date().getFullYear() ? undefined : 'numeric',
+  });
+};
+
+const isEmergencyRescheduleNotification = (notification) => (
+  notification?.type === 'RESCHEDULE_REQUIRED'
+  || notification?.meta?.emergencyReschedule === true
+);
+
+const getEmergencyRescheduleMessage = (message) => (
+  String(message || 'Your stylist had an emergency leave.')
+    .replace(/\s*Please reschedule your booking\.?\s*$/i, '')
+    .trim()
+);
 
 function Layout() {
   const location = useLocation();
@@ -10,6 +47,7 @@ function Layout() {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [acknowledgedUnreadCount, setAcknowledgedUnreadCount] = useState(0);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   
   const [user, setUser] = useState(() => {
@@ -68,10 +106,28 @@ function Layout() {
   }, []);
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
+  const shouldShowNotificationDot = unreadCount > acknowledgedUnreadCount && !isNotificationOpen;
 
-  const handleNotificationClick = async (notification) => {
-    const shouldReschedule = notification.type === 'RESCHEDULE_REQUIRED' && notification.meta?.actionUrl;
+  useEffect(() => {
+    if (unreadCount < acknowledgedUnreadCount) {
+      setAcknowledgedUnreadCount(unreadCount);
+    }
+  }, [acknowledgedUnreadCount, unreadCount]);
 
+  const handleNotificationBellClick = () => {
+    setIsNotificationOpen((currentIsOpen) => {
+      const nextIsOpen = !currentIsOpen;
+
+      if (nextIsOpen) {
+        setAcknowledgedUnreadCount(unreadCount);
+      }
+
+      return nextIsOpen;
+    });
+  };
+
+  const markNotificationAsRead = async (notification) => {
+    if (!notification?._id || notification.isRead) return;
     try {
       const token = localStorage.getItem('token');
       await fetch(`http://localhost:5000/api/notifications/${notification._id}/read`, {
@@ -81,16 +137,50 @@ function Layout() {
       fetchNotifications();
     } catch (error) {
       console.error("Error marking notification as read:", error);
-    } finally {
-      if (shouldReschedule) {
-        navigate(notification.meta.actionUrl, {
-          state: {
-            isReschedule: true,
-            originalServices: notification.meta.originalServices || []
-          }
-        });
-      }
     }
+  };
+
+  const handleRescheduleLinkClick = async (event, notification) => {
+    event.stopPropagation();
+
+    await markNotificationAsRead(notification);
+    setIsNotificationOpen(false);
+
+    const meta = notification.meta || {};
+
+    navigate('/book', {
+      state: {
+        emergencyReschedule: true,
+        isReschedule: true,
+        originalServices: meta.originalServices || meta.services || [],
+        stylistId: meta.stylistId || meta.staffId || meta.stylist || '',
+        staffId: meta.staffId || meta.stylistId || meta.stylist || '',
+        startStep: 3
+      }
+    });
+  };
+
+  const handleMarkAllAsRead = async () => {
+    const unreadNotifications = notifications.filter((notification) => !notification.isRead && notification._id);
+    if (unreadNotifications.length === 0) return;
+
+    const token = localStorage.getItem('token');
+
+    setNotifications((currentNotifications) => currentNotifications.map((notification) => ({
+      ...notification,
+      isRead: true,
+    })));
+
+    await Promise.allSettled(
+      unreadNotifications.map((notification) => (
+        fetch(`http://localhost:5000/api/notifications/${notification._id}/read`, {
+          method: 'PUT',
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+      ))
+    );
+
+    fetchNotifications();
   };
 
   useEffect(() => {
@@ -183,7 +273,7 @@ function Layout() {
             <div className="relative">
               <button
                 type="button"
-                onClick={() => setIsNotificationOpen(!isNotificationOpen)}
+                onClick={handleNotificationBellClick}
                 className="relative flex h-10 w-10 items-center justify-center rounded-lg text-white hover:text-[#d4af37] transition duration-200"
                 aria-label="Notifications"
               >
@@ -192,52 +282,103 @@ function Layout() {
                 </svg>
 
                 {/* Unread Yellow Dot */}
-                {unreadCount > 0 && (
-                  <span className="absolute top-2 right-2 flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
-                  </span>
-                )}
+                <AnimatePresence>
+                  {shouldShowNotificationDot && (
+                    <motion.span
+                      className="absolute right-2 top-2 flex h-2.5 w-2.5"
+                      initial={{ opacity: 0, scale: 0.4 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.35 }}
+                      transition={{ duration: 0.2, ease: 'easeOut' }}
+                    >
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#c5a880] opacity-75"></span>
+                      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#c5a880] shadow-[0_0_12px_rgba(197,168,128,0.75)]"></span>
+                    </motion.span>
+                  )}
+                </AnimatePresence>
               </button>
 
               {/* Dropdown Pop-up */}
-              {isNotificationOpen && (
-                <div className="absolute right-0 mt-3 w-80 bg-[#090d14] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden backdrop-blur-xl">
-                  <div className="p-3.5 border-b border-white/5 flex justify-between items-center bg-[#0d131f]">
-                    <span className="font-semibold text-xs uppercase tracking-wider text-slate-300">Notifications</span>
-                    {unreadCount > 0 && (
-                      <span className="text-[10px] bg-amber-500/10 text-amber-500 px-2 py-0.5 rounded-full font-medium">
-                        {unreadCount} New
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="max-h-64 overflow-y-auto divide-y divide-white/5">
-                    {notifications.length === 0 ? (
-                      <div className="p-6 text-center text-xs text-slate-500">No notifications yet</div>
-                    ) : (
-                      notifications.map((notif) => (
+              <AnimatePresence>
+                {isNotificationOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -14, scale: 0.88 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -10, scale: 0.92 }}
+                    transition={{
+                      type: 'spring',
+                      stiffness: 360,
+                      damping: 28,
+                      mass: 0.72,
+                    }}
+                    className="fixed inset-x-4 top-16 z-50 max-w-[380px] origin-top-right overflow-hidden rounded-2xl border border-[#c5a880]/10 bg-[#1c1c1e] shadow-2xl sm:w-[380px] md:absolute md:inset-auto md:right-0 md:top-full md:mt-3 md:w-[380px]"
+                  >
+                    <div className="flex items-center justify-between gap-4 border-b border-zinc-800/50 px-4 py-3.5">
+                      <span className="text-xs uppercase tracking-wider text-zinc-400">Notifications</span>
+                      {unreadCount > 0 && (
                         <button
-                          key={notif._id}
-                          onClick={() => {
-                            handleNotificationClick(notif);
-                            setIsNotificationOpen(false);
-                          }}
-                          className={`w-full p-3.5 text-left transition-colors duration-150 block hover:bg-white/5 ${!notif.isRead ? 'bg-amber-500/[0.02]' : ''}`}
+                          type="button"
+                          onClick={handleMarkAllAsRead}
+                          className="text-xs text-[#c5a880] transition hover:underline"
                         >
-                          <p className={`text-xs font-semibold ${!notif.isRead ? 'text-amber-400' : 'text-slate-200'}`}>
-                            {notif.title}
-                          </p>
-                          <p className="text-xs text-slate-400 mt-1 leading-relaxed">{notif.message}</p>
-                          <span className="text-[9px] text-slate-600 block mt-2 tracking-wide">
-                            {new Date(notif.createdAt).toLocaleDateString()}
-                          </span>
+                          Mark all as read
                         </button>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
+                      )}
+                    </div>
+
+                    <div className="max-h-[24rem] overflow-y-auto">
+                      {notifications.length === 0 ? (
+                        <div className="px-6 py-8 text-center text-xs text-zinc-500">No notifications yet</div>
+                      ) : (
+                        notifications.map((notif, index) => (
+                          <article
+                            key={notif._id}
+                            className={`flex w-full items-start gap-4 p-4 text-left transition hover:bg-white/[0.04] ${index < notifications.length - 1 ? 'border-b border-zinc-800/50' : ''}`}
+                          >
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-sm font-semibold text-zinc-100">
+                                {notif.title || 'SalonDEES Update'}
+                              </span>
+                              <span className="mt-1 block text-xs leading-relaxed text-zinc-400">
+                                {isEmergencyRescheduleNotification(notif) ? (
+                                  `${getEmergencyRescheduleMessage(notif.message)} Please reschedule your booking.`
+                                ) : (
+                                  notif.message
+                                )}
+                              </span>
+                              {isEmergencyRescheduleNotification(notif) && (
+                                <span className="mt-2 flex">
+                                  <button
+                                    type="button"
+                                    onClick={(event) => handleRescheduleLinkClick(event, notif)}
+                                    className="mt-2 inline-block cursor-pointer text-xs font-semibold uppercase tracking-wider text-[#c5a880] transition-colors hover:text-[#d4af37]"
+                                  >
+                                    Reschedule Booking &rarr;
+                                  </button>
+                                </span>
+                              )}
+                              <span className="mt-2 block text-[11px] font-medium text-zinc-500">
+                                {formatRelativeTime(notif.createdAt)}
+                              </span>
+                            </span>
+                            {!notif.isRead && (
+                              <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[#c5a880]"></span>
+                            )}
+                          </article>
+                        ))
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsNotificationOpen(false)}
+                      className="flex w-full items-center justify-center border-t border-zinc-800/50 px-4 py-3 text-xs font-medium text-zinc-200 transition hover:bg-white/[0.04] hover:text-[#c5a880]"
+                    >
+                      Close
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
             {/* Vertical Separator Line */}

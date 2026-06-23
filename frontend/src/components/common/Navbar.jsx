@@ -20,6 +20,7 @@ function Navbar() {
     location.pathname === '/onboarding' ||
     location.pathname.startsWith('/admin') ||
     location.pathname.startsWith('/staff') ||
+    location.pathname.startsWith('/customer') ||
     location.pathname === '/dashboard' ||
     location.pathname === '/profile' ||
     location.pathname === '/book' ||

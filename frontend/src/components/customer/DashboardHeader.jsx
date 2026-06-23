@@ -24,11 +24,13 @@ function DashboardHeader({ firstName, nextAppointment, formatDate, onBook }) {
   const greeting = useMemo(() => getGreeting(), []);
 
   useEffect(() => {
+    let isMounted = true;
+
     const fetchAvailabilityMessage = async () => {
       const token = localStorage.getItem('token');
 
       if (!token) {
-        setIsAvailabilityLoading(false);
+        if (isMounted) setIsAvailabilityLoading(false);
         return;
       }
 
@@ -39,6 +41,8 @@ function DashboardHeader({ firstName, nextAppointment, formatDate, onBook }) {
           },
         });
 
+        if (!isMounted) return;
+
         setAvailability({
           scenario: response.data?.scenario || 'no_preferred_stylist',
           message: response.data?.message || FALLBACK_AVAILABILITY_MESSAGE,
@@ -47,17 +51,22 @@ function DashboardHeader({ firstName, nextAppointment, formatDate, onBook }) {
           hasPreferredStylist: Boolean(response.data?.hasPreferredStylist),
         });
       } catch (error) {
+        if (!isMounted) return;
         console.error('Dashboard availability message error:', error);
         setAvailability({
           scenario: 'no_preferred_stylist',
           message: FALLBACK_AVAILABILITY_MESSAGE,
         });
       } finally {
-        setIsAvailabilityLoading(false);
+        if (isMounted) setIsAvailabilityLoading(false);
       }
     };
 
     fetchAvailabilityMessage();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   return (

@@ -4,9 +4,13 @@ import axios from "axios";
 
 import { toast } from "react-toastify";
 
+import { AnimatePresence, motion } from "framer-motion";
+
+import { createPortal } from "react-dom";
+
 import { useNavigate } from "react-router-dom";
 
-import { AlertTriangle, CalendarDays, Clock, Loader2, RotateCw, Users, XCircle } from "lucide-react";
+import { AlertTriangle, CalendarDays, Clock, Loader2, RotateCw, Users, X, XCircle } from "lucide-react";
 
 import {
   ResponsiveContainer,
@@ -42,6 +46,25 @@ const getAppointmentDateKey = (appointment) => {
   const rawDate = appointment?.date || appointment?.bookingDate;
   if (!rawDate) return "";
   return String(rawDate).slice(0, 10);
+};
+
+const formatDisplayDate = (dateValue) => {
+  if (!dateValue) return "Not set";
+
+  const parsedDate = new Date(dateValue);
+  if (Number.isNaN(parsedDate.getTime())) return "Not set";
+
+  return parsedDate.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+};
+
+const formatLeaveDateRange = (startDate, endDate) => {
+  const formattedStart = formatDisplayDate(startDate);
+  const formattedEnd = formatDisplayDate(endDate || startDate);
+  return formattedStart === formattedEnd ? formattedStart : `${formattedStart} - ${formattedEnd}`;
 };
 
 const timeToMinutes = (timeValue) => {
@@ -98,6 +121,8 @@ function AdminDashboard() {
   const [isConflictModalOpen, setIsConflictModalOpen] = useState(false);
 
   const [currentLeaveRequest, setCurrentLeaveRequest] = useState(null);
+
+  const [reviewLeaveRequest, setReviewLeaveRequest] = useState(null);
 
   const [isLeaveActionLoading, setIsLeaveActionLoading] = useState(false);
 
@@ -317,6 +342,7 @@ function AdminDashboard() {
         setConflictingAppointments(conflictsRes.data);
 
         setIsConflictModalOpen(true);
+        setReviewLeaveRequest(null);
         setIsLeaveActionLoading(false);
 
       } else {
@@ -363,6 +389,8 @@ function AdminDashboard() {
 
       setIsConflictModalOpen(false);
 
+      setReviewLeaveRequest(null);
+
       setConflictingAppointments([]);
 
       setCurrentLeaveRequest(null);
@@ -395,9 +423,23 @@ function AdminDashboard() {
 
 
 
-  const handleRejectLeave = async (leaveId) => {
+  const handleRejectLeave = async (leaveRequest) => {
+
+    if (isLeaveActionLoading) return;
 
     try {
+
+      const leaveId = typeof leaveRequest === "object" ? leaveRequest?._id : leaveRequest;
+
+      if (!leaveId) {
+
+        throw new Error("Leave request is no longer available.");
+
+      }
+
+      setCurrentLeaveRequest(typeof leaveRequest === "object" ? leaveRequest : null);
+
+      setIsLeaveActionLoading(true);
 
       const token = localStorage.getItem("token");
 
@@ -406,6 +448,10 @@ function AdminDashboard() {
       await axios.post(`http://localhost:5000/api/leaves/${leaveId}/reject`, {}, authHeaders);
 
       toast.success("Leave request rejected.");
+
+      setReviewLeaveRequest(null);
+
+      setCurrentLeaveRequest(null);
 
       // Refresh leave requests
 
@@ -424,6 +470,10 @@ function AdminDashboard() {
       toast.error(error.response?.data?.message || "Failed to reject leave request.");
 
       console.error("Rejection error:", error);
+
+    } finally {
+
+      setIsLeaveActionLoading(false);
 
     }
 
@@ -788,7 +838,19 @@ function AdminDashboard() {
 
         <GlassCard className="p-6">
 
-          <h2 className="mb-4 text-xl font-semibold text-white">Recent Leave Requests</h2>
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+
+            <h2 className="text-xl font-semibold text-white">Recent Leave Requests</h2>
+
+            <button
+              type="button"
+              onClick={() => navigate("/admin/staff")}
+              className="w-fit text-xs font-semibold uppercase tracking-[0.18em] text-[#d4af37] transition hover:text-[#f4d77d]"
+            >
+              View All →
+            </button>
+
+          </div>
 
           <div className="overflow-x-auto">
 
@@ -856,7 +918,7 @@ function AdminDashboard() {
 
                       <td className="py-3 px-4 text-gray-300">
 
-                        {new Date(leave.startDate).toLocaleDateString()} - {new Date(leave.endDate).toLocaleDateString()}
+                        {formatLeaveDateRange(leave.startDate, leave.endDate)}
 
                       </td>
 
@@ -868,30 +930,14 @@ function AdminDashboard() {
 
                       <td className="py-3 px-4 text-center">
 
-                        {leave.status?.toLowerCase() === 'pending' && (
-
-                          <div className="flex justify-center gap-2">
-
-                            <GoldButton
-                              onClick={() => handleApproveLeave(leave)}
-                              disabled={isLeaveActionLoading}
-                              className="px-3 py-1 text-xs"
-                            >
-                              {isLeaveActionLoading && currentLeaveRequest?._id === leave._id ? "Checking..." : "Approve"}
-                            </GoldButton>
-
-                            <GoldButton
-                              onClick={() => handleRejectLeave(leave._id)}
-                              disabled={isLeaveActionLoading}
-                              variant="outline"
-                              className="border-red-400/30 text-red-400 px-3 py-1 text-xs hover:bg-red-500/10"
-                            >
-                              Reject
-                            </GoldButton>
-
-                          </div>
-
-                        )}
+                        <GoldButton
+                          type="button"
+                          onClick={() => setReviewLeaveRequest(leave)}
+                          disabled={isLeaveActionLoading}
+                          className="px-4 py-1.5 text-xs shadow-[0_0_18px_rgba(212,175,55,0.16)]"
+                        >
+                          Review
+                        </GoldButton>
 
                       </td>
 
@@ -922,6 +968,144 @@ function AdminDashboard() {
         </GlassCard>
 
       </div>
+
+      {typeof document !== "undefined" && createPortal((
+
+      <AnimatePresence>
+
+        {reviewLeaveRequest && (
+
+          <motion.div
+            className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-black/95 px-4 py-8 backdrop-blur-xl"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget && !isLeaveActionLoading) {
+                setReviewLeaveRequest(null);
+              }
+            }}
+          >
+
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="leave-review-title"
+              className="relative w-full max-w-2xl overflow-hidden rounded-2xl border border-[#d4af37]/25 bg-[#050505]/95 p-5 shadow-[0_30px_100px_rgba(0,0,0,0.75)] sm:p-7"
+              initial={{ opacity: 0, y: 24, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 18, scale: 0.97 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+            >
+
+              <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#d4af37]/70 to-transparent" />
+              <div className="pointer-events-none absolute -right-24 -top-24 h-56 w-56 rounded-full bg-[#d4af37]/10 blur-3xl" />
+
+              <div className="relative flex items-start justify-between gap-4">
+
+                <div>
+
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#d4af37]">
+                    Leave Request Review
+                  </p>
+
+                  <h3 id="leave-review-title" className="mt-3 font-serif text-3xl font-semibold text-white">
+                    {reviewLeaveRequest.staffId?.name || "Former staff member"}
+                  </h3>
+
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setReviewLeaveRequest(null)}
+                  disabled={isLeaveActionLoading}
+                  className="rounded-full border border-white/10 bg-white/[0.04] p-2 text-zinc-400 transition hover:border-[#d4af37]/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label="Close leave review"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+
+              </div>
+
+              <div className="relative mt-7 grid gap-3 sm:grid-cols-2">
+
+                <div className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-zinc-500">Staff Name</p>
+                  <p className="mt-2 text-sm font-semibold text-white">{reviewLeaveRequest.staffId?.name || "Former staff member"}</p>
+                </div>
+
+                <div className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-zinc-500">Leave Type</p>
+                  <p className="mt-2 text-sm font-semibold text-white">{reviewLeaveRequest.leaveType || "Not specified"}</p>
+                </div>
+
+                <div className="rounded-xl border border-white/10 bg-white/[0.035] p-4 sm:col-span-2">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-zinc-500">Dates</p>
+                  <p className="mt-2 text-sm font-semibold text-white">
+                    {formatLeaveDateRange(reviewLeaveRequest.startDate, reviewLeaveRequest.endDate)}
+                  </p>
+                </div>
+
+              </div>
+
+              <div className="relative mt-3 rounded-xl border border-[#d4af37]/20 bg-[#d4af37]/[0.045] p-4 sm:p-5">
+                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#d4af37]">Description / Reason</p>
+                <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-zinc-200">
+                  {reviewLeaveRequest.reason || "No reason was provided for this leave request."}
+                </p>
+              </div>
+
+              <div className="relative mt-7 flex flex-col gap-3 border-t border-white/10 pt-5 sm:flex-row sm:items-center sm:justify-end">
+
+                {reviewLeaveRequest.status?.toLowerCase() === "pending" ? (
+
+                  <>
+
+                    <GoldButton
+                      type="button"
+                      onClick={() => handleApproveLeave(reviewLeaveRequest)}
+                      disabled={isLeaveActionLoading}
+                      className="px-5 py-2 shadow-[0_0_24px_rgba(212,175,55,0.2)]"
+                    >
+                      {isLeaveActionLoading && currentLeaveRequest?._id === reviewLeaveRequest._id ? "Checking..." : "Approve"}
+                    </GoldButton>
+
+                    <GoldButton
+                      type="button"
+                      variant="outline"
+                      onClick={() => handleRejectLeave(reviewLeaveRequest)}
+                      disabled={isLeaveActionLoading}
+                      className="border-red-400/35 px-5 py-2 text-red-300 hover:bg-red-500/10 hover:text-red-200"
+                    >
+                      {isLeaveActionLoading && currentLeaveRequest?._id === reviewLeaveRequest._id ? "Rejecting..." : "Reject"}
+                    </GoldButton>
+
+                  </>
+
+                ) : (
+
+                  <GoldButton
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setReviewLeaveRequest(null)}
+                    className="border border-white/10 px-5 py-2 text-white hover:bg-white/10"
+                  >
+                    Close
+                  </GoldButton>
+
+                )}
+
+              </div>
+
+            </motion.div>
+
+          </motion.div>
+
+        )}
+
+      </AnimatePresence>
+
+      ), document.body)}
 
 
 
@@ -989,9 +1173,18 @@ function AdminDashboard() {
 
       )}
 
+      {typeof document !== "undefined" && createPortal((
+
+      <AnimatePresence>
+
       {isConflictModalOpen && (
 
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+        <motion.div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 px-4 backdrop-blur-xl"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+        >
 
           <GlassCard className="mx-4 w-full max-w-lg border-t-4 border-t-red-600 bg-[#111111] p-6">
 
@@ -1074,9 +1267,13 @@ function AdminDashboard() {
 
           </GlassCard>
 
-        </div>
+        </motion.div>
 
       )}
+
+      </AnimatePresence>
+
+      ), document.body)}
 
     </div>
 

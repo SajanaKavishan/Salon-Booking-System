@@ -329,6 +329,8 @@ function BookAppointment({ userProfile, customerData }) {
 
     useEffect(() => {
 
+      if (location.state?.emergencyReschedule) return;
+
       if (!location.state?.isReschedule) return;
 
       const originalServices = Array.isArray(location.state.originalServices)
@@ -342,6 +344,48 @@ function BookAppointment({ userProfile, customerData }) {
       toast.info('Your original services are selected. Choose a stylist for the new booking.');
 
     }, [location.state]);
+
+
+
+    useEffect(() => {
+
+      if (!location.state?.emergencyReschedule || servicesList.length === 0 || stylistsList.length === 0) return;
+
+      const originalServices = Array.isArray(location.state.originalServices)
+        ? location.state.originalServices
+            .map((service) => typeof service === 'string' ? service : service?._id || service?.id)
+            .filter(Boolean)
+        : [];
+
+      const stylistPayload = location.state.stylistId || location.state.staffId || location.state.stylist;
+      const resolvedStylist = (() => {
+        if (!stylistPayload) return ANY_STYLIST;
+
+        if (typeof stylistPayload === 'string') {
+          return stylistsList.some((stylistItem) => stylistItem._id === stylistPayload)
+            ? stylistPayload
+            : ANY_STYLIST;
+        }
+
+        const stylistId = stylistPayload._id || stylistPayload.id;
+        if (stylistId && stylistsList.some((stylistItem) => stylistItem._id === stylistId)) {
+          return stylistId;
+        }
+
+        const matchingStylist = stylistsList.find((stylistItem) => stylistItem.name === stylistPayload.name);
+        return matchingStylist?._id || ANY_STYLIST;
+      })();
+
+      setSelectedServices([...new Set(originalServices)]);
+      setStylist(resolvedStylist);
+      setStylistSearch('');
+      setDate('');
+      setTimeSlot('');
+      setHasUserSelectedStylist(true);
+      setStep(location.state.startStep || 3);
+      toast.info('Your affected service and artist are ready. Pick a new date and time.');
+
+    }, [location.state, servicesList, stylistsList]);
 
 
 
