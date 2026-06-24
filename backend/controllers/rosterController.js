@@ -12,6 +12,37 @@ const getShifts = async (req, res) => {
     }
 };
 
+const getStaffMetrics = async (req, res) => {
+    try {
+        const staffId = req.user._id;
+        const currentYear = new Date().getFullYear();
+        const yearStart = new Date(Date.UTC(currentYear, 0, 1));
+        const nextYearStart = new Date(Date.UTC(currentYear + 1, 0, 1));
+        const yearlyLeaveEntitlement = 12;
+
+        const approvedRequestsCount = await LeaveRequest.countDocuments({
+            staffId,
+            status: "Approved",
+            startDate: {
+                $gte: yearStart,
+                $lt: nextYearStart,
+            },
+        });
+
+        const leaveBalance = Math.max(0, yearlyLeaveEntitlement - approvedRequestsCount);
+
+        res.status(200).json({
+            leaveBalance,
+            approvedRequestsCount,
+            yearlyLeaveEntitlement,
+            year: currentYear,
+        });
+    } catch (error) {
+        console.error("Error fetching staff metrics:", error);
+        res.status(500).json({ message: "Server error fetching staff metrics." });
+    }
+};
+
 const applyLeave = async (req, res) => {
     try {
         const staffId = req.user._id;
@@ -44,5 +75,6 @@ const applyLeave = async (req, res) => {
 
 module.exports = {
     getShifts,
+    getStaffMetrics,
     applyLeave
 };

@@ -1,19 +1,22 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "react-toastify";
-import { Calendar, Briefcase, PlusCircle, NotebookText, Loader2, Palmtree } from "lucide-react";
+import { Calendar, Briefcase, PlusCircle, NotebookText, Loader2, Palmtree, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { GlassCard, GoldButton } from "../../components/admin/SystemUI";
-import { format, addDays, startOfWeek, isSameDay, isWithinInterval } from "date-fns";
+import { format, addDays, startOfWeek, isSameDay, isWithinInterval, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameMonth } from "date-fns";
 
 const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const calendarDaysOfWeek = ["M", "T", "W", "T", "F", "S", "S"];
 
 export default function RosterShifts() {
-  const [metrics, _setMetrics] = useState({
-    leaveBalance: "12 Days",
+  const [metrics, setMetrics] = useState({
+    leaveBalance: 12,
   });
   const [shifts, setShifts] = useState([]);
   const [leaveHistory, setLeaveHistory] = useState([]);
   const [currentWeek, setCurrentWeek] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
+  const [calendarMonth, setCalendarMonth] = useState(startOfMonth(new Date()));
+  const [selectedDates, setSelectedDates] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmittingLeave, setIsSubmittingLeave] = useState(false);
   const [currentStaffData, setCurrentStaffData] = useState(null);
@@ -45,6 +48,15 @@ export default function RosterShifts() {
           }
           return { data: [] }; // Return empty array on error
         });
+        const metricsPromise = axios.get("http://localhost:5000/api/roster/metrics", config).catch(error => {
+          console.error("Error fetching staff metrics:", error);
+          if (error.response?.status === 401) {
+            toast.error("Session expired, please sign out and log back in.");
+          } else {
+            toast.error(error.response?.data?.message || "Failed to load leave balance");
+          }
+          return { data: { leaveBalance: 12 } };
+        });
         const leavesPromise = axios.get("http://localhost:5000/api/leaves", config).catch(error => {
           console.error("Error fetching leaves:", error);
           if (error.response?.status === 401) {
@@ -64,13 +76,19 @@ export default function RosterShifts() {
           return { data: null }; // Return null on error
         });
 
-        const [shiftsRes, leavesRes, staffRes] = await Promise.all([
+        const [shiftsRes, leavesRes, staffRes, metricsRes] = await Promise.all([
           shiftsPromise,
           leavesPromise,
           staffProfilePromise,
+          metricsPromise,
         ]);
 
         setShifts(shiftsRes.data);
+        setMetrics({
+          leaveBalance: Number.isFinite(Number(metricsRes.data?.leaveBalance))
+            ? Number(metricsRes.data.leaveBalance)
+            : 12,
+        });
         
         // Securely extract offDays (checking offDays, staffProfile.offDays, or user.offDays)
         const userData = staffRes.data || {};
@@ -160,33 +178,94 @@ export default function RosterShifts() {
   };
 
   const [leaveForm, setLeaveForm] = useState({
-    startDate: "",
-    endDate: "",
     type: "Casual",
     reason: "",
   });
+
+  const getSelectedDateKey = (date) => format(date, "yyyy-MM-dd");
+
+  const sortedSelectedDates = [...selectedDates].sort((first, second) => first.localeCompare(second));
+
+  const calendarDays = (() => {
+    const monthStart = startOfMonth(calendarMonth);
+    const monthEnd = endOfMonth(calendarMonth);
+    const leadingBlankCount = (getDay(monthStart) + 6) % 7;
+
+    return [
+      ...Array.from({ length: leadingBlankCount }, (_, index) => ({ type: "blank", id: `blank-${index}` })),
+      ...eachDayOfInterval({ start: monthStart, end: monthEnd }).map((date) => ({
+        type: "date",
+        id: getSelectedDateKey(date),
+        date,
+      })),
+    ];
+  })();
+
+  const toggleSelectedDate = (date) => {
+    const dateKey = getSelectedDateKey(date);
+    setSelectedDates((prev) => (
+      prev.includes(dateKey)
+        ? prev.filter((selectedDate) => selectedDate !== dateKey)
+        : [...prev, dateKey]
+    ));
+  };
+
+  const removeSelectedDate = (dateKey) => {
+    setSelectedDates((prev) => prev.filter((selectedDate) => selectedDate !== dateKey));
+  };
+
+  const groupConsecutiveDates = (dates) => {
+    const sortedDates = [...dates].sort((first, second) => first.localeCompare(second));
+
+    return sortedDates.reduce((ranges, dateKey) => {
+      const currentDate = new Date(`${dateKey}T00:00:00`);
+      const previousRange = ranges[ranges.length - 1];
+
+      if (!previousRange) {
+        return [{ startDate: dateKey, endDate: dateKey }];
+      }
+
+      const previousEndDate = new Date(`${previousRange.endDate}T00:00:00`);
+      const nextExpectedDate = addDays(previousEndDate, 1);
+
+      if (getSelectedDateKey(nextExpectedDate) === getSelectedDateKey(currentDate)) {
+        previousRange.endDate = dateKey;
+        return ranges;
+      }
+
+      return [...ranges, { startDate: dateKey, endDate: dateKey }];
+    }, []);
+  };
 
   const handleLeaveSubmit = async (e) => {
     e.preventDefault();
     if (isSubmittingLeave) return;
 
     try {
-      if (!leaveForm.startDate || !leaveForm.reason) {
+      if (selectedDates.length === 0 || !leaveForm.reason) {
         toast.error("Please fill in all required fields.");
         return;
       }
 
       setIsSubmittingLeave(true);
       const token = localStorage.getItem("token");
-      const res = await axios.post(
-        "http://localhost:5000/api/roster/leaves",
-        leaveForm,
-        { headers: { Authorization: `Bearer ${token}` } }
+      const leaveDateRanges = groupConsecutiveDates(selectedDates);
+      const leaveRequests = await Promise.all(
+        leaveDateRanges.map((range) => axios.post(
+          "http://localhost:5000/api/roster/leaves",
+          {
+            ...leaveForm,
+            startDate: range.startDate,
+            endDate: range.endDate,
+          },
+          { headers: { Authorization: `Bearer ${token}` } }
+        ))
       );
 
-      const newLeave = res.data.leave;
-      setLeaveHistory(prev => [
-        {
+      const newLeaves = leaveRequests
+        .map((response) => response.data.leave)
+        .filter(Boolean)
+        .map((newLeave) => ({
           id: newLeave._id,
           type: newLeave.leaveType,
           startDate: new Date(newLeave.startDate),
@@ -194,12 +273,16 @@ export default function RosterShifts() {
           status: newLeave.status,
           reason: newLeave.reason,
           datesDisplay: `${format(new Date(newLeave.startDate), 'MMM dd')}${newLeave.endDate ? ` - ${format(new Date(newLeave.endDate), 'MMM dd')}` : ''}`
-        },
+        }));
+
+      setLeaveHistory(prev => [
+        ...newLeaves,
         ...prev
       ]);
 
-      toast.success("Leave request submitted successfully.");
-      setLeaveForm({ startDate: "", endDate: "", type: "Casual", reason: "" });
+      toast.success(`${newLeaves.length} leave request${newLeaves.length === 1 ? "" : "s"} submitted successfully.`);
+      setLeaveForm({ type: "Casual", reason: "" });
+      setSelectedDates([]);
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to submit leave request.");
       console.error(error);
@@ -241,7 +324,7 @@ export default function RosterShifts() {
           <GlassCard className="p-6 flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-400">Leave Balance</p>
-              <p className="text-3xl font-bold text-white">{metrics.leaveBalance}</p>
+              <p className="text-3xl font-bold text-white">{metrics.leaveBalance} Requests</p>
             </div>
             <Palmtree className="h-8 w-8 text-[#d4af37]" />
           </GlassCard>
@@ -331,26 +414,89 @@ export default function RosterShifts() {
                   <option value="Unpaid">Unpaid Leave</option>
                 </select>
               </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Start Date</label>
-                <input
-                  type="date"
-                  name="startDate"
-                  required
-                  value={leaveForm.startDate}
-                  onChange={(e) => setLeaveForm({ ...leaveForm, startDate: e.target.value })}
-                  className="w-full bg-[#07090d] border border-slate-800 text-slate-200 text-sm rounded-xl focus:ring-1 focus:ring-[#d4af37] focus:border-[#d4af37] transition-colors p-3 outline-none"
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">End Date (Optional)</label>
-                <input
-                  type="date"
-                  name="endDate"
-                  value={leaveForm.endDate}
-                  onChange={(e) => setLeaveForm({ ...leaveForm, endDate: e.target.value })}
-                  className="w-full bg-[#07090d] border border-slate-800 text-slate-200 text-sm rounded-xl focus:ring-1 focus:ring-[#d4af37] focus:border-[#d4af37] transition-colors p-3 outline-none"
-                />
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Select Leave Dates</label>
+                  <span className="text-xs font-semibold text-[#d4af37]">Total: {selectedDates.length} Days</span>
+                </div>
+                <div className="rounded-xl border border-slate-800 bg-[#07090d] p-3">
+                  <div className="mb-3 flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => setCalendarMonth((prev) => addDays(startOfMonth(prev), -1))}
+                      className="rounded-lg border border-slate-800 p-1.5 text-slate-400 transition hover:border-[#d4af37]/60 hover:text-[#d4af37]"
+                      aria-label="Previous month"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    <p className="text-sm font-semibold text-slate-100">{format(calendarMonth, "MMMM yyyy")}</p>
+                    <button
+                      type="button"
+                      onClick={() => setCalendarMonth((prev) => addDays(endOfMonth(prev), 1))}
+                      className="rounded-lg border border-slate-800 p-1.5 text-slate-400 transition hover:border-[#d4af37]/60 hover:text-[#d4af37]"
+                      aria-label="Next month"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    {calendarDaysOfWeek.map((day, index) => (
+                      <span key={`${day}-${index}`}>{day}</span>
+                    ))}
+                  </div>
+                  <div className="mt-2 grid grid-cols-7 gap-1">
+                    {calendarDays.map((calendarDay) => {
+                      if (calendarDay.type === "blank") {
+                        return <div key={calendarDay.id} className="aspect-square" />;
+                      }
+
+                      const dateKey = getSelectedDateKey(calendarDay.date);
+                      const isSelected = selectedDates.includes(dateKey);
+                      const isToday = isSameDay(calendarDay.date, new Date());
+
+                      return (
+                        <button
+                          type="button"
+                          key={calendarDay.id}
+                          onClick={() => toggleSelectedDate(calendarDay.date)}
+                          className={`aspect-square rounded-lg text-xs font-semibold transition ${
+                            isSelected
+                              ? "bg-[#c5a880] text-black shadow-[0_0_16px_rgba(197,168,128,0.35)]"
+                              : isToday
+                                ? "border border-[#d4af37]/70 bg-[#d4af37]/10 text-[#d4af37]"
+                                : isSameMonth(calendarDay.date, calendarMonth)
+                                  ? "text-slate-300 hover:bg-white/10 hover:text-white"
+                                  : "text-slate-700"
+                          }`}
+                        >
+                          {format(calendarDay.date, "d")}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  {sortedSelectedDates.length > 0 ? (
+                    sortedSelectedDates.map((dateKey) => (
+                      <span
+                        key={dateKey}
+                        className="inline-flex items-center gap-1 rounded-full border border-[#c5a880]/30 bg-[#c5a880]/10 px-2.5 py-1 text-xs font-semibold text-[#f1d9ad]"
+                      >
+                        {format(new Date(`${dateKey}T00:00:00`), "MMM d")}
+                        <button
+                          type="button"
+                          onClick={() => removeSelectedDate(dateKey)}
+                          className="rounded-full p-0.5 text-[#f1d9ad] transition hover:bg-[#c5a880]/20 hover:text-white"
+                          aria-label={`Remove ${format(new Date(`${dateKey}T00:00:00`), "MMM d")}`}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-xs text-slate-600">No leave dates selected.</span>
+                  )}
+                </div>
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Reason</label>
