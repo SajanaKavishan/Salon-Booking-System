@@ -510,7 +510,7 @@ function StaffManager() {
               </label>
             </div>
 
-            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
+            <span className="inline-block self-start rounded-full border border-[#c5a880]/30 bg-[#c5a880]/10 px-2.5 py-1 text-xs font-semibold uppercase tracking-wider text-[#c5a880] sm:border-0 sm:bg-transparent sm:px-0 sm:py-0 sm:text-zinc-500">
               {filteredLeaveRequests.length} leave requests
             </span>
           </div>
@@ -528,7 +528,7 @@ function StaffManager() {
                       </div>
                     )}
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-gray-100">{leave.staffId?.name || "Former staff member"}</p>
+                      <p className="truncate text-base font-medium text-[#c5a880]">{leave.staffId?.name || "Former staff member"}</p>
                       <p className="mt-1 text-xs text-gray-500">{formatLeaveDateRange(leave.startDate, leave.endDate)}</p>
                     </div>
                   </div>
@@ -536,12 +536,12 @@ function StaffManager() {
                 </div>
                 <div className="mt-4 grid gap-3 text-sm">
                   <div>
-                    <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">Type</p>
-                    <p className="text-sm text-zinc-200">{leave.leaveType || "Not specified"}</p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Type</p>
+                    <p className="mt-0.5 text-sm text-zinc-200">{leave.leaveType || "Not specified"}</p>
                   </div>
                   <div>
-                    <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">Reason</p>
-                    <p className="text-sm leading-6 text-zinc-200">{leave.reason || "No reason provided"}</p>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Reason</p>
+                    <p className="mt-0.5 text-sm leading-6 text-zinc-200">{leave.reason || "No reason provided"}</p>
                   </div>
                 </div>
               </div>
