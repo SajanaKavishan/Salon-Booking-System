@@ -349,11 +349,11 @@ function AppointmentsPage() {
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto">
-      <header className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div className="mx-auto w-full max-w-7xl">
+      <header className="mb-6 flex flex-col gap-4 sm:mb-8 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-4xl font-serif font-bold tracking-tight text-white">Appointments</h1>
-          <p className="mt-3 text-base text-gray-400">
+          <h1 className="font-serif text-3xl font-bold tracking-tight text-white sm:text-4xl">Appointments</h1>
+          <p className="mt-3 text-sm leading-6 text-gray-400 sm:text-base">
             Review bookings, refine the queue, and update customer appointment status.
           </p>
         </div>
@@ -362,7 +362,7 @@ function AppointmentsPage() {
           <GoldButton
             type="button"
             onClick={() => setIsAddModalOpen(true)}
-            className="inline-flex w-fit items-center gap-2 rounded-lg px-5 py-3 font-bold"
+            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg px-5 py-3 font-bold sm:w-fit"
           >
             <CalendarPlus className="h-5 w-5" />
             Quick Book
@@ -377,15 +377,15 @@ function AppointmentsPage() {
         onCreated={handleAppointmentCreated}
       />
 
-      <section className="rounded-2xl border border-white/10 bg-[#111111]/70 p-6 shadow-xl backdrop-blur-md">
-        <div className="flex flex-col gap-6 border-b border-white/10 pb-6 xl:flex-row xl:items-start xl:justify-between">
-          <div className="flex flex-wrap gap-3">
+      <section className="rounded-2xl border border-white/10 bg-[#111111]/70 p-4 shadow-xl backdrop-blur-md sm:p-6">
+        <div className="flex flex-col gap-5 border-b border-white/10 pb-5 sm:gap-6 sm:pb-6 xl:flex-row xl:items-start xl:justify-between">
+          <div className="salon-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:flex-wrap sm:gap-3 sm:overflow-visible sm:px-0 sm:pb-0">
             {tabs.map((tab) => (
               <button
                 key={tab}
                 type="button"
                 onClick={() => setActiveTab(tab)}
-                className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold transition ${
+                className={`inline-flex shrink-0 items-center gap-2 rounded-full px-3.5 py-2 text-sm font-semibold transition sm:px-4 ${
                   activeTab === tab
                     ? 'bg-[#d4af37] text-black shadow-[0_0_10px_rgba(212,175,55,0.28)]'
                     : 'border border-gray-700 bg-transparent text-gray-300 hover:border-[#d4af37]/50 hover:text-[#d4af37]'
@@ -402,7 +402,7 @@ function AppointmentsPage() {
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="relative">
+            <div className="relative w-full sm:w-auto">
               <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">
                 <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d="m21 21-4.35-4.35M18 11a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -413,14 +413,14 @@ function AppointmentsPage() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search appointments"
-                className="w-full rounded-full border border-white/10 bg-[#0a0a0a]/80 py-2.5 pl-11 pr-4 text-sm text-white placeholder:text-gray-500 focus:border-[#d4af37] focus:outline-none focus:ring-2 focus:ring-[#d4af37]/20 sm:w-[260px]"
+                className="h-11 w-full rounded-full border border-white/10 bg-[#0a0a0a]/80 py-2.5 pl-11 pr-4 text-sm text-white placeholder:text-gray-500 focus:border-[#d4af37] focus:outline-none focus:ring-2 focus:ring-[#d4af37]/20 sm:w-[260px]"
               />
             </div>
 
             <DarkSelect
               value={dateFilter}
               onChange={(e) => setDateFilter(e.target.value)}
-              className="h-11 rounded-full px-4 text-sm font-medium focus:ring-2 focus:ring-[#d4af37]/20"
+              className="h-11 w-full rounded-full px-4 text-sm font-medium focus:ring-2 focus:ring-[#d4af37]/20 sm:w-auto"
             >
               <option value="All">All Dates</option>
               <option value="Today">Today</option>
@@ -453,8 +453,8 @@ function AppointmentsPage() {
             <p className="mt-2 text-sm text-gray-400">Try a different status, date range, or search term to broaden the results.</p>
           </div>
         ) : (
-          <div className="salon-scrollbar max-h-[520px] overflow-y-auto pt-6">
-            <div className="space-y-4 md:hidden">
+          <div className="salon-scrollbar max-h-[520px] overflow-y-auto pt-5 sm:pt-6">
+            <div className="space-y-3 md:hidden">
               {filteredAppointments.map((appt) => {
                 const customerPhone = appt.user?.phone || appt.user?.phoneNumber;
                 const customerName = appt.user?.name || 'Unknown User';
@@ -462,17 +462,19 @@ function AppointmentsPage() {
                 return (
                   <div
                     key={appt._id}
-                    className="mb-4 flex flex-col gap-3 rounded-xl border border-white/10 bg-[#111111]/70 p-4 backdrop-blur-md"
+                    className="flex flex-col gap-3 rounded-xl border border-white/10 bg-[#111111]/70 p-4 backdrop-blur-md"
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-lg font-semibold text-white">{customerName}</p>
+                      <div className="min-w-0">
+                        <p className="truncate text-base font-semibold text-white">{customerName}</p>
                         <p className="mt-1 text-sm text-gray-400">{new Date(appt.date).toLocaleDateString()}</p>
                       </div>
-                      <StatusBadge status={appt.status} />
+                      <div className="shrink-0">
+                        <StatusBadge status={appt.status} />
+                      </div>
                     </div>
 
-                    <div className="flex flex-col gap-2">
+                    <div className="grid gap-2 rounded-xl border border-white/5 bg-black/15 p-3">
                       <p className="text-sm">
                         <span className="text-gray-400">Client:</span>{' '}
                         <span className="text-white">{customerName}</span>

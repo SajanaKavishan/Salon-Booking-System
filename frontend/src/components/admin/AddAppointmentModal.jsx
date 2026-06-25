@@ -271,37 +271,37 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 backdrop-blur-sm sm:p-4">
       <form
         onSubmit={handleSubmit}
-        className="relative h-fit max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-[28px] bg-[#070707] text-white shadow-[0_0_0_1px_rgba(212,175,55,0.18),0_28px_90px_rgba(0,0,0,0.7)]"
+        className="relative h-fit max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-[#070707] text-white shadow-[0_0_0_1px_rgba(212,175,55,0.18),0_28px_90px_rgba(0,0,0,0.7)] sm:max-h-[90vh] sm:rounded-[28px]"
       >
         <div className="absolute -left-12 top-8 h-48 w-48 rounded-full bg-[#D4AF37]/10 blur-3xl" />
 
-        <div className="relative px-6 pb-6 pt-7 sm:px-8">
+        <div className="relative px-4 pb-5 pt-6 sm:px-8 sm:pb-6 sm:pt-7">
           <button
             type="button"
             onClick={onClose}
-            className="absolute right-6 top-6 text-neutral-400 transition hover:text-white"
+            className="absolute right-4 top-5 rounded-full border border-white/10 bg-white/[0.04] p-2 text-neutral-400 transition hover:text-white sm:right-6 sm:top-6 sm:border-0 sm:bg-transparent sm:p-0"
             aria-label="Close modal"
           >
             <X className="h-5 w-5" />
           </button>
 
-          <div className="flex items-center gap-4 pr-10">
-            <span className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-[#D4AF37]/40 text-[#D4AF37]">
+          <div className="flex items-start gap-3 pr-12 sm:items-center sm:gap-4 sm:pr-10">
+            <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#D4AF37]/40 text-[#D4AF37] sm:h-11 sm:w-11">
               <CalendarPlus className="h-5 w-5" />
             </span>
             <div>
-              <h2 className="font-serif text-3xl font-semibold tracking-tight">Rebook Appointment</h2>
-              <p className="mt-1 text-sm text-neutral-400">Pick a stylist, time, and services in one quick pass.</p>
+              <h2 className="font-serif text-2xl font-semibold tracking-tight sm:text-3xl">Rebook Appointment</h2>
+              <p className="mt-1 text-sm leading-6 text-neutral-400">Pick a stylist, time, and services in one quick pass.</p>
             </div>
           </div>
         </div>
 
-        <div className="relative grid gap-8 px-6 pb-8 sm:px-8 lg:grid-cols-[1.45fr_0.85fr]">
+        <div className="relative grid gap-6 px-4 pb-6 sm:gap-8 sm:px-8 sm:pb-8 lg:grid-cols-[1.45fr_0.85fr]">
           <section>
-            <div className="grid gap-5 md:grid-cols-3">
+            <div className="grid gap-4 sm:gap-5 md:grid-cols-3">
               <label>
                 <span className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-widest text-[#D4AF37]">
                   <UserRound className="h-3.5 w-3.5" />
@@ -353,7 +353,7 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
               </label>
             </div>
 
-            <div className="mt-8">
+            <div className="mt-7 sm:mt-8">
               <div className="flex items-end justify-between gap-4">
                 <div>
                   <p className="text-[10px] font-semibold uppercase tracking-widest text-[#D4AF37]">Services</p>
@@ -379,7 +379,7 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
                         className="group text-left"
                       >
                         <div className="flex items-start justify-between gap-4">
-                          <div>
+                          <div className="min-w-0">
                             <p className="text-base font-semibold text-white transition group-hover:text-[#f3d77a]">{service.name}</p>
                             <p className="mt-1 text-xs text-neutral-500">{service.duration} min</p>
                           </div>
@@ -404,7 +404,7 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
           </section>
 
           <aside className="lg:pt-2">
-            <div className="rounded-3xl bg-[#0d0d0d] p-6 shadow-[inset_0_0_0_1px_rgba(212,175,55,0.14)]">
+            <div className="rounded-2xl bg-[#0d0d0d] p-4 shadow-[inset_0_0_0_1px_rgba(212,175,55,0.14)] sm:rounded-3xl sm:p-6">
               <p className="text-[10px] font-semibold uppercase tracking-widest text-[#D4AF37]/80">Booking Preview</p>
               <div className="mt-6 space-y-5">
                 <div>
@@ -416,15 +416,15 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
                   <p className="mt-2 text-sm text-white">{formatDate(form.bookingDate)}</p>
                   <p className="mt-1 text-xs text-neutral-400">{summaryTime}</p>
                 </div>
-                <div className="grid grid-cols-2 gap-5 border-t border-[#D4AF37]/10 pt-5">
+                <div className="grid grid-cols-2 gap-4 border-t border-[#D4AF37]/10 pt-5 sm:gap-5">
                   <div>
                     <p className="text-[10px] uppercase tracking-widest text-neutral-500">Duration</p>
-                    <p className="mt-2 text-2xl font-semibold text-white">{totalDuration || 0}</p>
+                    <p className="mt-2 text-xl font-semibold text-white sm:text-2xl">{totalDuration || 0}</p>
                     <p className="text-xs text-neutral-500">minutes</p>
                   </div>
                   <div>
                     <p className="text-[10px] uppercase tracking-widest text-neutral-500">Total</p>
-                    <p className="mt-2 text-2xl font-semibold text-[#D4AF37]">{formatCurrency(totalCost)}</p>
+                    <p className="mt-2 text-xl font-semibold text-[#D4AF37] sm:text-2xl">{formatCurrency(totalCost)}</p>
                   </div>
                 </div>
               </div>
