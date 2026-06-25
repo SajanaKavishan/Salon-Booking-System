@@ -245,14 +245,15 @@ function Layout() {
 
   const userInitial = user?.name ? user.name.charAt(0).toUpperCase() : 'U';
   const closeProfile = () => setIsProfileOpen(false);
+  const isReviewsPage = location.pathname.startsWith('/admin/reviews');
 
   return (
     <div className="min-h-screen w-full bg-[#07090d]">
       <Sidebar isOpen={isMobileSidebarOpen} onClose={() => setIsMobileSidebarOpen(false)} />
 
-      <div className="flex min-h-screen w-full flex-col md:pl-80">
+      <div className="flex h-screen min-h-0 w-full flex-col overflow-hidden md:pl-80">
         
-        <header className="sticky top-0 z-20 flex h-[72px] items-center justify-between bg-[#090d14]/95 px-4 backdrop-blur-md md:px-8">
+        <header className="z-30 flex h-[72px] shrink-0 items-center justify-between bg-[#090d14]/95 px-4 backdrop-blur-md md:px-8">
           
           <div className="flex items-center gap-3">
             <button
@@ -420,7 +421,7 @@ function Layout() {
           />
         )}
 
-        <main className="w-full flex-1 overflow-y-auto p-4 md:p-8 lg:p-10">
+        <main className={`min-h-0 w-full flex-1 overflow-y-auto ${isReviewsPage ? 'p-0' : 'p-4 md:p-8 lg:p-10'}`}>
           <Outlet />
         </main>
       </div>

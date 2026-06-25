@@ -156,8 +156,8 @@ function ReviewManagement() {
   };
 
   return (
-    <div className="bg-zinc-950 min-h-screen text-zinc-100 p-6">
-      <div className="mx-auto w-full max-w-7xl">
+    <div className="min-h-full bg-zinc-950 text-zinc-100">
+      <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 md:px-8 lg:px-10">
         <header className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h1 className="mt-4 font-serif text-4xl font-bold tracking-tight text-white">
@@ -211,14 +211,18 @@ function ReviewManagement() {
             </p>
           </div>
         ) : (
-          <div className="space-y-8">
+          <div className="space-y-10">
             {groupedReviews.map((group) => (
-              <section key={group.key}>
-                <div className="mb-4 flex items-center justify-between gap-3">
-                  <h2 className="text-lg font-semibold text-white">{group.title}</h2>
-                  <span className="rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1 text-xs font-semibold text-zinc-400">
-                    {group.reviews.length}
-                  </span>
+              <section key={group.key} className="relative">
+                <div className="sticky top-0 z-20 mb-5 border-b border-zinc-800/60 bg-[#0c0c0e]/95 shadow-md backdrop-blur-md">
+                  <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6 md:px-8 lg:px-10">
+                    <h2 className="text-lg font-bold tracking-tight text-white">
+                      {group.title}
+                    </h2>
+                    <span className="inline-flex min-h-7 min-w-7 items-center justify-center rounded-full border border-zinc-800 bg-zinc-900 px-2 text-xs font-bold text-zinc-300 shadow-inner shadow-black/20">
+                      {group.reviews.length}
+                    </span>
+                  </div>
                 </div>
 
                 {group.reviews.length === 0 ? (
@@ -226,7 +230,7 @@ function ReviewManagement() {
                     No {group.title.toLowerCase()} reviews.
                   </div>
                 ) : (
-                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  <div className="grid gap-4 pt-1 md:grid-cols-2 xl:grid-cols-3">
                     {group.reviews.map((review) => {
                       const reviewId = getReviewId(review);
                       const services = getServiceItems(review);
@@ -252,12 +256,14 @@ function ReviewManagement() {
                               </div>
 
                               {isApproved ? (
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-[0_0_12px_rgba(16,185,129,0.05)]">
-                                  ● Live on Homepage
+                                <span className="inline-flex w-fit self-start items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-400 shadow-[0_0_12px_rgba(16,185,129,0.05)]">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                                  Live on Homepage
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 shadow-[0_0_12px_rgba(245,158,11,0.05)]">
-                                  ● Pending Moderation
+                                <span className="inline-flex w-fit self-start items-center gap-1 rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.05)]">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                                  Pending Moderation
                                 </span>
                               )}
                             </div>
