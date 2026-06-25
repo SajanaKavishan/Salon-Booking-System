@@ -15,14 +15,49 @@ const getServices = async (req, res) => {
 // @route   POST /api/services
 const createService = async (req, res) => {
   try {
-    const { name, price, duration } = req.body;
+    const { name, price, duration, image } = req.body;
     if (!name || !price || !duration) {
       return res.status(400).json({ message: 'Please add all fields' });
     }
-    const service = await Service.create({ name, price, duration });
+
+    const service = await Service.create({
+      name,
+      price,
+      duration,
+      image: req.file?.path || image || undefined,
+    });
+
     res.status(201).json(service);
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Update a service (Admin only)
+// @route   PUT /api/services/:id
+const updateService = async (req, res) => {
+  try {
+    const updateData = {
+      ...req.body,
+    };
+
+    if (req.file?.path) {
+      updateData.image = req.file.path;
+    }
+
+    const updatedService = await Service.findByIdAndUpdate(
+      req.params.id,
+      updateData,
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedService) {
+      return res.status(404).json({ message: 'Service not found' });
+    }
+
+    res.status(200).json(updatedService);
+  } catch (error) {
+    res.status(500).json({ message: 'Error updating service', error });
   }
 };
 
@@ -40,4 +75,4 @@ const deleteService = async (req, res) => {
   }
 };
 
-module.exports = { getServices, createService, deleteService };
+module.exports = { getServices, createService, updateService, deleteService };
