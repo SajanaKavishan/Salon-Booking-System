@@ -382,35 +382,71 @@ function StaffManager() {
         </form>
           </section>
 
-          <section className="rounded-2xl border border-white/10 bg-[#111111]/70 p-6 shadow-xl backdrop-blur-md">
-        <div className="mb-4 flex flex-wrap items-center gap-2 text-xs font-semibold">
-          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-gray-300">
-            {staffList.length} staff members
-          </span>
-          <span className="rounded-full border border-[#d4af37]/20 bg-[#d4af37]/10 px-3 py-1 text-[#d4af37]">
-            Team roster
-          </span>
+          <section className="rounded-2xl border border-white/10 bg-[#111111]/70 p-4 shadow-xl backdrop-blur-md sm:p-6">
+        <div className="space-y-3 md:hidden">
+          {staffList.map((staff) => (
+            <div key={staff._id} className="rounded-xl border border-zinc-800 bg-black/20 p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="truncate text-base font-semibold text-gray-100">{staff.name}</p>
+                  <p className="mt-1 text-sm text-gray-400">{staff.specialty}</p>
+                </div>
+                {activeMenuId === staff._id ? (
+                  <GoldButton type="button" variant="ghost" onClick={() => setActiveMenuId(null)} className="shrink-0 bg-gray-800 px-2 py-1 text-sm text-gray-400 hover:bg-gray-700 hover:text-white">
+                    x
+                  </GoldButton>
+                ) : (
+                  <GoldButton type="button" variant="outline" onClick={() => setActiveMenuId(staff._id)} className="shrink-0 px-4 py-1.5">
+                    Manage
+                  </GoldButton>
+                )}
+              </div>
+
+              {activeMenuId === staff._id && (
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  <GoldButton type="button" variant="ghost" onClick={() => openEditModal(staff)} className="border border-blue-800/50 bg-blue-900/30 px-3 py-2 text-sm text-blue-300 hover:bg-blue-600 hover:text-white">
+                    Edit
+                  </GoldButton>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setItemToDelete(staff._id);
+                      setIsDeleteModalOpen(true);
+                    }}
+                    className="inline-flex items-center justify-center rounded-md border border-red-800/50 bg-red-900/30 px-3 py-2 text-sm font-semibold text-red-300 transition duration-300 hover:bg-red-600 hover:text-white"
+                  >
+                    Delete
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+          {staffList.length === 0 && (
+            <div className="rounded-xl border border-zinc-800 bg-black/20 p-8 text-center text-sm font-light text-gray-500">
+              No staff members found.
+            </div>
+          )}
         </div>
 
-        <div className="salon-scrollbar overflow-x-auto rounded-xl border border-white/10 bg-black/20">
-          <table className="salon-table">
+        <div className="salon-scrollbar hidden overflow-x-auto rounded-xl border border-white/10 bg-black/20 md:block">
+          <table className="w-full min-w-[720px] table-fixed border-collapse text-left">
             <thead>
-              <tr className="bg-black/30 text-[#d4af37]">
-                <th className="salon-table-th border-b border-white/10">Name</th>
-                <th className="salon-table-th border-b border-white/10">Specialty</th>
-                <th className="salon-table-th border-b border-white/10 text-center">Action</th>
+              <tr className="border-b border-zinc-800 bg-black/30 text-xs font-bold uppercase tracking-[0.18em] text-[#d4af37]">
+                <th className="w-[45%] py-4 pl-4 pr-6">Name</th>
+                <th className="w-[35%] px-0 py-4 pr-6">Specialty</th>
+                <th className="w-[20%] py-4 pl-0 pr-4 text-right">Action</th>
               </tr>
             </thead>
             <tbody>
               {staffList.map((staff) => (
-                <tr key={staff._id} className="group border-b border-white/10 transition-colors last:border-b-0 hover:bg-white/5">
-                  <td className="salon-table-td">
+                <tr key={staff._id} className="group border-b border-zinc-800 transition-colors last:border-b-0 hover:bg-white/5">
+                  <td className="w-[45%] py-4 pl-4 pr-6 align-middle">
                     <div className="font-medium text-gray-200">{staff.name}</div>
                   </td>
-                  <td className="salon-table-td text-gray-300">{staff.specialty}</td>
-                  <td className="salon-table-td text-center">
+                  <td className="w-[35%] px-0 py-4 pr-6 align-middle text-gray-300">{staff.specialty}</td>
+                  <td className="w-[20%] py-4 pl-0 pr-4 text-right align-middle">
                     {activeMenuId === staff._id ? (
-                      <div className="flex items-center justify-center gap-2">
+                      <div className="flex items-center justify-end gap-2">
                         <GoldButton type="button" variant="ghost" onClick={() => openEditModal(staff)} className="border border-blue-800/50 bg-blue-900/30 px-3 py-1 text-sm text-blue-300 hover:bg-blue-600 hover:text-white">
                           Edit
                         </GoldButton>
@@ -479,7 +515,45 @@ function StaffManager() {
             </span>
           </div>
 
-          <div className="salon-scrollbar overflow-x-auto">
+          <div className="space-y-3 md:hidden">
+            {filteredLeaveRequests.map((leave) => (
+              <div key={leave._id} className="border-b border-zinc-800/60 pb-4 last:border-b-0">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex min-w-0 items-center gap-3">
+                    {leave.staffId?.imageUrl ? (
+                      <img src={leave.staffId.imageUrl} alt={leave.staffId.name || "Staff member"} className="h-10 w-10 rounded-full object-cover" />
+                    ) : (
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-gray-300">
+                        {leave.staffId?.name?.charAt(0).toUpperCase() || "?"}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-gray-100">{leave.staffId?.name || "Former staff member"}</p>
+                      <p className="mt-1 text-xs text-gray-500">{formatLeaveDateRange(leave.startDate, leave.endDate)}</p>
+                    </div>
+                  </div>
+                  <div className="shrink-0">{getLeaveStatusBadge(leave.status)}</div>
+                </div>
+                <div className="mt-4 grid gap-3 text-sm">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-500">Type</p>
+                    <p className="mt-1 text-gray-300">{leave.leaveType || "Not specified"}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-500">Reason</p>
+                    <p className="mt-1 leading-6 text-gray-300">{leave.reason || "No reason provided"}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {filteredLeaveRequests.length === 0 && (
+              <div className="py-12 text-center text-sm font-light text-gray-500">
+                No leave requests found for the selected filters.
+              </div>
+            )}
+          </div>
+
+          <div className="salon-scrollbar hidden overflow-x-auto md:block">
             <table className="w-full min-w-[820px] text-left">
               <thead>
                 <tr className="border-b border-zinc-800/60 text-xs font-bold uppercase tracking-[0.18em] text-[#d4af37]">
