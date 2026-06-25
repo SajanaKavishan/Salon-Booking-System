@@ -4,6 +4,8 @@ const User = require('../models/User');
 const Staff = require('../models/Staff');
 const Notification = require('../models/Notification');
 const mongoose = require('mongoose');
+const sendEmail = require('../utils/sendEmail');
+const { ensureSettingsDocument, defaultSettings } = require('./settingsController');
 
 const toDateKey = (date) => new Date(date).toISOString().split('T')[0];
 
@@ -18,6 +20,45 @@ const formatLeaveDate = (startDate, endDate = startDate) => {
     const end = formatter.format(new Date(endDate));
     return start === end ? start : `${start} - ${end}`;
 };
+
+const buildLeaveCancellationEmail = ({
+    customerName,
+    salonName,
+    supportEmail,
+    contactNumber,
+    stylistName,
+    appointmentDate,
+    appointmentTime,
+    serviceNames
+}) => `
+    <div style="font-family: Arial, sans-serif; padding: 24px; border: 1px solid #262626; border-radius: 14px; max-width: 580px; margin: 0 auto; background: #0b0b0b; color: #f5f5f5;">
+        <h2 style="color:#d4af37; margin-top:0;">${salonName}</h2>
+        <p style="font-size:16px;">Hello <strong>${customerName || 'there'}</strong>,</p>
+        <p style="font-size:14px; line-height:1.7; color:#d1d5db;">
+            We're sorry, but your appointment has been cancelled because your selected stylist, <strong>${stylistName || 'your stylist'}</strong>, is on leave.
+        </p>
+        <div style="margin-top:18px; border:1px solid #232323; border-radius:12px; overflow:hidden;">
+            <div style="display:flex; justify-content:space-between; gap:16px; padding:12px 14px; border-bottom:1px solid #232323;">
+                <span style="color:#9ca3af; font-size:13px;">Services</span>
+                <span style="color:#ffffff; font-size:13px; font-weight:600; text-align:right;">${serviceNames || 'Not specified'}</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; gap:16px; padding:12px 14px; border-bottom:1px solid #232323;">
+                <span style="color:#9ca3af; font-size:13px;">Date</span>
+                <span style="color:#ffffff; font-size:13px; font-weight:600; text-align:right;">${appointmentDate || 'Not specified'}</span>
+            </div>
+            <div style="display:flex; justify-content:space-between; gap:16px; padding:12px 14px;">
+                <span style="color:#9ca3af; font-size:13px;">Time</span>
+                <span style="color:#ffffff; font-size:13px; font-weight:600; text-align:right;">${appointmentTime || 'Not specified'}</span>
+            </div>
+        </div>
+        <p style="margin-top:20px; font-size:14px; line-height:1.7; color:#d1d5db;">
+            Please log in to your account and create a new booking for another suitable date or stylist.
+        </p>
+        <p style="margin-top:18px; font-size:13px; color:#9ca3af; text-align:center;">
+            Need help? Reach us at ${supportEmail || 'our support email'}${contactNumber ? ` or ${contactNumber}` : ''}
+        </p>
+    </div>
+`;
 const getLeaveRequests = async (req, res) => {
     try {
         let query = {};
@@ -78,8 +119,14 @@ const approveLeave = async (req, res) => {
         let approvedLeave;
         let cancelledAppointments = 0;
         let preferredCustomerNotifications = 0;
+        let cancellationEmailsSent = 0;
 
         await session.withTransaction(async () => {
+            const settings = await ensureSettingsDocument();
+            const salonName = settings?.salonName || defaultSettings.salonName;
+            const supportEmail = settings?.supportEmail || defaultSettings.supportEmail;
+            const contactNumber = settings?.contactNumber || defaultSettings.contactNumber;
+            const shouldSendCustomerEmails = settings?.customerEmails !== false;
             const leaveRequest = await LeaveRequest.findById(id).session(session);
 
             if (!leaveRequest) {
@@ -95,7 +142,7 @@ const approveLeave = async (req, res) => {
             }
 
             const staffProfile = await Staff.findOne({ userId: leaveRequest.staffId })
-                .select('_id')
+                .select('_id name')
                 .session(session);
 
             const conflictingAppointments = staffProfile
@@ -106,11 +153,15 @@ const approveLeave = async (req, res) => {
                         $gte: toDateKey(leaveRequest.startDate),
                         $lte: toDateKey(leaveRequest.endDate)
                     }
-                }).select('_id user services date').session(session)
+                })
+                    .select('_id user services date startTime endTime')
+                    .populate('user', 'name email')
+                    .populate('services', 'name')
+                    .session(session)
                 : [];
 
             const tierOneCustomerIds = [
-                ...new Set(conflictingAppointments.map((appointment) => appointment.user.toString()))
+                ...new Set(conflictingAppointments.map((appointment) => appointment.user?._id?.toString() || appointment.user?.toString()).filter(Boolean))
             ];
 
             if (conflictingAppointments.length > 0) {
@@ -122,18 +173,53 @@ const approveLeave = async (req, res) => {
 
                 await Notification.insertMany(
                     conflictingAppointments.map((appointment) => ({
-                        user: appointment.user,
+                        user: appointment.user?._id || appointment.user,
                         type: 'RESCHEDULE_REQUIRED',
                         message: `We're sorry! Your stylist had an emergency leave on ${formatLeaveDate(appointment.date)}. Please reschedule your booking.`,
                         meta: {
                             actionUrl: '/book',
                             staffId: appointment.staffId?.toString(),
                             stylistId: appointment.staffId?.toString(),
-                            originalServices: appointment.services.map((serviceId) => serviceId.toString())
+                            originalServices: appointment.services.map((service) => service?._id?.toString() || service?.toString()).filter(Boolean)
                         }
                     })),
                     { session }
                 );
+
+                if (shouldSendCustomerEmails) {
+                    const emailResults = await Promise.allSettled(
+                        conflictingAppointments
+                            .filter((appointment) => appointment.user?.email)
+                            .map((appointment) => {
+                                const serviceNames = appointment.services
+                                    .map((service) => service?.name)
+                                    .filter(Boolean)
+                                    .join(', ') || 'Not specified';
+
+                                return sendEmail({
+                                    email: appointment.user.email,
+                                    subject: `Appointment Cancelled - ${salonName}`,
+                                    message: buildLeaveCancellationEmail({
+                                        customerName: appointment.user.name,
+                                        salonName,
+                                        supportEmail,
+                                        contactNumber,
+                                        stylistName: staffProfile?.name,
+                                        appointmentDate: appointment.date,
+                                        appointmentTime: `${appointment.startTime || 'N/A'} - ${appointment.endTime || 'N/A'}`,
+                                        serviceNames
+                                    })
+                                });
+                            })
+                    );
+
+                    cancellationEmailsSent = emailResults.filter((result) => result.status === 'fulfilled').length;
+                    emailResults
+                        .filter((result) => result.status === 'rejected')
+                        .forEach((result) => {
+                            console.warn('Leave cancellation email failed:', result.reason?.message || result.reason);
+                        });
+                }
             }
 
             const preferredStylistQuery = {
@@ -170,7 +256,8 @@ const approveLeave = async (req, res) => {
             message: 'Leave request approved and conflicts handled.',
             leaveRequest: approvedLeave,
             cancelledAppointments,
-            preferredCustomerNotifications
+            preferredCustomerNotifications,
+            cancellationEmailsSent
         });
     } catch (error) {
         console.error('Error approving leave request:', error);
