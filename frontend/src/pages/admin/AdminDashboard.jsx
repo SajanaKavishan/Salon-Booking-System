@@ -10,7 +10,7 @@ import { createPortal } from "react-dom";
 
 import { useNavigate } from "react-router-dom";
 
-import { AlertTriangle, CalendarDays, Clock, DollarSign, Loader2, RotateCw, Users, X, XCircle } from "lucide-react";
+import { AlertTriangle, CalendarDays, Clock, DollarSign, Loader2, RotateCw, Users, XCircle } from "lucide-react";
 
 import {
   ResponsiveContainer,
@@ -521,13 +521,13 @@ function AdminDashboard() {
 
   return (
 
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8">
 
       <header className="mb-8">
 
-        <h1 className="text-4xl font-serif font-bold tracking-tight text-white">Admin Dashboard</h1>
+        <h1 className="font-serif text-3xl font-bold tracking-tight text-white sm:text-4xl">Admin Dashboard</h1>
 
-        <p className="mt-3 text-base text-gray-400">
+        <p className="mt-3 text-sm leading-6 text-gray-400 sm:text-base">
 
           Overview of your salon operations, recent activities, and key metrics.
 
@@ -537,15 +537,15 @@ function AdminDashboard() {
 
 
 
-      <section className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+      <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
 
-        <GlassCard className="flex items-center justify-between p-6">
+        <GlassCard className="flex items-center justify-between gap-4 p-5 sm:p-6">
 
           <div>
 
             <p className="text-sm font-medium text-gray-400">Total Appointments</p>
 
-            <p className="text-3xl font-bold text-white">
+            <p className="text-2xl font-bold text-white sm:text-3xl">
 
               {loading ? "..." : summaryData?.totalAppointments || 0}
 
@@ -553,17 +553,17 @@ function AdminDashboard() {
 
           </div>
 
-          <CalendarDays className="h-8 w-8 text-[#d4af37]" />
+          <CalendarDays className="h-7 w-7 shrink-0 text-[#d4af37] sm:h-8 sm:w-8" />
 
         </GlassCard>
 
-        <GlassCard className="flex items-center justify-between p-6">
+        <GlassCard className="flex items-center justify-between gap-4 p-5 sm:p-6">
 
           <div>
 
             <p className="text-sm font-medium text-gray-400">Pending Appointments</p>
 
-            <p className="text-3xl font-bold text-white">
+            <p className="text-2xl font-bold text-white sm:text-3xl">
 
               {loading ? "..." : summaryData?.pendingAppointments || 0}
 
@@ -571,17 +571,17 @@ function AdminDashboard() {
 
           </div>
 
-          <Clock className="h-8 w-8 text-[#d4af37]" />
+          <Clock className="h-7 w-7 shrink-0 text-[#d4af37] sm:h-8 sm:w-8" />
 
         </GlassCard>
 
-        <GlassCard className="flex items-center justify-between p-6">
+        <GlassCard className="flex items-center justify-between gap-4 p-5 sm:p-6">
 
           <div>
 
             <p className="text-sm font-medium text-gray-400">Total Revenue</p>
 
-            <p className="text-3xl font-bold text-white">
+            <p className="text-2xl font-bold text-white sm:text-3xl">
 
               {loading
 
@@ -593,17 +593,17 @@ function AdminDashboard() {
 
           </div>
 
-          <DollarSign className="h-8 w-8 text-[#d4af37]" />
+          <DollarSign className="h-7 w-7 shrink-0 text-[#d4af37] sm:h-8 sm:w-8" />
 
         </GlassCard>
 
-        <GlassCard className="flex items-center justify-between p-6">
+        <GlassCard className="flex items-center justify-between gap-4 p-5 sm:p-6">
 
           <div>
 
             <p className="text-sm font-medium text-gray-400">Total Staff</p>
 
-            <p className="text-3xl font-bold text-white">
+            <p className="text-2xl font-bold text-white sm:text-3xl">
 
               {loading ? "..." : summaryData?.totalStaff || 0}
 
@@ -611,7 +611,7 @@ function AdminDashboard() {
 
           </div>
 
-          <Users className="h-8 w-8 text-[#d4af37]" />
+          <Users className="h-7 w-7 shrink-0 text-[#d4af37] sm:h-8 sm:w-8" />
 
         </GlassCard>
 
@@ -651,7 +651,7 @@ function AdminDashboard() {
         </div>
       </div>
 
-      <GlassCard className="p-6">
+      <GlassCard className="p-4 sm:p-6">
         <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-[0.65rem] font-semibold uppercase tracking-[0.28em] text-[#d4af37]">Live Operations</p>
@@ -701,7 +701,59 @@ function AdminDashboard() {
                       </button>
                     </div>
 
-                <div className="overflow-x-auto">
+                <div className="space-y-3 md:hidden">
+                  {group.appointments.map((appointment) => {
+                    const isLate = appointment.isLate === true;
+                    const clientName = appointment.user?.name || "Unknown customer";
+                    const services = Array.isArray(appointment.services)
+                      ? appointment.services.map((service) => service?.name || service).join(", ")
+                      : appointment.service || "Service pending";
+
+                    return (
+                      <article
+                        key={appointment._id}
+                        className={`rounded-xl border border-white/10 bg-black/20 p-4 ${
+                          isLate ? "border-l-4 border-l-amber-500 bg-amber-500/5" : ""
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-white">{clientName}</p>
+                            <p className="mt-1 text-xs text-gray-500">{appointment.user?.phone || appointment.user?.email || "No contact details"}</p>
+                          </div>
+                          <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getStatusBadgeClass(appointment.status)}`}>
+                            {appointment.status}
+                          </span>
+                        </div>
+
+                        <div className="mt-4 grid gap-3 text-sm">
+                          <div>
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Time</p>
+                            {isLate ? (
+                              <div className="mt-1">
+                                <p className="text-xs font-medium text-zinc-500 line-through">{appointment.startTime || "Time pending"}</p>
+                                <p className="mt-1 text-xs font-semibold text-amber-400">Adjusted end: {appointment.adjustedEndTime || appointment.endTime || "Pending"}</p>
+                                <span className="mt-2 inline-flex rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-400">
+                                  Late {appointment.lateMinutes || 0}m
+                                </span>
+                              </div>
+                            ) : (
+                              <p className="mt-1 text-sm font-semibold text-gray-200">
+                                {appointment.startTime || "Time pending"}{appointment.endTime ? ` - ${appointment.endTime}` : ""}
+                              </p>
+                            )}
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Service</p>
+                            <p className="mt-1 text-sm leading-6 text-gray-300">{services}</p>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+
+                <div className="hidden overflow-x-auto md:block">
                   <table className="min-w-full text-left text-sm">
                     <thead>
                       <tr className="border-b border-white/10 text-xs uppercase tracking-[0.18em] text-gray-500">
@@ -780,11 +832,36 @@ function AdminDashboard() {
 
         {/* Recent Appointments */}
 
-        <GlassCard className="p-6">
+        <GlassCard className="p-4 sm:p-6">
 
           <h2 className="mb-4 text-xl font-semibold text-white">Recent Appointments</h2>
 
-          <div className="overflow-x-auto">
+          <div className="space-y-3 md:hidden">
+            {recentAppointments.length > 0 ? (
+              recentAppointments.map((appointment) => (
+                <article key={appointment._id} className="rounded-xl border border-white/10 bg-black/20 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-white">{appointment.user?.name || "Unknown customer"}</p>
+                      <p className="mt-1 text-xs text-gray-500">{appointment.stylist?.name || "Unassigned"}</p>
+                    </div>
+                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${getStatusBadgeClass(appointment.status)}`}>
+                      {appointment.status}
+                    </span>
+                  </div>
+                  <p className="mt-4 text-xs font-medium text-gray-300">
+                    {new Date(appointment.date).toLocaleDateString()} at {appointment.startTime || "Time pending"}
+                  </p>
+                </article>
+              ))
+            ) : (
+              <div className="rounded-xl border border-dashed border-white/10 bg-black/20 p-6 text-center text-sm text-gray-500">
+                No recent appointments.
+              </div>
+            )}
+          </div>
+
+          <div className="hidden overflow-x-auto md:block">
 
             <table className="min-w-full text-left text-sm">
 
@@ -874,7 +951,7 @@ function AdminDashboard() {
 
         {/* Recent Leave Requests */}
 
-        <GlassCard className="p-6">
+        <GlassCard className="p-4 sm:p-6">
 
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 
@@ -890,7 +967,55 @@ function AdminDashboard() {
 
           </div>
 
-          <div className="overflow-x-auto">
+          <div className="space-y-3 md:hidden">
+            {recentLeaveRequests.length > 0 ? (
+              recentLeaveRequests.map((leave) => (
+                <article key={leave._id} className="rounded-xl border border-white/10 bg-black/20 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      {leave.staffId?.imageUrl ? (
+                        <img
+                          src={leave.staffId.imageUrl}
+                          alt={leave.staffId.name || "Staff member"}
+                          className="h-9 w-9 shrink-0 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-gray-300">
+                          {leave.staffId?.name?.charAt(0).toUpperCase() || "?"}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-white">{leave.staffId?.name || "Former staff member"}</p>
+                        <p className="mt-1 text-xs text-gray-500">{formatLeaveDateRange(leave.startDate, leave.endDate)}</p>
+                      </div>
+                    </div>
+                    <div className="shrink-0">{getLeaveStatusBadge(leave.status)}</div>
+                  </div>
+
+                  <div className="mt-4 flex items-end justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Type</p>
+                      <p className="mt-1 truncate text-sm text-gray-300">{leave.leaveType}</p>
+                    </div>
+                    <GoldButton
+                      type="button"
+                      onClick={() => setReviewLeaveRequest(leave)}
+                      disabled={isLeaveActionLoading}
+                      className="shrink-0 px-4 py-1.5 text-xs shadow-[0_0_18px_rgba(212,175,55,0.16)]"
+                    >
+                      Review
+                    </GoldButton>
+                  </div>
+                </article>
+              ))
+            ) : (
+              <div className="rounded-xl border border-dashed border-white/10 bg-black/20 p-6 text-center text-sm text-gray-500">
+                No recent leave requests.
+              </div>
+            )}
+          </div>
+
+          <div className="hidden overflow-x-auto md:block">
 
             <table className="min-w-full text-left text-sm">
 
@@ -1052,16 +1177,6 @@ function AdminDashboard() {
                   </h3>
 
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => setReviewLeaveRequest(null)}
-                  disabled={isLeaveActionLoading}
-                  className="rounded-full border border-white/10 bg-white/[0.04] p-2 text-zinc-400 transition hover:border-[#d4af37]/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                  aria-label="Close leave review"
-                >
-                  <X className="h-4 w-4" />
-                </button>
 
               </div>
 
