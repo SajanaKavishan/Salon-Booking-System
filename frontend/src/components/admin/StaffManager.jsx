@@ -7,7 +7,7 @@ import { GlassCard, GoldButton } from "./SystemUI";
 
 function StaffManager() {
   const fieldClassName = "w-full bg-black/50 border border-gray-700 rounded-lg p-3 text-white focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] outline-none transition-all";
-  const selectClassName = "w-full rounded-lg border border-white/10 bg-[#0b0b0b] px-4 py-3 text-sm font-medium text-white outline-none transition focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880]";
+  const minimalSelectClassName = "bg-transparent text-white border-b border-zinc-700 rounded-none px-2 py-1 text-sm font-medium outline-none transition focus:border-[#c5a880]";
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(searchParams.get("tab") === "leaves" ? "leaves" : "directory");
   const [staffList, setStaffList] = useState([]);
@@ -451,75 +451,71 @@ function StaffManager() {
       )}
 
       {activeTab === "leaves" && (
-        <section className="rounded-2xl border border-white/10 bg-[#111111]/70 p-6 shadow-xl backdrop-blur-md">
-          <div className="mb-6 grid gap-4 md:grid-cols-2">
-            <div>
-              <label className="mb-2 block text-xs font-bold uppercase tracking-[0.18em] text-gray-500">Stylist Filter</label>
-              <select value={stylistFilter} onChange={(event) => setStylistFilter(event.target.value)} className={selectClassName}>
-                <option value="all" className="bg-[#111111]">All Stylists</option>
-                {staffList.map((staff) => (
-                  <option key={staff._id} value={getStaffFilterId(staff)} className="bg-[#111111]">
-                    {staff.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="mb-2 block text-xs font-bold uppercase tracking-[0.18em] text-gray-500">Year Filter</label>
-              <select value={yearFilter} onChange={(event) => setYearFilter(event.target.value)} className={selectClassName}>
-                <option value="2026" className="bg-[#111111]">2026</option>
-              </select>
-            </div>
-          </div>
+        <section className="space-y-6">
+          <div className="flex flex-col gap-4 border-b border-zinc-800/60 pb-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+              <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-zinc-500">
+                Stylist
+                <select value={stylistFilter} onChange={(event) => setStylistFilter(event.target.value)} className={minimalSelectClassName}>
+                  <option value="all" className="bg-[#111111]">All Stylists</option>
+                  {staffList.map((staff) => (
+                    <option key={staff._id} value={getStaffFilterId(staff)} className="bg-[#111111]">
+                      {staff.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-          <div className="mb-4 flex flex-wrap items-center gap-2 text-xs font-semibold">
-            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-gray-300">
+              <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-zinc-500">
+                Year
+                <select value={yearFilter} onChange={(event) => setYearFilter(event.target.value)} className={minimalSelectClassName}>
+                  <option value="2026" className="bg-[#111111]">2026</option>
+                </select>
+              </label>
+            </div>
+
+            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
               {filteredLeaveRequests.length} leave requests
             </span>
-            <span className="rounded-full border border-[#d4af37]/20 bg-[#d4af37]/10 px-3 py-1 text-[#d4af37]">
-              {yearFilter}
-            </span>
           </div>
 
-          <div className="salon-scrollbar overflow-x-auto rounded-xl border border-white/10 bg-black/20">
-            <table className="salon-table">
+          <div className="salon-scrollbar overflow-x-auto">
+            <table className="w-full min-w-[820px] text-left">
               <thead>
-                <tr className="bg-black/30 text-[#d4af37]">
-                  <th className="salon-table-th border-b border-white/10">Stylist Name</th>
-                  <th className="salon-table-th border-b border-white/10">Requested Dates</th>
-                  <th className="salon-table-th border-b border-white/10">Type</th>
-                  <th className="salon-table-th border-b border-white/10">Reason</th>
-                  <th className="salon-table-th border-b border-white/10">Status</th>
+                <tr className="border-b border-zinc-800/60 text-xs font-bold uppercase tracking-[0.18em] text-[#d4af37]">
+                  <th className="px-0 py-3 pr-6">Stylist Name</th>
+                  <th className="px-0 py-3 pr-6">Requested Dates</th>
+                  <th className="px-0 py-3 pr-6">Type</th>
+                  <th className="px-0 py-3 pr-6">Reason</th>
+                  <th className="px-0 py-3">Status</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredLeaveRequests.map((leave) => {
-                  return (
-                    <tr key={leave._id} className="group border-b border-white/10 transition-colors last:border-b-0 hover:bg-white/5">
-                      <td className="salon-table-td">
-                        <div className="flex items-center gap-3">
-                          {leave.staffId?.imageUrl ? (
-                            <img src={leave.staffId.imageUrl} alt={leave.staffId.name || "Staff member"} className="h-9 w-9 rounded-full object-cover" />
-                          ) : (
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-gray-300">
-                              {leave.staffId?.name?.charAt(0).toUpperCase() || "?"}
-                            </div>
-                          )}
-                          <span className="font-medium text-gray-200">{leave.staffId?.name || "Former staff member"}</span>
-                        </div>
-                      </td>
-                      <td className="salon-table-td text-gray-300">{formatLeaveDateRange(leave.startDate, leave.endDate)}</td>
-                      <td className="salon-table-td text-gray-300">{leave.leaveType || "Not specified"}</td>
-                      <td className="salon-table-td max-w-xs text-gray-300">
-                        <span className="line-clamp-2">{leave.reason || "No reason provided"}</span>
-                      </td>
-                      <td className="salon-table-td">{getLeaveStatusBadge(leave.status)}</td>
-                    </tr>
-                  );
-                })}
+                {filteredLeaveRequests.map((leave) => (
+                  <tr key={leave._id} className="border-b border-zinc-800/60 transition-colors last:border-b-0 hover:bg-white/[0.025]">
+                    <td className="py-4 pr-6 align-middle">
+                      <div className="flex items-center gap-3">
+                        {leave.staffId?.imageUrl ? (
+                          <img src={leave.staffId.imageUrl} alt={leave.staffId.name || "Staff member"} className="h-9 w-9 rounded-full object-cover" />
+                        ) : (
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-gray-300">
+                            {leave.staffId?.name?.charAt(0).toUpperCase() || "?"}
+                          </div>
+                        )}
+                        <span className="text-sm font-medium text-gray-200">{leave.staffId?.name || "Former staff member"}</span>
+                      </div>
+                    </td>
+                    <td className="py-4 pr-6 align-middle text-sm text-gray-300">{formatLeaveDateRange(leave.startDate, leave.endDate)}</td>
+                    <td className="py-4 pr-6 align-middle text-sm text-gray-300">{leave.leaveType || "Not specified"}</td>
+                    <td className="max-w-md py-4 pr-6 align-middle text-sm text-gray-300">
+                      <span className="line-clamp-2">{leave.reason || "No reason provided"}</span>
+                    </td>
+                    <td className="py-4 align-middle">{getLeaveStatusBadge(leave.status)}</td>
+                  </tr>
+                ))}
                 {filteredLeaveRequests.length === 0 && (
                   <tr>
-                    <td colSpan="5" className="bg-[#0a0a0a]/30 p-10 text-center font-light text-gray-500">
+                    <td colSpan="5" className="py-12 text-center text-sm font-light text-gray-500">
                       No leave requests found for the selected filters.
                     </td>
                   </tr>
