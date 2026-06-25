@@ -66,6 +66,37 @@ const formatLeaveDateRange = (startDate, endDate) => {
   return formattedStart === formattedEnd ? formattedStart : `${formattedStart} - ${formattedEnd}`;
 };
 
+const getCurrentWeekRange = (date = new Date()) => {
+  const currentDate = new Date(date);
+  currentDate.setHours(0, 0, 0, 0);
+
+  const dayIndex = currentDate.getDay();
+  const daysFromMonday = dayIndex === 0 ? 6 : dayIndex - 1;
+  const weekStart = new Date(currentDate);
+  weekStart.setDate(currentDate.getDate() - daysFromMonday);
+
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+  weekEnd.setHours(23, 59, 59, 999);
+
+  return { weekStart, weekEnd };
+};
+
+const getThisWeekLeaveRequests = (leaveRequests) => {
+  const leaves = Array.isArray(leaveRequests) ? leaveRequests : [];
+  const { weekStart, weekEnd } = getCurrentWeekRange();
+
+  return leaves.filter((leave) => {
+    const leaveStart = new Date(leave.startDate);
+    const leaveEnd = new Date(leave.endDate || leave.startDate);
+
+    if (Number.isNaN(leaveStart.getTime())) return false;
+    if (Number.isNaN(leaveEnd.getTime())) return leaveStart >= weekStart && leaveStart <= weekEnd;
+
+    return leaveStart <= weekEnd && leaveEnd >= weekStart;
+  });
+};
+
 const timeToMinutes = (timeValue) => {
   if (!timeValue || typeof timeValue !== "string") return 0;
 
@@ -178,7 +209,7 @@ function AdminDashboard() {
 
         setRecentAppointments(fetchedAppointments.slice(0, 5));
 
-        setRecentLeaveRequests(leaveRes.data);
+        setRecentLeaveRequests(getThisWeekLeaveRequests(leaveRes.data));
 
       } catch (error) {
 
@@ -407,7 +438,7 @@ function AdminDashboard() {
 
       const leaveRes = await axios.get("http://localhost:5000/api/leaves", authHeadersRefresh); 
 
-      setRecentLeaveRequests(leaveRes.data);
+      setRecentLeaveRequests(getThisWeekLeaveRequests(leaveRes.data));
 
 
 
@@ -467,7 +498,7 @@ function AdminDashboard() {
 
       const leaveRes = await axios.get("http://localhost:5000/api/leaves", authHeadersRefresh); 
 
-      setRecentLeaveRequests(leaveRes.data);
+      setRecentLeaveRequests(getThisWeekLeaveRequests(leaveRes.data));
 
 
 
@@ -851,7 +882,7 @@ function AdminDashboard() {
 
             <button
               type="button"
-              onClick={() => navigate("/admin/staff")}
+              onClick={() => navigate("/admin/staff?tab=leaves")}
               className="w-fit text-xs font-semibold uppercase tracking-[0.18em] text-[#d4af37] transition hover:text-[#f4d77d]"
             >
               View All →

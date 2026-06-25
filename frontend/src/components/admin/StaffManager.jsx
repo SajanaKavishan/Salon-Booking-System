@@ -1,17 +1,24 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "react-toastify";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
+import { useSearchParams } from "react-router-dom";
 import { GlassCard, GoldButton } from "./SystemUI";
 
 function StaffManager() {
   const fieldClassName = "w-full bg-black/50 border border-gray-700 rounded-lg p-3 text-white focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] outline-none transition-all";
+  const selectClassName = "w-full rounded-lg border border-white/10 bg-[#0b0b0b] px-4 py-3 text-sm font-medium text-white outline-none transition focus:border-[#c5a880] focus:ring-1 focus:ring-[#c5a880]";
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState(searchParams.get("tab") === "leaves" ? "leaves" : "directory");
   const [staffList, setStaffList] = useState([]);
+  const [leaveRequests, setLeaveRequests] = useState([]);
   const [formData, setFormData] = useState({ name: "", email: "", password: "", specialty: "", offDays: "", workingHours: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
   const [imagePreview, setImagePreview] = useState("");
   const [isAddingStaff, setIsAddingStaff] = useState(false);
+  const [stylistFilter, setStylistFilter] = useState("all");
+  const [yearFilter, setYearFilter] = useState("2026");
   const fileInputRef = useRef(null);
   const [activeMenuId, setActiveMenuId] = useState(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -31,6 +38,23 @@ function StaffManager() {
     return () => { isActive = false; };
   }, []);
 
+  useEffect(() => {
+    let isActive = true;
+    const loadLeaveRequests = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const authHeaders = token ? { headers: { Authorization: `Bearer ${token}` } } : undefined;
+        const response = await axios.get("http://localhost:5000/api/leaves", authHeaders);
+        if (isActive) setLeaveRequests(Array.isArray(response.data) ? response.data : []);
+      } catch (error) {
+        toast.error(error.response?.data?.message || "Failed to load leave requests");
+      }
+    };
+
+    loadLeaveRequests();
+    return () => { isActive = false; };
+  }, []);
+
   useEffect(() => () => {
     if (imagePreview) {
       URL.revokeObjectURL(imagePreview);
@@ -38,6 +62,40 @@ function StaffManager() {
   }, [imagePreview]);
 
   const specialtyOptions = ["Hair Stylist", "Colorist", "Beautician", "Massage Therapist", "All-Rounder"];
+
+  const getLeaveStaffId = (leave) => {
+    const staff = leave?.staffId;
+    return typeof staff === "object" ? staff?._id : staff;
+  };
+
+  const getStaffFilterId = (staff) => staff.userId || staff._id;
+
+  const filteredLeaveRequests = useMemo(() => leaveRequests.filter((leave) => {
+    const leaveYear = new Date(leave.startDate).getFullYear().toString();
+    const matchesYear = leaveYear === yearFilter;
+    const matchesStylist = stylistFilter === "all" || getLeaveStaffId(leave) === stylistFilter;
+    return matchesYear && matchesStylist;
+  }), [leaveRequests, stylistFilter, yearFilter]);
+
+  const formatLeaveDateRange = (startDate, endDate) => {
+    const formatter = new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" });
+    const start = new Date(startDate);
+    const end = new Date(endDate || startDate);
+    if (Number.isNaN(start.getTime())) return "Not set";
+    if (Number.isNaN(end.getTime()) || start.toDateString() === end.toDateString()) return formatter.format(start);
+    return `${formatter.format(start)} - ${formatter.format(end)}`;
+  };
+
+  const getLeaveStatusBadge = (status) => {
+    const normalizedStatus = String(status || "").toLowerCase();
+    if (normalizedStatus === "approved") {
+      return <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-emerald-300">Approved</span>;
+    }
+    if (normalizedStatus === "rejected") {
+      return <span className="rounded-full border border-red-400/20 bg-red-400/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-red-300">Rejected</span>;
+    }
+    return <span className="rounded-full border border-[#c5a880]/25 bg-[#c5a880]/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-[#c5a880]">Pending</span>;
+  };
 
   const handleInputChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -181,7 +239,36 @@ function StaffManager() {
 
   return (
     <div className="space-y-8">
-      <section className="rounded-2xl border border-white/10 bg-[#111111]/70 p-6 shadow-xl backdrop-blur-md">
+      <div className="rounded-2xl border border-white/10 bg-[#0d0d0d]/80 px-4 shadow-xl backdrop-blur-md">
+        <div className="flex gap-6 overflow-x-auto">
+          <button
+            type="button"
+            onClick={() => setActiveTab("directory")}
+            className={`whitespace-nowrap border-b-2 px-1 py-4 text-sm font-bold uppercase tracking-[0.18em] transition ${
+              activeTab === "directory"
+                ? "border-[#c5a880] text-[#c5a880]"
+                : "border-transparent text-gray-400 hover:text-white"
+            }`}
+          >
+            Manage Directory
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("leaves")}
+            className={`whitespace-nowrap border-b-2 px-1 py-4 text-sm font-bold uppercase tracking-[0.18em] transition ${
+              activeTab === "leaves"
+                ? "border-[#c5a880] text-[#c5a880]"
+                : "border-transparent text-gray-400 hover:text-white"
+            }`}
+          >
+            Leave Requests
+          </button>
+        </div>
+      </div>
+
+      {activeTab === "directory" && (
+        <>
+          <section className="rounded-2xl border border-white/10 bg-[#111111]/70 p-6 shadow-xl backdrop-blur-md">
         <form onSubmit={handleAddStaff} className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           <input type="text" name="name" placeholder="Name" value={formData.name} onChange={handleInputChange} required className={fieldClassName} />
           <input type="email" name="email" placeholder="Email Address" value={formData.email} onChange={handleInputChange} required className={fieldClassName} autoComplete="email" />
@@ -293,9 +380,9 @@ function StaffManager() {
             </GoldButton>
           </div>
         </form>
-      </section>
+          </section>
 
-      <section className="rounded-2xl border border-white/10 bg-[#111111]/70 p-6 shadow-xl backdrop-blur-md">
+          <section className="rounded-2xl border border-white/10 bg-[#111111]/70 p-6 shadow-xl backdrop-blur-md">
         <div className="mb-4 flex flex-wrap items-center gap-2 text-xs font-semibold">
           <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-gray-300">
             {staffList.length} staff members
@@ -359,7 +446,89 @@ function StaffManager() {
             </tbody>
           </table>
         </div>
-      </section>
+          </section>
+        </>
+      )}
+
+      {activeTab === "leaves" && (
+        <section className="rounded-2xl border border-white/10 bg-[#111111]/70 p-6 shadow-xl backdrop-blur-md">
+          <div className="mb-6 grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="mb-2 block text-xs font-bold uppercase tracking-[0.18em] text-gray-500">Stylist Filter</label>
+              <select value={stylistFilter} onChange={(event) => setStylistFilter(event.target.value)} className={selectClassName}>
+                <option value="all" className="bg-[#111111]">All Stylists</option>
+                {staffList.map((staff) => (
+                  <option key={staff._id} value={getStaffFilterId(staff)} className="bg-[#111111]">
+                    {staff.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-2 block text-xs font-bold uppercase tracking-[0.18em] text-gray-500">Year Filter</label>
+              <select value={yearFilter} onChange={(event) => setYearFilter(event.target.value)} className={selectClassName}>
+                <option value="2026" className="bg-[#111111]">2026</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="mb-4 flex flex-wrap items-center gap-2 text-xs font-semibold">
+            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-gray-300">
+              {filteredLeaveRequests.length} leave requests
+            </span>
+            <span className="rounded-full border border-[#d4af37]/20 bg-[#d4af37]/10 px-3 py-1 text-[#d4af37]">
+              {yearFilter}
+            </span>
+          </div>
+
+          <div className="salon-scrollbar overflow-x-auto rounded-xl border border-white/10 bg-black/20">
+            <table className="salon-table">
+              <thead>
+                <tr className="bg-black/30 text-[#d4af37]">
+                  <th className="salon-table-th border-b border-white/10">Stylist Name</th>
+                  <th className="salon-table-th border-b border-white/10">Requested Dates</th>
+                  <th className="salon-table-th border-b border-white/10">Type</th>
+                  <th className="salon-table-th border-b border-white/10">Reason</th>
+                  <th className="salon-table-th border-b border-white/10">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredLeaveRequests.map((leave) => {
+                  return (
+                    <tr key={leave._id} className="group border-b border-white/10 transition-colors last:border-b-0 hover:bg-white/5">
+                      <td className="salon-table-td">
+                        <div className="flex items-center gap-3">
+                          {leave.staffId?.imageUrl ? (
+                            <img src={leave.staffId.imageUrl} alt={leave.staffId.name || "Staff member"} className="h-9 w-9 rounded-full object-cover" />
+                          ) : (
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-gray-300">
+                              {leave.staffId?.name?.charAt(0).toUpperCase() || "?"}
+                            </div>
+                          )}
+                          <span className="font-medium text-gray-200">{leave.staffId?.name || "Former staff member"}</span>
+                        </div>
+                      </td>
+                      <td className="salon-table-td text-gray-300">{formatLeaveDateRange(leave.startDate, leave.endDate)}</td>
+                      <td className="salon-table-td text-gray-300">{leave.leaveType || "Not specified"}</td>
+                      <td className="salon-table-td max-w-xs text-gray-300">
+                        <span className="line-clamp-2">{leave.reason || "No reason provided"}</span>
+                      </td>
+                      <td className="salon-table-td">{getLeaveStatusBadge(leave.status)}</td>
+                    </tr>
+                  );
+                })}
+                {filteredLeaveRequests.length === 0 && (
+                  <tr>
+                    <td colSpan="5" className="bg-[#0a0a0a]/30 p-10 text-center font-light text-gray-500">
+                      No leave requests found for the selected filters.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       {isEditModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 backdrop-blur-sm">
