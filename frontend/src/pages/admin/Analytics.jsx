@@ -57,6 +57,26 @@ const formatRating = (rating) => Number(rating || 0).toFixed(1);
 const getRangeLabel = (range) =>
   FILTER_RANGE_OPTIONS.find((option) => option.value === range)?.label ||
   "Year to date";
+const compactAxisLabel = (label, maxLength = 12) => {
+  const text = String(label || "");
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}...` : text;
+};
+
+const useIsNarrowViewport = () => {
+  const [isNarrowViewport, setIsNarrowViewport] = useState(() =>
+    typeof window === "undefined" ? false : window.innerWidth < 640
+  );
+
+  useEffect(() => {
+    const handleResize = () => setIsNarrowViewport(window.innerWidth < 640);
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  return isNarrowViewport;
+};
 
 const normalizeAppointmentStatusData = (statuses) => {
   const statusTotals = DISPLAYED_STATUS_NAMES.reduce((totals, status) => {
@@ -202,6 +222,7 @@ function StylistLeaderboard({ staffPerformanceData, isLoading }) {
 
 function Analytics() {
   const currentYear = new Date().getFullYear();
+  const isNarrowViewport = useIsNarrowViewport();
   const [filterYear, setFilterYear] = useState("2026");
   const [filterRange, setFilterRange] = useState("YTD");
   const [summary, setSummary] = useState({
@@ -623,7 +644,12 @@ function Analytics() {
             >
               <BarChart
                 data={topServicesData}
-                margin={{ top: 12, right: 8, left: -18, bottom: 0 }}
+                margin={{
+                  top: 12,
+                  right: isNarrowViewport ? 2 : 8,
+                  left: isNarrowViewport ? -28 : -18,
+                  bottom: isNarrowViewport ? 16 : 0,
+                }}
               >
                 <CartesianGrid
                   stroke="rgba(255,255,255,0.05)"
@@ -635,8 +661,17 @@ function Analytics() {
                   stroke="#737373"
                   tickLine={false}
                   axisLine={false}
-                  tick={{ fill: "#a3a3a3", fontSize: 12 }}
+                  tick={{
+                    fill: "#a3a3a3",
+                    fontSize: isNarrowViewport ? 10 : 12,
+                  }}
+                  angle={isNarrowViewport ? -25 : 0}
+                  textAnchor={isNarrowViewport ? "end" : "middle"}
+                  height={isNarrowViewport ? 62 : 30}
                   interval={0}
+                  tickFormatter={(value) =>
+                    compactAxisLabel(value, isNarrowViewport ? 8 : 14)
+                  }
                 />
                 <YAxis
                   stroke="#737373"
