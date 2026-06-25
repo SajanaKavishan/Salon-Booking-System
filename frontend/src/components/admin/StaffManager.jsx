@@ -7,7 +7,7 @@ import { GlassCard, GoldButton } from "./SystemUI";
 
 function StaffManager() {
   const fieldClassName = "w-full bg-black/50 border border-gray-700 rounded-lg p-3 text-white focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] outline-none transition-all";
-  const minimalSelectClassName = "bg-transparent text-white border-b border-zinc-700 rounded-none px-2 py-1 text-sm font-medium outline-none transition focus:border-[#c5a880]";
+  const minimalSelectClassName = "w-full bg-transparent text-white border-b border-zinc-700 rounded-none px-2 py-1.5 text-sm font-medium outline-none transition focus:border-[#c5a880] sm:w-auto sm:py-1";
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(searchParams.get("tab") === "leaves" ? "leaves" : "directory");
   const [staffList, setStaffList] = useState([]);
@@ -239,12 +239,12 @@ function StaffManager() {
 
   return (
     <div className="space-y-8">
-      <div className="rounded-2xl border border-white/10 bg-[#0d0d0d]/80 px-4 shadow-xl backdrop-blur-md">
-        <div className="flex gap-6 overflow-x-auto">
+      <div className="rounded-2xl border border-white/10 bg-[#0d0d0d]/80 px-3 shadow-xl backdrop-blur-md sm:px-4">
+        <div className="scrollbar-none flex gap-4 overflow-x-auto whitespace-nowrap sm:gap-6">
           <button
             type="button"
             onClick={() => setActiveTab("directory")}
-            className={`whitespace-nowrap border-b-2 px-1 py-4 text-sm font-bold uppercase tracking-[0.18em] transition ${
+            className={`shrink-0 border-b-2 px-1 py-4 text-xs font-bold uppercase tracking-[0.14em] transition sm:text-sm sm:tracking-[0.18em] ${
               activeTab === "directory"
                 ? "border-[#c5a880] text-[#c5a880]"
                 : "border-transparent text-gray-400 hover:text-white"
@@ -255,7 +255,7 @@ function StaffManager() {
           <button
             type="button"
             onClick={() => setActiveTab("leaves")}
-            className={`whitespace-nowrap border-b-2 px-1 py-4 text-sm font-bold uppercase tracking-[0.18em] transition ${
+            className={`shrink-0 border-b-2 px-1 py-4 text-xs font-bold uppercase tracking-[0.14em] transition sm:text-sm sm:tracking-[0.18em] ${
               activeTab === "leaves"
                 ? "border-[#c5a880] text-[#c5a880]"
                 : "border-transparent text-gray-400 hover:text-white"
@@ -489,8 +489,8 @@ function StaffManager() {
       {activeTab === "leaves" && (
         <section className="space-y-6">
           <div className="flex flex-col gap-4 border-b border-zinc-800/60 pb-5 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-              <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-zinc-500">
+            <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-6 sm:gap-y-3">
+              <label className="flex w-full flex-col gap-1 text-xs font-bold uppercase tracking-[0.18em] text-zinc-500 sm:w-auto sm:flex-row sm:items-center sm:gap-2">
                 Stylist
                 <select value={stylistFilter} onChange={(event) => setStylistFilter(event.target.value)} className={minimalSelectClassName}>
                   <option value="all" className="bg-[#111111]">All Stylists</option>
@@ -502,7 +502,7 @@ function StaffManager() {
                 </select>
               </label>
 
-              <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-zinc-500">
+              <label className="flex w-full flex-col gap-1 text-xs font-bold uppercase tracking-[0.18em] text-zinc-500 sm:w-auto sm:flex-row sm:items-center sm:gap-2">
                 Year
                 <select value={yearFilter} onChange={(event) => setYearFilter(event.target.value)} className={minimalSelectClassName}>
                   <option value="2026" className="bg-[#111111]">2026</option>
@@ -536,12 +536,12 @@ function StaffManager() {
                 </div>
                 <div className="mt-4 grid gap-3 text-sm">
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-500">Type</p>
-                    <p className="mt-1 text-gray-300">{leave.leaveType || "Not specified"}</p>
+                    <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">Type</p>
+                    <p className="text-sm text-zinc-200">{leave.leaveType || "Not specified"}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-500">Reason</p>
-                    <p className="mt-1 leading-6 text-gray-300">{leave.reason || "No reason provided"}</p>
+                    <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">Reason</p>
+                    <p className="text-sm leading-6 text-zinc-200">{leave.reason || "No reason provided"}</p>
                   </div>
                 </div>
               </div>
