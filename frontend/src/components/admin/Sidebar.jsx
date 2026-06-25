@@ -124,29 +124,29 @@ function Sidebar({ isOpen = false, onClose = () => { } }) {
 
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-40 w-72 border-r border-white/10 bg-[#0d1117] text-white shadow-2xl shadow-black/30 transition-transform duration-300 ease-out md:w-80 md:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'
+      className={`fixed inset-y-0 left-0 z-40 w-[min(18rem,calc(100vw-2rem))] border-r border-white/10 bg-[#0d1117] text-white shadow-2xl shadow-black/30 transition-transform duration-300 ease-out md:w-80 md:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       aria-label={panelLabel}
     >
       <div className="flex h-full flex-col justify-between">
-        <div className="px-6 pb-6 pt-8 md:px-8 md:pt-10">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-start gap-3 md:gap-4">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#d4af37]/25 bg-[#d4af37]/10 text-[#d4af37] md:h-14 md:w-14">
-                <Scissors size={26} strokeWidth={2.1} />
+        <div className="min-h-0 overflow-y-auto px-4 pb-5 pt-5 sm:px-6 sm:pt-8 md:px-8 md:pt-10">
+          <div className="flex min-w-0 items-start">
+            <div className="flex min-w-0 items-start gap-3 sm:gap-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#d4af37]/25 bg-[#d4af37]/10 text-[#d4af37] sm:h-12 sm:w-12 md:h-14 md:w-14">
+                <Scissors size={24} strokeWidth={2.1} />
               </div>
-              <div>
-                <h1 className="font-serif text-[1.7rem] font-semibold tracking-wide text-white md:text-[2rem] md:tracking-wider">
+              <div className="min-w-0">
+                <h1 className="truncate font-serif text-[1.68rem] font-semibold leading-none tracking-wide text-white sm:text-[1.85rem] md:text-[2rem] md:tracking-wider">
                   Salon<span className="text-[#D4AF37]">DEES</span>
                 </h1>
-                <p className="mt-2 text-sm uppercase tracking-widest text-neutral-500 md:text-base">{suiteLabel}</p>
+                <p className="mt-2 truncate text-xs uppercase tracking-[0.32em] text-neutral-500 sm:text-sm md:text-base md:tracking-widest">{suiteLabel}</p>
               </div>
             </div>
           </div>
 
-          <div className="mt-10 md:mt-12">
+          <div className="mt-9 sm:mt-10 md:mt-12">
         
-            <nav className="space-y-2 md:space-y-3.5">
+            <nav className="space-y-1.5 sm:space-y-2 md:space-y-3.5">
               {sidebarItems.map((item) => (
                 <NavLink
                   key={item.label}
@@ -154,7 +154,7 @@ function Sidebar({ isOpen = false, onClose = () => { } }) {
                   end={item.end}
                   onClick={() => onClose()}
                   className={({ isActive }) =>
-                    `group relative flex items-center gap-4 overflow-hidden rounded-xl px-4 py-3 text-base font-semibold tracking-widest transition-colors duration-300 md:gap-5 md:px-5 md:py-4 md:text-sm ${isActive
+                    `group relative flex min-h-11 items-center gap-3 overflow-hidden rounded-xl px-3 py-2.5 text-sm font-semibold tracking-[0.18em] transition-colors duration-300 sm:gap-4 sm:px-4 sm:py-3 sm:text-base md:gap-5 md:px-5 md:py-4 md:text-sm ${isActive
                       ? 'text-[#D4AF37]'
                       : 'text-neutral-400 hover:text-[#D4AF37]/60'
                     }`
@@ -186,7 +186,7 @@ function Sidebar({ isOpen = false, onClose = () => { } }) {
                       >
                         <path d={item.icon} stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
                       </motion.svg>
-                      <span className="relative z-10">{item.label}</span>
+                      <span className="relative z-10 min-w-0 truncate">{item.label}</span>
                     </>
                   )}
                 </NavLink>
@@ -195,12 +195,12 @@ function Sidebar({ isOpen = false, onClose = () => { } }) {
           </div>
         </div>
 
-        <div className="border-t border-neutral-800 px-6 py-6 md:px-8 md:py-7">
+        <div className="shrink-0 border-t border-neutral-800 px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-7">
           {userRole === 'admin' && (
             <motion.button
               type="button"
               onClick={() => handleNavigate('/admin/messages')}
-              className="group flex w-full items-center gap-4 rounded-xl px-4 py-3 text-left text-base font-semibold tracking-widest text-neutral-400 transition-colors duration-300 hover:bg-white/5 hover:text-[#D4AF37]/60 md:gap-5 md:px-5 md:py-4 md:text-lg"
+              className="group flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold tracking-[0.18em] text-neutral-400 transition-colors duration-300 hover:bg-white/5 hover:text-[#D4AF37]/60 sm:gap-4 sm:px-4 sm:py-3 sm:text-base md:gap-5 md:px-5 md:py-4 md:text-lg"
               whileHover={{ x: 2 }}
               transition={{ duration: 0.22, ease: 'easeOut' }}
             >
@@ -214,13 +214,13 @@ function Sidebar({ isOpen = false, onClose = () => { } }) {
               >
                 <path d="M4 5h16v11H7l-3 3V5Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
               </motion.svg>
-              Messages
+              <span className="min-w-0 truncate">Messages</span>
             </motion.button>
           )}
           <motion.button
             type="button"
             onClick={handleLogout}
-            className="group mt-3 flex w-full items-center gap-4 rounded-xl px-4 py-3 text-left text-base font-semibold tracking-widest text-neutral-400 transition-colors duration-300 hover:bg-white/5 hover:text-[#D4AF37]/60 md:gap-5 md:px-5 md:py-4 md:text-lg"
+            className="group mt-2 flex min-h-11 w-full items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 text-left text-sm font-semibold tracking-[0.18em] text-neutral-400 transition-colors duration-300 hover:border-red-500/20 hover:bg-red-500/10 hover:text-red-300 sm:mt-3 sm:gap-4 sm:px-4 sm:py-3 sm:text-base md:gap-5 md:px-5 md:py-4 md:text-lg"
             whileHover={{ x: 2 }}
             transition={{ duration: 0.22, ease: 'easeOut' }}
           >
@@ -234,7 +234,7 @@ function Sidebar({ isOpen = false, onClose = () => { } }) {
             >
               <path d="M15 17l5-5-5-5M20 12H8M11 20H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
             </motion.svg>
-            Sign Out
+            <span className="min-w-0 truncate">Sign Out</span>
           </motion.button>
         </div>
       </div>
