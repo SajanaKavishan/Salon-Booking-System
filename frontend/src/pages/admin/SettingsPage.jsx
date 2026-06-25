@@ -6,7 +6,7 @@ import { useSalonSettings } from '../../hooks/useSalonSettings';
 
 function SettingsToggle({ label, description, checked, onChange }) {
   return (
-    <div className="flex items-center justify-between gap-4 border-b border-white/10 py-4 last:border-b-0">
+    <div className="flex items-start justify-between gap-4 border-b border-white/10 py-4 last:border-b-0 sm:items-center">
       <div className="min-w-0">
         <p className="text-sm font-semibold text-white">{label}</p>
         <p className="mt-1 text-xs leading-5 text-gray-400">{description}</p>
@@ -108,7 +108,7 @@ function SettingsPage() {
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto">
+    <div className="mx-auto w-full max-w-7xl pb-24">
       <header className="mb-8 flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <h1 className="mt-4 text-4xl font-serif font-bold tracking-tight text-white">
@@ -118,10 +118,6 @@ function SettingsPage() {
             Manage the salon identity, client communications, and appointment timing rules from one focused workspace.
           </p>
         </div>
-
-        <GoldButton type="button" onClick={handleSave} disabled={isSaving || isLoading} className="w-fit px-6 py-3 text-base">
-          {isSaving ? 'Saving...' : 'Save Changes'}
-        </GoldButton>
       </header>
 
       {isLoading ? (
@@ -130,7 +126,7 @@ function SettingsPage() {
         </GlassCard>
       ) : (
         <section className="grid gap-8 xl:grid-cols-[1.05fr_0.95fr]">
-          <SectionPanel className="p-7 sm:p-8">
+          <SectionPanel className="p-5 sm:p-8">
             <div className="border-b border-white/10 pb-5">
               <h2 className="salon-heading">Brand Profile Info</h2>
               <p className="salon-subtext mt-2">Keep client-facing contact details accurate across bookings and notifications.</p>
@@ -185,7 +181,7 @@ function SettingsPage() {
             </div>
           </SectionPanel>
 
-          <SectionPanel className="p-7 sm:p-8">
+          <SectionPanel className="p-5 sm:p-8">
             <div className="border-b border-white/10 pb-5">
               <h2 className="salon-heading">Operations & Scheduling</h2>
               <p className="salon-subtext mt-2">Control communication rules and smart appointment timing without extra noise.</p>
@@ -193,7 +189,7 @@ function SettingsPage() {
 
             <div className="mt-7">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#d4af37]">Core Toggles</p>
-              <div className="mt-3 rounded-xl border border-white/10 bg-black/20 px-5">
+              <div className="mt-3 rounded-xl border border-white/10 bg-black/20 px-4 sm:px-5">
                 <SettingsToggle
                   label="Booking Alerts"
                   description="Send admin email alerts when a new booking is created."
@@ -237,6 +233,12 @@ function SettingsPage() {
           </SectionPanel>
         </section>
       )}
+
+      <div className="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-end border-t border-zinc-800/80 bg-[#0a0a0c]/90 px-6 py-4 backdrop-blur-md md:left-80">
+        <GoldButton type="button" onClick={handleSave} disabled={isSaving || isLoading} className="w-full px-6 py-3 text-base sm:w-fit">
+          {isSaving ? 'Saving...' : 'Save Changes'}
+        </GoldButton>
+      </div>
     </div>
   );
 }
