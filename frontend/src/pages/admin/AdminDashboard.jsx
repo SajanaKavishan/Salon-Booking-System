@@ -124,6 +124,7 @@ function AdminDashboard() {
   const [reviewLeaveRequest, setReviewLeaveRequest] = useState(null);
 
   const [isLeaveActionLoading, setIsLeaveActionLoading] = useState(false);
+  const [leaveActionType, setLeaveActionType] = useState(null);
 
   const [shiftTarget, setShiftTarget] = useState(null);
 
@@ -324,6 +325,7 @@ function AdminDashboard() {
     if (isLeaveActionLoading) return;
 
     setCurrentLeaveRequest(leaveRequest);
+    setLeaveActionType("approve");
     setIsLeaveActionLoading(true);
 
     try {
@@ -343,6 +345,7 @@ function AdminDashboard() {
         setIsConflictModalOpen(true);
         setReviewLeaveRequest(null);
         setIsLeaveActionLoading(false);
+        setLeaveActionType(null);
 
       } else {
 
@@ -359,6 +362,7 @@ function AdminDashboard() {
       console.error("Conflict check error:", error);
       setCurrentLeaveRequest(null);
       setIsLeaveActionLoading(false);
+      setLeaveActionType(null);
 
     }
 
@@ -371,6 +375,7 @@ function AdminDashboard() {
     try {
 
       setIsLeaveActionLoading(true);
+      setLeaveActionType("approve");
 
       if (!leaveRequestId) {
 
@@ -415,6 +420,7 @@ function AdminDashboard() {
     } finally {
 
       setIsLeaveActionLoading(false);
+      setLeaveActionType(null);
 
     }
 
@@ -439,6 +445,7 @@ function AdminDashboard() {
       setCurrentLeaveRequest(typeof leaveRequest === "object" ? leaveRequest : null);
 
       setIsLeaveActionLoading(true);
+      setLeaveActionType("reject");
 
       const token = localStorage.getItem("token");
 
@@ -473,6 +480,7 @@ function AdminDashboard() {
     } finally {
 
       setIsLeaveActionLoading(false);
+      setLeaveActionType(null);
 
     }
 
@@ -1066,7 +1074,7 @@ function AdminDashboard() {
                       disabled={isLeaveActionLoading}
                       className="px-5 py-2 shadow-[0_0_24px_rgba(212,175,55,0.2)]"
                     >
-                      {isLeaveActionLoading && currentLeaveRequest?._id === reviewLeaveRequest._id ? "Checking..." : "Approve"}
+                      {isLeaveActionLoading && leaveActionType === "approve" && currentLeaveRequest?._id === reviewLeaveRequest._id ? "Checking..." : "Approve"}
                     </GoldButton>
 
                     <GoldButton
@@ -1076,7 +1084,7 @@ function AdminDashboard() {
                       disabled={isLeaveActionLoading}
                       className="border-red-400/35 px-5 py-2 text-red-300 hover:bg-red-500/10 hover:text-red-200"
                     >
-                      {isLeaveActionLoading && currentLeaveRequest?._id === reviewLeaveRequest._id ? "Rejecting..." : "Reject"}
+                      {isLeaveActionLoading && leaveActionType === "reject" && currentLeaveRequest?._id === reviewLeaveRequest._id ? "Rejecting..." : "Reject"}
                     </GoldButton>
 
                   </>
