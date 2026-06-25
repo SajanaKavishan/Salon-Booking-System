@@ -121,17 +121,21 @@ export default function RosterShifts() {
      fetchStaffData();
    }, []);
 
-   const getDayStatus = (date) => {
-     const dayName = format(date, 'EEEE'); // e.g., "Monday"
-
-     // Normalize offDays to an array comparison
-     const staffOffDays = Array.isArray(currentStaffData?.offDays)
+   const getStaffOffDays = () => (
+     Array.isArray(currentStaffData?.offDays)
        ? currentStaffData.offDays
        : currentStaffData?.offDays
          ? [currentStaffData.offDays]
-         : [];
+         : []
+   );
 
-     const isOffDay = staffOffDays.some(day => day.toLowerCase() === dayName.toLowerCase());
+   const isStaffOffDay = (date) => {
+     const dayName = format(date, 'EEEE');
+     return getStaffOffDays().some(day => day.toLowerCase() === dayName.toLowerCase());
+   };
+
+   const getDayStatus = (date) => {
+     const isOffDay = isStaffOffDay(date);
      const formattedDate = format(date, 'yyyy-MM-dd');
      const shift = shifts.find(s => s.date.startsWith(formattedDate));
 
@@ -202,11 +206,16 @@ export default function RosterShifts() {
   })();
 
   const toggleSelectedDate = (date) => {
+    if (isStaffOffDay(date)) {
+      toast.error("You cannot apply leave on a scheduled off day.");
+      return;
+    }
+
     const dateKey = getSelectedDateKey(date);
     setSelectedDates((prev) => (
       prev.includes(dateKey)
         ? prev.filter((selectedDate) => selectedDate !== dateKey)
-        : [...prev, dateKey]
+        : [...prev, dateKey].filter((selectedDate) => !isStaffOffDay(new Date(`${selectedDate}T00:00:00`)))
     ));
   };
 
@@ -247,9 +256,16 @@ export default function RosterShifts() {
         return;
       }
 
+      const validSelectedDates = selectedDates.filter((dateKey) => !isStaffOffDay(new Date(`${dateKey}T00:00:00`)));
+      if (validSelectedDates.length !== selectedDates.length) {
+        setSelectedDates(validSelectedDates);
+        toast.error("Scheduled off days were removed from your leave selection.");
+        return;
+      }
+
       setIsSubmittingLeave(true);
       const token = localStorage.getItem("token");
-      const leaveDateRanges = groupConsecutiveDates(selectedDates);
+      const leaveDateRanges = groupConsecutiveDates(validSelectedDates);
       const leaveRequests = await Promise.all(
         leaveDateRanges.map((range) => axios.post(
           "http://localhost:5000/api/roster/leaves",
@@ -453,14 +469,18 @@ export default function RosterShifts() {
                       const dateKey = getSelectedDateKey(calendarDay.date);
                       const isSelected = selectedDates.includes(dateKey);
                       const isToday = isSameDay(calendarDay.date, new Date());
+                      const isOffDay = isStaffOffDay(calendarDay.date);
 
                       return (
                         <button
                           type="button"
                           key={calendarDay.id}
                           onClick={() => toggleSelectedDate(calendarDay.date)}
+                          disabled={isOffDay}
                           className={`aspect-square rounded-lg text-xs font-semibold transition ${
-                            isSelected
+                            isOffDay
+                              ? "opacity-40 cursor-not-allowed pointer-events-none text-slate-600 bg-slate-900/40"
+                              : isSelected
                               ? "bg-[#c5a880] text-black shadow-[0_0_16px_rgba(197,168,128,0.35)]"
                               : isToday
                                 ? "border border-[#d4af37]/70 bg-[#d4af37]/10 text-[#d4af37]"

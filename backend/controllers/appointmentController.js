@@ -4,6 +4,7 @@ const Staff = require('../models/Staff'); // Import the Staff model to interact 
 const User = require('../models/User');
 const sendEmail = require('../utils/sendEmail'); // Import the sendEmail utility function to send email notifications to users about their appointment status updates
 const generateAvailableSlots = require('../utils/slotGenerator');
+const { isStaffOnApprovedLeave } = require('../utils/slotGenerator');
 const { ensureSettingsDocument, defaultSettings } = require('./settingsController');
 
 // Utility functions to convert time formats for easier calculations when checking for overlapping appointments. The timeToMinutes function converts a time string (e.g., "10:30 AM") into total minutes, while the minutesToTime function converts total minutes back into a time string format. These functions are essential for accurately determining if appointment times overlap when creating or updating appointments.
@@ -127,6 +128,8 @@ const createAppointment = async (req, res) => {
         if (Number.isNaN(appointmentDate.getTime())) {
             return res.status(400).json({ message: 'Invalid appointment date.' });
         }
+        const nextAppointmentDate = new Date(appointmentDate);
+        nextAppointmentDate.setUTCDate(nextAppointmentDate.getUTCDate() + 1);
 
         const dayOfWeek = appointmentDate.getUTCDay();
         if (!isAdminBypass && !settings.weekendBookings && (dayOfWeek === 0 || dayOfWeek === 6)) {
@@ -164,6 +167,10 @@ const createAppointment = async (req, res) => {
 
             let assignedStaff = null;
             for (let s of workingStaff) {
+                if (await isStaffOnApprovedLeave(s, appointmentDate, nextAppointmentDate)) {
+                    continue;
+                }
+
                 if (isAdminBypass) {
                     assignedStaff = s;
                     break;
@@ -225,6 +232,10 @@ const createAppointment = async (req, res) => {
 
         const finalStylist = await Staff.findById(stylistId);
         const stylistName = finalStylist ? finalStylist.name : 'Any Available Stylist';
+
+        if (!isAdminBypass && await isStaffOnApprovedLeave(finalStylist, appointmentDate, nextAppointmentDate)) {
+            return res.status(400).json({ message: 'This stylist is on approved leave for the selected date.' });
+        }
 
         let appointmentStatus = 'pending';
         if (settings.autoConfirmVip) {

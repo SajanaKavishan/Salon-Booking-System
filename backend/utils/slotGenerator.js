@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const Staff = require('../models/Staff');
 const Appointment = require('../models/appointmentModel');
 const SalonSettings = require('../models/SalonSettings');
+const LeaveRequest = require('../models/LeaveRequest');
 
 const DAY_NAMES = [
   'Sunday',
@@ -152,6 +153,20 @@ const findFirstConflict = (bookedRanges, windowStart, windowEnd) => (
   )
 );
 
+const isStaffOnApprovedLeave = async (staff, requestedDate, nextDate) => {
+  const leaveStaffIds = [staff?.userId, staff?._id].filter(Boolean);
+  if (leaveStaffIds.length === 0) return false;
+
+  const approvedLeave = await LeaveRequest.exists({
+    staffId: { $in: leaveStaffIds },
+    status: { $in: ['Approved', 'approved'] },
+    startDate: { $lt: nextDate },
+    endDate: { $gte: requestedDate },
+  });
+
+  return Boolean(approvedLeave);
+};
+
 /**
  * Generates the free service slots for one staff member on one date.
  *
@@ -194,7 +209,7 @@ const generateAvailableSlots = async (
   const requestedDate = parseBookingDate(requestedDateValue);
   const [staff, defaultBufferTime] = await Promise.all([
     Staff.findById(staffId)
-      .select('workingHours offDays')
+      .select('workingHours offDays userId')
       .lean(),
     getDefaultBufferTime(),
   ]);
@@ -211,16 +226,18 @@ const generateAvailableSlots = async (
 
   if (isOffDay) return [];
 
+  // A half-open UTC range matches the full requested day without timezone drift.
+  const nextDate = new Date(requestedDate);
+  nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+
+  if (await isStaffOnApprovedLeave(staff, requestedDate, nextDate)) return [];
+
   const workingStart = timeToMinutes(staff.workingHours?.start || '09:00');
   const workingEnd = timeToMinutes(staff.workingHours?.end || '17:00');
 
   if (workingEnd <= workingStart) {
     throw createSlotError('The staff member has invalid working hours.');
   }
-
-  // A half-open UTC range matches the full requested day without timezone drift.
-  const nextDate = new Date(requestedDate);
-  nextDate.setUTCDate(nextDate.getUTCDate() + 1);
 
   const appointments = await Appointment.find({
     staffId,
@@ -275,3 +292,4 @@ const generateAvailableSlots = async (
 
 module.exports = generateAvailableSlots;
 module.exports.generateAvailableSlots = generateAvailableSlots;
+module.exports.isStaffOnApprovedLeave = isStaffOnApprovedLeave;
