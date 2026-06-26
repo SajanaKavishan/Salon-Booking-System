@@ -31,7 +31,26 @@ const formatLeaveDate = (startDate, endDate = startDate) => {
   return start === end ? start : `${start} - ${end}`;
 };
 
+const formatDisplayDate = (dateValue) => {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'UTC'
+  });
+
+  return formatter.format(new Date(dateValue));
+};
+
 const NO_PREFERRED_STYLIST_BANNER_MESSAGE = 'Ready to elevate your aesthetic? Explore our master stylists and reserve your luxury grooming experience today.';
+const DAY_NAMES = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+];
 
 const toDateString = (date) => {
   const year = date.getFullYear();
@@ -44,6 +63,51 @@ const toDateString = (date) => {
 const getTodayDateString = () => {
   const today = new Date();
   return toDateString(today);
+};
+
+const getDateWindow = (dateString) => {
+  const startDate = new Date(`${dateString}T00:00:00.000Z`);
+  const endDate = new Date(startDate);
+  endDate.setUTCDate(endDate.getUTCDate() + 1);
+
+  return { startDate, endDate };
+};
+
+const getStaffOffDayName = (staff, date) => {
+  const dayName = DAY_NAMES[date.getUTCDay()];
+  const offDays = normalizeOffDays(staff?.offDays) || [];
+
+  return offDays.some(
+    (offDay) => String(offDay).trim().toLowerCase() === dayName.toLowerCase()
+  )
+    ? dayName
+    : null;
+};
+
+const findApprovedLeaveForDate = async (staff, startDate, endDate) => {
+  const leaveStaffIds = [staff?.userId, staff?._id].filter(Boolean);
+  if (leaveStaffIds.length === 0) return null;
+
+  return LeaveRequest.findOne({
+    staffId: { $in: leaveStaffIds },
+    status: { $in: ['Approved', 'approved'] },
+    startDate: { $lt: endDate },
+    endDate: { $gte: startDate },
+  })
+    .sort({ startDate: 1 })
+    .lean();
+};
+
+const getPostLeaveBookingWindow = (leaveEndDate, todayStartDate) => {
+  const nextAvailableDate = new Date(leaveEndDate);
+  nextAvailableDate.setUTCDate(nextAvailableDate.getUTCDate() + 1);
+
+  const tomorrow = new Date(todayStartDate);
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+
+  return nextAvailableDate.getTime() <= tomorrow.getTime()
+    ? 'tomorrow or later this week'
+    : `${formatDisplayDate(nextAvailableDate)} onward`;
 };
 
 const getPreferredStaff = async (preferredStylist) => {
@@ -417,6 +481,37 @@ const getDashboardBanner = async (req, res) => {
       });
     }
 
+    const todayDateString = getTodayDateString();
+    const { startDate: todayStartDate, endDate: tomorrowStartDate } = getDateWindow(todayDateString);
+    const stylistFirstName = getFirstName(preferredStaff.name);
+    const offDayName = getStaffOffDayName(preferredStaff, todayStartDate);
+
+    if (offDayName) {
+      return res.status(200).json({
+        scenario: 'preferred_stylist_off_day',
+        message: `${stylistFirstName} is off today (${offDayName}). Explore availability with another stylist or reserve your preferred slot for tomorrow or later this week.`,
+        stylistName: preferredStaff.name,
+        slotsOpen: 0,
+        actualSlotsOpen: 0,
+        hasPreferredStylist: true,
+      });
+    }
+
+    const approvedLeave = await findApprovedLeaveForDate(preferredStaff, todayStartDate, tomorrowStartDate);
+
+    if (approvedLeave) {
+      const postLeaveBookingWindow = getPostLeaveBookingWindow(approvedLeave.endDate, todayStartDate);
+
+      return res.status(200).json({
+        scenario: 'preferred_stylist_on_leave',
+        message: `${stylistFirstName} is on leave today. Explore availability with another stylist or reserve your preferred slot for ${postLeaveBookingWindow}.`,
+        stylistName: preferredStaff.name,
+        slotsOpen: 0,
+        actualSlotsOpen: 0,
+        hasPreferredStylist: true,
+      });
+    }
+
     const shortestService = await Service.findOne({})
       .sort({ duration: 1 })
       .select('duration')
@@ -427,7 +522,7 @@ const getDashboardBanner = async (req, res) => {
 
     const slots = await generateAvailableSlots({
       staffId: preferredStaff._id,
-      date: getTodayDateString(),
+      date: todayDateString,
       serviceDuration,
     });
     const actualSlotsOpen = slots.length;
@@ -444,7 +539,6 @@ const getDashboardBanner = async (req, res) => {
       });
     }
 
-    const stylistFirstName = getFirstName(preferredStaff.name);
     const workingEndMinutes = timeToMinutes(preferredStaff.workingHours?.end || '17:00');
     const isPastWorkingHours = workingEndMinutes !== null && getCurrentMinutes() > workingEndMinutes;
 
