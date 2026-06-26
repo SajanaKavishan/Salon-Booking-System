@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { CalendarCheck, CheckCircle2, ChevronDown, DollarSign, Loader2, TrendingUp } from "lucide-react";
 import { toast } from "react-toastify";
@@ -34,8 +34,49 @@ const formatCurrency = (amount) => (
   }).format(Number(amount) || 0)}`
 );
 
+const formatRevenueAxis = (value) => {
+  const numericValue = Number(value) || 0;
+  if (numericValue >= 100000000) return `${Number((numericValue / 1000000).toFixed(1))}M`;
+  if (numericValue >= 1000000) return `${Number((numericValue / 1000000).toFixed(2))}M`;
+  if (numericValue >= 1000) return `${Number((numericValue / 1000).toFixed(1))}k`;
+  return `${numericValue}`;
+};
+
+const getRevenueXAxisTicks = (data, range, isNarrowViewport) => {
+  if (!["LAST_7_DAYS", "LAST_30_DAYS"].includes(range)) return undefined;
+
+  const labels = (Array.isArray(data) ? data : [])
+    .map((item) => item.label)
+    .filter(Boolean);
+
+  if (labels.length <= 1) return labels;
+
+  const step = range === "LAST_30_DAYS" ? (isNarrowViewport ? 7 : 5) : 2;
+  const ticks = labels.filter((_, index) => index % step === 0);
+  const lastLabel = labels[labels.length - 1];
+
+  return ticks.includes(lastLabel) ? ticks : [...ticks, lastLabel];
+};
+
+const useIsNarrowViewport = () => {
+  const [isNarrowViewport, setIsNarrowViewport] = useState(() =>
+    typeof window === "undefined" ? false : window.innerWidth < 640
+  );
+
+  useEffect(() => {
+    const handleResize = () => setIsNarrowViewport(window.innerWidth < 640);
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  return isNarrowViewport;
+};
+
 function StaffEarnings() {
   const currentYear = new Date().getFullYear();
+  const isNarrowViewport = useIsNarrowViewport();
   const [filterYear, setFilterYear] = useState(String(currentYear));
   const [filterRange, setFilterRange] = useState("YTD");
   const [availableYears, setAvailableYears] = useState([currentYear]);
@@ -55,6 +96,27 @@ function StaffEarnings() {
   const rangeLabel = useMemo(
     () => RANGE_OPTIONS.find((option) => option.value === filterRange)?.label || "Year to date",
     [filterRange]
+  );
+
+  const calculateYAxisWidth = useCallback((data, formatter) => {
+    if (!data || data.length === 0) return 34;
+
+    const maxLength = data.reduce((longestLabel, item) => {
+      const formattedValue = formatter ? formatter(item.revenue) : `${item.revenue}`;
+      return Math.max(longestLabel, String(formattedValue).length);
+    }, 0);
+
+    return Math.ceil(Math.max(34, maxLength * 7.5 + 10));
+  }, []);
+
+  const revenueYAxisWidth = useMemo(
+    () => calculateYAxisWidth(summary.revenueTrends, formatRevenueAxis),
+    [calculateYAxisWidth, summary.revenueTrends]
+  );
+
+  const revenueXAxisTicks = useMemo(
+    () => getRevenueXAxisTicks(summary.revenueTrends, filterRange, isNarrowViewport),
+    [filterRange, isNarrowViewport, summary.revenueTrends]
   );
 
   useEffect(() => {
@@ -302,7 +364,7 @@ function StaffEarnings() {
             >
               <AreaChart
                 data={summary.revenueTrends}
-                margin={{ top: 10, right: 10, left: -12, bottom: 0 }}
+                margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
               >
                 <defs>
                   <linearGradient id="staffRevenueGradient" x1="0" y1="0" x2="0" y2="1">
@@ -316,14 +378,21 @@ function StaffEarnings() {
                   stroke="#737373"
                   tickLine={false}
                   axisLine={false}
-                  tick={{ fill: "#a3a3a3", fontSize: 12 }}
+                  interval={0}
+                  minTickGap={isNarrowViewport ? 12 : 18}
+                  padding={{ left: 4, right: isNarrowViewport ? 28 : 20 }}
+                  tick={{ fill: "#a3a3a3", fontSize: isNarrowViewport ? 10 : 12 }}
+                  tickMargin={10}
+                  ticks={revenueXAxisTicks}
                 />
                 <YAxis
+                  width={revenueYAxisWidth}
+                  tickMargin={4}
                   stroke="#737373"
                   tickLine={false}
                   axisLine={false}
                   tick={{ fill: "#a3a3a3", fontSize: 12 }}
-                  tickFormatter={(value) => (value >= 1000 ? `Rs. ${value / 1000}k` : `Rs. ${value}`)}
+                  tickFormatter={formatRevenueAxis}
                 />
                 <Tooltip
                   contentStyle={tooltipStyle}
