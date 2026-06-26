@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "react-toastify";
 import {
@@ -60,6 +60,30 @@ const getRangeLabel = (range) =>
 const compactAxisLabel = (label, maxLength = 12) => {
   const text = String(label || "");
   return text.length > maxLength ? `${text.slice(0, maxLength - 1)}...` : text;
+};
+
+const formatRevenueAxis = (value) => {
+  const numericValue = Number(value) || 0;
+  if (numericValue >= 100000000) return `${Number((numericValue / 1000000).toFixed(1))}M`;
+  if (numericValue >= 1000000) return `${Number((numericValue / 1000000).toFixed(2))}M`;
+  if (numericValue >= 1000) return `${Number((numericValue / 1000).toFixed(1))}k`;
+  return `${numericValue}`;
+};
+
+const getRevenueXAxisTicks = (data, range, isNarrowViewport) => {
+  if (!["LAST_7_DAYS", "LAST_30_DAYS"].includes(range)) return undefined;
+
+  const labels = (Array.isArray(data) ? data : [])
+    .map((item) => item.month)
+    .filter(Boolean);
+
+  if (labels.length <= 1) return labels;
+
+  const step = range === "LAST_30_DAYS" ? (isNarrowViewport ? 7 : 5) : 2;
+  const ticks = labels.filter((_, index) => index % step === 0);
+  const lastLabel = labels[labels.length - 1];
+
+  return ticks.includes(lastLabel) ? ticks : [...ticks, lastLabel];
 };
 
 const useIsNarrowViewport = () => {
@@ -244,6 +268,27 @@ function Analytics() {
   const selectedYear = Number(filterYear);
   const rangeLabel = getRangeLabel(filterRange);
   const shouldShowSummaryLoader = isAnalyticsLoading;
+
+  const calculateYAxisWidth = useCallback((data, formatter) => {
+    if (!data || data.length === 0) return 34;
+
+    const maxLength = data.reduce((longestLabel, item) => {
+      const formattedValue = formatter ? formatter(item.revenue) : `${item.revenue}`;
+      return Math.max(longestLabel, String(formattedValue).length);
+    }, 0);
+
+    return Math.ceil(Math.max(34, maxLength * 7.5 + 10));
+  }, []);
+
+  const revenueYAxisWidth = useMemo(
+    () => calculateYAxisWidth(trendData, formatRevenueAxis),
+    [calculateYAxisWidth, trendData]
+  );
+
+  const revenueXAxisTicks = useMemo(
+    () => getRevenueXAxisTicks(trendData, filterRange, isNarrowViewport),
+    [filterRange, isNarrowViewport, trendData]
+  );
 
   const summaryMetrics = [
     {
@@ -555,7 +600,7 @@ function Analytics() {
           >
             <AreaChart
               data={trendData}
-              margin={{ top: 10, right: 10, left: -12, bottom: 0 }}
+              margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
             >
               <defs>
                 <linearGradient
@@ -579,16 +624,21 @@ function Analytics() {
                 stroke="#737373"
                 tickLine={false}
                 axisLine={false}
-                tick={{ fill: "#a3a3a3", fontSize: 12 }}
+                interval={0}
+                minTickGap={isNarrowViewport ? 12 : 18}
+                padding={{ left: 4, right: isNarrowViewport ? 28 : 20 }}
+                tick={{ fill: "#a3a3a3", fontSize: isNarrowViewport ? 10 : 12 }}
+                tickMargin={10}
+                ticks={revenueXAxisTicks}
               />
               <YAxis
+                width={revenueYAxisWidth}
+                tickMargin={4}
                 stroke="#737373"
                 tickLine={false}
                 axisLine={false}
                 tick={{ fill: "#a3a3a3", fontSize: 12 }}
-                tickFormatter={(value) =>
-                  value >= 1000 ? `Rs. ${value / 1000}k` : `Rs. ${value}`
-                }
+                tickFormatter={formatRevenueAxis}
               />
               <Tooltip
                 contentStyle={tooltipStyle}

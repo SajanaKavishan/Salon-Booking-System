@@ -27,8 +27,11 @@ import { GoldButton, GlassCard } from "../../components/admin/SystemUI";
 
 
 const formatYAxis = (value) => {
-  if (value >= 1000) return `Rs. ${value / 1000}k`;
-  return `Rs. ${value}`;
+  const numericValue = Number(value) || 0;
+  if (numericValue >= 100000000) return `${Number((numericValue / 1000000).toFixed(1))}M`;
+  if (numericValue >= 1000000) return `${Number((numericValue / 1000000).toFixed(2))}M`;
+  if (numericValue >= 1000) return `${Number((numericValue / 1000).toFixed(1))}k`;
+  return `${numericValue}`;
 };
 
 const getLocalDateKey = (date = new Date()) => {
@@ -160,6 +163,22 @@ function AdminDashboard() {
   const [shiftTarget, setShiftTarget] = useState(null);
 
   const [isShiftLoading, setIsShiftLoading] = useState(false);
+
+  const calculateYAxisWidth = useCallback((data, formatter) => {
+    if (!data || data.length === 0) return 34;
+
+    const maxLength = data.reduce((longestLabel, item) => {
+      const formattedValue = formatter ? formatter(item.revenue) : `${item.revenue}`;
+      return Math.max(longestLabel, String(formattedValue).length);
+    }, 0);
+
+    return Math.ceil(Math.max(34, maxLength * 7.5 + 10));
+  }, []);
+
+  const weeklyRevenueYAxisWidth = useMemo(
+    () => calculateYAxisWidth(chartData, formatYAxis),
+    [calculateYAxisWidth, chartData]
+  );
 
   const fetchDashboardData = useCallback(async () => {
 
@@ -581,7 +600,7 @@ function AdminDashboard() {
       <div className="group lux-card backdrop-blur-xl bg-card/40 border border-white/[0.04] p-4 sm:p-6 rounded-2xl shadow-2xl mt-8">
         <div className="mb-6">
           <h3 className="text-lg font-brand font-semibold text-white sm:text-xl">Weekly Revenue Analytics</h3>
-          <p className="text-neutral-500 text-xs mt-1">Completed appointment revenue from Monday to Sunday</p>
+          <p className="text-neutral-500 text-xs mt-1">Completed appointment revenue (LKR) from Monday to Sunday</p>
         </div>
 
         <div className="h-[250px] w-full min-w-0 sm:h-[300px]">
@@ -594,7 +613,7 @@ function AdminDashboard() {
           >
             <AreaChart
               data={chartData}
-              margin={{ top: 10, right: 5, left: -15, bottom: 0 }}
+              margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
             >
               <defs>
                 <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
@@ -603,8 +622,8 @@ function AdminDashboard() {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
-              <XAxis dataKey="day" stroke="#737373" fontSize={11} tickLine={false} axisLine={false} dy={10} />
-              <YAxis stroke="#737373" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} domain={[0, "auto"]} tickFormatter={formatYAxis} />
+              <XAxis dataKey="day" stroke="#737373" fontSize={11} tickLine={false} axisLine={false} dy={10} padding={{ left: 4, right: 12 }} />
+              <YAxis width={weeklyRevenueYAxisWidth} tickMargin={4} stroke="#737373" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} domain={[0, "auto"]} tickFormatter={formatYAxis} />
               <Tooltip contentStyle={{ backgroundColor: '#111', borderColor: '#222', borderRadius: '8px' }} itemStyle={{ color: '#d4af37' }} formatter={(value) => [`Rs. ${value.toLocaleString()}`, 'Revenue']} />
               <Area type="monotone" dataKey="revenue" stroke="#d4af37" strokeWidth={2} fillOpacity={1} fill="url(#colorRevenue)" />
             </AreaChart>

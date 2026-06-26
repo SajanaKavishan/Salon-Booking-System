@@ -421,7 +421,7 @@ function Layout() {
           />
         )}
 
-        <main className={`min-h-0 w-full flex-1 overflow-y-auto ${isReviewsPage ? 'p-0' : 'p-4 md:p-8 lg:p-10'}`}>
+        <main className={`no-scrollbar min-h-0 w-full flex-1 overflow-y-auto ${isReviewsPage ? 'p-0' : 'p-4 md:p-8 lg:p-10'}`}>
           <Outlet />
         </main>
       </div>
