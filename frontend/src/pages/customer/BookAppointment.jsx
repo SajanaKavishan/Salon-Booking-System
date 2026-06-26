@@ -1,8 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import { AnimatePresence, motion } from 'framer-motion';
 
 import axios from 'axios';
+
+import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -26,6 +28,245 @@ const getLocalDateKey = () => {
 
   return `${year}-${month}-${day}`;
 };
+
+const MONTH_LABELS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December'
+];
+
+const WEEKDAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+
+const toDateKey = (dateValue) => {
+  const year = dateValue.getFullYear();
+  const month = String(dateValue.getMonth() + 1).padStart(2, '0');
+  const day = String(dateValue.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+};
+
+const parseDateKey = (dateKey) => {
+  if (!dateKey) return null;
+
+  const [year, month, day] = dateKey.split('-').map(Number);
+
+  if (!year || !month || !day) return null;
+
+  return new Date(year, month - 1, day);
+};
+
+const formatDisplayDate = (dateKey) => {
+  const parsedDate = parseDateKey(dateKey);
+
+  if (!parsedDate) return 'Select Date...';
+
+  return parsedDate.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
+};
+
+function BookingCalendarPicker({ value, onChange, holidays = [], minDate, weekendBookings }) {
+  const pickerRef = useRef(null);
+  const selectedDate = parseDateKey(value);
+  const minimumDate = parseDateKey(minDate);
+  const [isOpen, setIsOpen] = useState(false);
+  const [openDirection, setOpenDirection] = useState('down');
+  const [viewDate, setViewDate] = useState(() => selectedDate || minimumDate || new Date());
+
+  const holidayDateKeys = useMemo(
+    () => new Set(
+      holidays
+        .map((holiday) => holiday.date)
+        .filter(Boolean)
+    ),
+    [holidays]
+  );
+
+  const fullDayHolidayKeys = useMemo(
+    () => new Set(
+      holidays
+        .filter((holiday) => holiday.date && holiday.isFullDay !== false)
+        .map((holiday) => holiday.date)
+    ),
+    [holidays]
+  );
+
+  useEffect(() => {
+    if (selectedDate) {
+      setViewDate(selectedDate);
+    }
+  }, [value]);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    const updateOpenDirection = () => {
+      if (!pickerRef.current) return;
+
+      const triggerRect = pickerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - triggerRect.bottom;
+      const spaceAbove = triggerRect.top;
+
+      setOpenDirection(spaceBelow < 360 && spaceAbove > spaceBelow ? 'up' : 'down');
+    };
+
+    const handleClickOutside = (event) => {
+      if (pickerRef.current && !pickerRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+
+    updateOpenDirection();
+    document.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('resize', updateOpenDirection);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('resize', updateOpenDirection);
+    };
+  }, [isOpen]);
+
+  const calendarDays = useMemo(() => {
+    const year = viewDate.getFullYear();
+    const month = viewDate.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const gridStart = new Date(year, month, 1 - firstDay.getDay());
+
+    return Array.from({ length: 42 }, (_, index) => {
+      const calendarDate = new Date(gridStart);
+      calendarDate.setDate(gridStart.getDate() + index);
+
+      return calendarDate;
+    });
+  }, [viewDate]);
+
+  const moveMonth = (offset) => {
+    setViewDate((current) => new Date(current.getFullYear(), current.getMonth() + offset, 1));
+  };
+
+  const handleToggleCalendar = () => {
+    if (!pickerRef.current) {
+      setIsOpen((current) => !current);
+      return;
+    }
+
+    const triggerRect = pickerRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - triggerRect.bottom;
+    const spaceAbove = triggerRect.top;
+
+    setOpenDirection(spaceBelow < 360 && spaceAbove > spaceBelow ? 'up' : 'down');
+    setIsOpen((current) => !current);
+  };
+
+  const handleSelectDate = (calendarDate) => {
+    const dateKey = toDateKey(calendarDate);
+
+    onChange(dateKey);
+    setIsOpen(false);
+  };
+
+  return (
+    <div ref={pickerRef} className="relative mt-3">
+      <button
+        type="button"
+        onClick={handleToggleCalendar}
+        className="flex w-full cursor-pointer items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-left text-zinc-300 transition hover:border-[#c5a880]/50 hover:text-white focus:outline-none focus:ring-2 focus:ring-[#c5a880]/30"
+        aria-expanded={isOpen}
+      >
+        <span className={value ? 'text-sm font-medium text-zinc-200' : 'text-sm text-zinc-500'}>
+          {formatDisplayDate(value)}
+        </span>
+        <CalendarDays className="h-4 w-4 text-[#c5a880]" />
+      </button>
+
+      {isOpen && (
+        <div className={`absolute left-0 z-50 w-[min(20rem,calc(100vw-3rem))] rounded-xl border border-zinc-800/80 bg-[#0c0c0e] p-4 shadow-2xl ${
+          openDirection === 'up' ? 'bottom-full mb-2' : 'mt-2'
+        }`}>
+          <div className="mb-4 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => moveMonth(-1)}
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-900 hover:text-[#c5a880]"
+              aria-label="Previous month"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <p className="text-sm font-semibold text-zinc-100">
+              {MONTH_LABELS[viewDate.getMonth()]} {viewDate.getFullYear()}
+            </p>
+            <button
+              type="button"
+              onClick={() => moveMonth(1)}
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-900 hover:text-[#c5a880]"
+              aria-label="Next month"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-7 gap-1 text-center">
+            {WEEKDAY_LABELS.map((weekday) => (
+              <div key={weekday} className="py-2 text-xs font-semibold text-zinc-500">
+                {weekday}
+              </div>
+            ))}
+
+            {calendarDays.map((calendarDate) => {
+              const dateKey = toDateKey(calendarDate);
+              const isCurrentMonth = calendarDate.getMonth() === viewDate.getMonth();
+              const isSelected = dateKey === value;
+              const isHoliday = holidayDateKeys.has(dateKey);
+              const isFullDayHoliday = fullDayHolidayKeys.has(dateKey);
+              const isWeekend = calendarDate.getDay() === 0 || calendarDate.getDay() === 6;
+              const isPast = minimumDate ? dateKey < minDate : false;
+              const isDisabled = isPast || (!weekendBookings && isWeekend) || isFullDayHoliday;
+
+              return (
+                <button
+                  key={dateKey}
+                  type="button"
+                  onClick={() => handleSelectDate(calendarDate)}
+                  disabled={isDisabled}
+                  className={`relative flex h-9 items-center justify-center rounded-lg text-sm transition-all disabled:cursor-not-allowed ${
+                    isSelected
+                      ? 'bg-[#c5a880] font-bold text-black'
+                      : isDisabled
+                        ? 'text-zinc-700 opacity-60'
+                        : isCurrentMonth
+                          ? 'text-zinc-200 hover:bg-[#c5a880]/20 hover:text-[#c5a880]'
+                          : 'text-zinc-700 hover:bg-zinc-900/70 hover:text-zinc-500'
+                  } ${isHoliday && !isSelected ? 'bg-red-500/5 text-red-300/70 ring-1 ring-inset ring-red-500/15' : ''}`}
+                  aria-label={`${formatDisplayDate(dateKey)}${isHoliday ? ' closed' : ''}`}
+                >
+                  {calendarDate.getDate()}
+                  {isHoliday && (
+                    <span
+                      className={`absolute bottom-1 h-1 w-1 rounded-full ${
+                        isSelected ? 'bg-black/70' : 'bg-red-400/80'
+                      }`}
+                    />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 
 
@@ -1773,18 +2014,12 @@ function BookAppointment({ userProfile, customerData }) {
 
                             <label className="text-[0.65rem] uppercase tracking-[0.35em] text-white/40">Select Date</label>
 
-                            <input
-
-                              type="date"
-
+                            <BookingCalendarPicker
                               value={date}
-
-                              min={new Date().toISOString().split('T')[0]}
-
-                              onChange={(event) => setDate(event.target.value)}
-
-                              className="mt-3 w-full border-b border-white/15 bg-transparent pb-3 text-sm text-white focus:border-[#D4AF37] focus:outline-none [color-scheme:dark]"
-
+                              onChange={setDate}
+                              holidays={holidays}
+                              minDate={getLocalDateKey()}
+                              weekendBookings={settings.weekendBookings}
                             />
 
                           </div>
