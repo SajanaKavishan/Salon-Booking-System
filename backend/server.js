@@ -64,6 +64,7 @@ app.use("/api/staff", ensureMongoConnection, require("./routes/staffRoutes")); /
 app.use("/api/messages", ensureMongoConnection, require("./routes/messageRoutes")); // Contact form message handling routes
 app.use("/api/notifications", ensureMongoConnection, require("./routes/notificationRoutes")); // Notification handling routes
 app.use("/api/settings", ensureMongoConnection, require("./routes/settingsRoutes")); // Salon settings routes
+app.use("/api/holidays", ensureMongoConnection, require("./routes/holidayRoutes")); // Salon holidays and custom closure routes
 app.use("/api/roster", ensureMongoConnection, require("./routes/rosterRoutes")); // Roster and Shifts routes
 app.use("/api/leaves", ensureMongoConnection, require("./routes/leaveRoutes")); // Leave management routes
 app.use("/api/dashboard", ensureMongoConnection, require("./routes/dashboardRoutes")); // Admin dashboard summary routes

@@ -3,6 +3,7 @@ const Staff = require('../models/Staff');
 const Appointment = require('../models/appointmentModel');
 const SalonSettings = require('../models/SalonSettings');
 const LeaveRequest = require('../models/LeaveRequest');
+const Holiday = require('../models/Holiday');
 
 const DAY_NAMES = [
   'Sunday',
@@ -207,6 +208,9 @@ const generateAvailableSlots = async (
   }
 
   const requestedDate = parseBookingDate(requestedDateValue);
+  const holiday = await Holiday.exists({ date: requestedDateValue });
+  if (holiday) return [];
+
   const [staff, defaultBufferTime] = await Promise.all([
     Staff.findById(staffId)
       .select('workingHours offDays userId')

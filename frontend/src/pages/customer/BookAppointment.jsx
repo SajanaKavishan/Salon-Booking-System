@@ -18,6 +18,15 @@ import { useAppointments } from '../../context/AppointmentsContext';
 
 const ANY_STYLIST = '__ANY_STYLIST__';
 
+const getLocalDateKey = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+};
+
 
 
 function BookAppointment({ userProfile, customerData }) {
@@ -80,6 +89,8 @@ function BookAppointment({ userProfile, customerData }) {
 
   const [isOptionsLoading, setIsOptionsLoading] = useState(true);
 
+  const [holidays, setHolidays] = useState([]);
+
   const { settings } = useSalonSettings();
 
   const navigate = useNavigate();
@@ -97,6 +108,37 @@ function BookAppointment({ userProfile, customerData }) {
     ? profile.preferredStylist.trim()
 
     : '';
+
+  const todayHoliday = useMemo(
+    () => holidays.find((holiday) => holiday.date === getLocalDateKey()) || null,
+    [holidays]
+  );
+
+  const selectedHoliday = useMemo(
+    () => holidays.find((holiday) => holiday.date === date) || null,
+    [date, holidays]
+  );
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const fetchHolidays = async () => {
+      try {
+        const response = await axios.get('http://localhost:5000/api/holidays');
+        if (!isCancelled) {
+          setHolidays(Array.isArray(response.data?.holidays) ? response.data.holidays : []);
+        }
+      } catch (error) {
+        console.error('Error loading salon holidays:', error);
+      }
+    };
+
+    fetchHolidays();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
 
 
 
@@ -615,6 +657,20 @@ function BookAppointment({ userProfile, customerData }) {
 
         }
 
+        if (selectedHoliday) {
+
+          setAvailableSlots([]);
+
+          setTimeSlot('');
+
+          setIsAvailabilityLoading(false);
+
+          setHasLoadedAvailability(true);
+
+          return;
+
+        }
+
         const staffIds = stylist === ANY_STYLIST
 
           ? stylistsList.map((stylistItem) => stylistItem._id).filter(Boolean)
@@ -725,7 +781,7 @@ function BookAppointment({ userProfile, customerData }) {
 
       };
 
-    }, [date, stylist, stylistsList, totalDuration]);
+    }, [date, stylist, stylistsList, totalDuration, selectedHoliday]);
 
 
 
@@ -846,6 +902,14 @@ function BookAppointment({ userProfile, customerData }) {
       if (!timeSlot) {
 
         toast.error('Please select an available time slot.');
+
+        return;
+
+      }
+
+      if (selectedHoliday) {
+
+        toast.error(`The salon is closed on this date for ${selectedHoliday.name}. Please select another date.`);
 
         return;
 
@@ -1227,9 +1291,15 @@ function BookAppointment({ userProfile, customerData }) {
 
     return (
 
-      <div className="h-[calc(100dvh-104px)] overflow-hidden bg-[#070707] text-white md:h-[calc(100dvh-136px)] lg:h-[calc(100dvh-152px)]">
+      <div className="flex h-[calc(100dvh-104px)] flex-col overflow-hidden bg-[#070707] text-white md:h-[calc(100dvh-136px)] lg:h-[calc(100dvh-152px)]">
 
-        <div className="mx-auto flex h-full max-w-7xl flex-col">
+        {todayHoliday && (
+          <div className="mx-auto mb-4 w-full max-w-7xl rounded-xl border border-[#D4AF37]/25 bg-[#D4AF37]/10 px-4 py-3 text-sm leading-6 text-[#ead28a]">
+            Notice: Today the salon is closed for {todayHoliday.name}. You can still schedule appointments for future dates.
+          </div>
+        )}
+
+        <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col">
 
           <div className="flex h-full min-h-0 flex-col gap-4 sm:gap-6">
 
@@ -1742,7 +1812,15 @@ function BookAppointment({ userProfile, customerData }) {
 
                         {date && stylist ? (
 
-                          isAvailabilityLoading ? (
+                          selectedHoliday ? (
+
+                            <div className="rounded-lg bg-zinc-900/30 p-6 text-center text-sm text-zinc-400">
+
+                              We are closed on this date due to {selectedHoliday.name}. Please select another date.
+
+                            </div>
+
+                          ) : isAvailabilityLoading ? (
 
                             <div className="flex min-h-40 items-center justify-center rounded-[1.5rem] border border-white/8 bg-white/[0.02]">
 

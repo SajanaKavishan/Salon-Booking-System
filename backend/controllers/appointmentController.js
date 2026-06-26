@@ -2,6 +2,7 @@ const Appointment = require('../models/appointmentModel');
 const Service = require('../models/Service'); // Import the Service model to interact with the services collection in the database
 const Staff = require('../models/Staff'); // Import the Staff model to interact with the staff collection
 const User = require('../models/User');
+const Holiday = require('../models/Holiday');
 const sendEmail = require('../utils/sendEmail'); // Import the sendEmail utility function to send email notifications to users about their appointment status updates
 const generateAvailableSlots = require('../utils/slotGenerator');
 const { isStaffOnApprovedLeave } = require('../utils/slotGenerator');
@@ -130,6 +131,13 @@ const createAppointment = async (req, res) => {
         }
         const nextAppointmentDate = new Date(appointmentDate);
         nextAppointmentDate.setUTCDate(nextAppointmentDate.getUTCDate() + 1);
+
+        const holiday = await Holiday.findOne({ date }).select('name').lean();
+        if (holiday) {
+            return res.status(400).json({
+                message: `The salon is closed on this date for ${holiday.name}. Please select another date.`
+            });
+        }
 
         const dayOfWeek = appointmentDate.getUTCDay();
         if (!isAdminBypass && !settings.weekendBookings && (dayOfWeek === 0 || dayOfWeek === 6)) {

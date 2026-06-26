@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import { GlassCard, GoldButton, SectionPanel } from '../../components/admin/SystemUI';
@@ -57,6 +57,33 @@ const normalizeMinutes = (value, fallback = 15) => {
 function SettingsPage() {
   const { settings, setSettings, isLoading } = useSalonSettings();
   const [isSaving, setIsSaving] = useState(false);
+  const [holidays, setHolidays] = useState([]);
+  const [holidayForm, setHolidayForm] = useState({
+    date: '',
+    name: ''
+  });
+  const [isHolidaySaving, setIsHolidaySaving] = useState(false);
+  const [holidayConflict, setHolidayConflict] = useState(null);
+  const [editingHolidayId, setEditingHolidayId] = useState(null);
+
+  const getAuthConfig = () => {
+    const token = localStorage.getItem('token');
+    return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+  };
+
+  const fetchHolidays = async () => {
+    try {
+      const response = await axios.get('http://localhost:5000/api/holidays');
+      setHolidays(Array.isArray(response.data?.holidays) ? response.data.holidays : []);
+    } catch (error) {
+      console.error('Error loading holidays:', error);
+      toast.error('Could not load salon holidays.');
+    }
+  };
+
+  useEffect(() => {
+    fetchHolidays();
+  }, []);
 
   const toggleSetting = (key) => {
     setSettings((current) => ({
@@ -104,6 +131,115 @@ function SettingsPage() {
       toast.error(error.response?.data?.message || 'Failed to save settings.');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleHolidayChange = (event) => {
+    const { name, value } = event.target;
+    setHolidayForm((current) => ({ ...current, [name]: value }));
+  };
+
+  const resetHolidayForm = () => {
+    setHolidayForm({ date: '', name: '' });
+    setEditingHolidayId(null);
+  };
+
+  const handleHolidaySubmit = async (event) => {
+    event.preventDefault();
+
+    if (!holidayForm.date || !holidayForm.name.trim()) {
+      toast.error('Please add a closure date and description.');
+      return;
+    }
+
+    try {
+      setIsHolidaySaving(true);
+      const requestUrl = editingHolidayId
+        ? `http://localhost:5000/api/holidays/${editingHolidayId}`
+        : 'http://localhost:5000/api/holidays';
+      const requestMethod = editingHolidayId ? axios.put : axios.post;
+      const response = await requestMethod(
+        requestUrl,
+        {
+          date: holidayForm.date,
+          name: holidayForm.name.trim(),
+          type: 'custom'
+        },
+        getAuthConfig()
+      );
+
+      if (response.data?.success) {
+        toast.success(editingHolidayId ? 'Salon closure updated.' : 'Salon closure saved.');
+        resetHolidayForm();
+        fetchHolidays();
+      }
+    } catch (error) {
+      const response = error.response?.data;
+
+      if (response?.conflict) {
+        setHolidayConflict({
+          date: holidayForm.date,
+          name: holidayForm.name.trim(),
+          appointmentCount: response.appointmentCount || 0
+        });
+        return;
+      }
+
+      console.error('Error saving holiday:', error);
+      toast.error(response?.message || 'Could not save salon closure.');
+    } finally {
+      setIsHolidaySaving(false);
+    }
+  };
+
+  const handleForceHoliday = async () => {
+    if (!holidayConflict) return;
+
+    try {
+      setIsHolidaySaving(true);
+      const response = await axios.post(
+        'http://localhost:5000/api/holidays/force',
+        {
+          date: holidayConflict.date,
+          name: holidayConflict.name,
+          type: 'custom'
+        },
+        getAuthConfig()
+      );
+
+      toast.success(`Date closed. ${response.data?.cancelledAppointments || 0} appointment(s) cancelled.`);
+      setHolidayConflict(null);
+      resetHolidayForm();
+      fetchHolidays();
+    } catch (error) {
+      console.error('Error force closing holiday:', error);
+      toast.error(error.response?.data?.message || 'Could not force close this date.');
+    } finally {
+      setIsHolidaySaving(false);
+    }
+  };
+
+  const handleEditHoliday = (holiday) => {
+    setEditingHolidayId(holiday._id);
+    setHolidayForm({
+      date: holiday.date || '',
+      name: holiday.name || ''
+    });
+  };
+
+  const handleDeleteHoliday = async (holidayId) => {
+    if (!holidayId) return;
+
+    const shouldReopen = window.confirm('Are you sure you want to re-open the salon on this date?');
+    if (!shouldReopen) return;
+
+    try {
+      await axios.delete(`http://localhost:5000/api/holidays/${holidayId}`, getAuthConfig());
+      toast.success('Salon date reopened.');
+      fetchHolidays();
+    } catch (error) {
+      console.error('Error deleting holiday:', error);
+      toast.error(error.response?.data?.message || 'Could not reopen this date.');
     }
   };
 
@@ -231,6 +367,94 @@ function SettingsPage() {
               </div>
             </div>
           </SectionPanel>
+
+          <SectionPanel className="p-5 sm:p-8 xl:col-span-2">
+            <div className="border-b border-white/10 pb-5">
+              <h2 className="salon-heading">Salon Holidays & Closures</h2>
+              <p className="salon-subtext mt-2">Block Poya days, Christmas, and owner-directed closures from the booking calendar.</p>
+            </div>
+
+            <form onSubmit={handleHolidaySubmit} className="mt-7 grid items-end gap-5 lg:grid-cols-[minmax(180px,0.6fr)_minmax(220px,1fr)_auto]">
+              <label className="block">
+                <span className="mb-2 block text-sm font-medium text-gray-300">Closure Date</span>
+                <input
+                  type="date"
+                  name="date"
+                  value={holidayForm.date}
+                  onChange={handleHolidayChange}
+                  className="salon-field [&::-webkit-calendar-picker-indicator]:opacity-50 [&::-webkit-calendar-picker-indicator]:invert"
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-2 block text-sm font-medium text-gray-300">Description</span>
+                <input
+                  type="text"
+                  name="name"
+                  value={holidayForm.name}
+                  onChange={handleHolidayChange}
+                  placeholder="Poya Day, Christmas, emergency closure..."
+                  className="salon-field"
+                />
+              </label>
+
+              <button
+                type="submit"
+                disabled={isHolidaySaving}
+                className="inline-flex h-[52px] items-center justify-center rounded-full border border-[#d4af37]/40 px-5 text-sm font-semibold text-[#d4af37] transition hover:bg-[#d4af37]/10 disabled:cursor-not-allowed disabled:opacity-60 lg:self-end"
+              >
+                {isHolidaySaving ? 'Saving...' : editingHolidayId ? 'Update Closure' : 'Add Closure'}
+              </button>
+            </form>
+
+            {editingHolidayId && (
+              <button
+                type="button"
+                onClick={resetHolidayForm}
+                className="mt-3 text-sm font-semibold text-zinc-500 transition hover:text-zinc-300"
+              >
+                Cancel edit
+              </button>
+            )}
+
+            <div className="mt-7 rounded-xl border border-white/10 bg-black/20 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#d4af37]">Active Closed Dates</p>
+              <div className="mt-3">
+                {holidays.length === 0 ? (
+                  <p className="text-sm text-gray-500">No holidays or custom closures have been added yet.</p>
+                ) : (
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {holidays.map((holiday) => (
+                      <div key={holiday._id || holiday.date} className="rounded-lg border border-white/10 bg-zinc-950/70 px-4 py-3">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-white">{holiday.name}</p>
+                            <p className="mt-1 text-xs text-gray-500">{holiday.date}</p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleEditHoliday(holiday)}
+                              className="rounded-md bg-sky-400/5 px-3 py-1.5 text-sm font-semibold text-sky-300/85 transition-colors duration-200 hover:border-sky-300/40 hover:bg-sky-400/10 hover:text-sky-200"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteHoliday(holiday._id)}
+                              className="rounded-md px-3 py-1.5 text-sm font-semibold text-red-400/75 transition-colors duration-200 hover:bg-red-500/10 hover:text-red-300"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </SectionPanel>
         </section>
       )}
 
@@ -239,6 +463,40 @@ function SettingsPage() {
           {isSaving ? 'Saving...' : 'Save Changes'}
         </GoldButton>
       </div>
+
+      {holidayConflict && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-md">
+          <div className="w-full max-w-lg rounded-2xl border border-red-500/30 bg-[#0b0b0d] p-6 shadow-2xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-red-400">Closure Conflict</p>
+            <h3 className="mt-3 text-2xl font-bold text-white">Warning</h3>
+            <p className="mt-4 text-sm leading-6 text-zinc-300">
+              There are {holidayConflict.appointmentCount} active appointments scheduled on this date.
+              Proceeding will automatically CANCEL them and notify clients.
+            </p>
+            <div className="mt-6 rounded-xl border border-zinc-800 bg-zinc-950/80 p-4">
+              <p className="text-sm font-semibold text-white">{holidayConflict.name}</p>
+              <p className="mt-1 text-xs text-zinc-500">{holidayConflict.date}</p>
+            </div>
+            <div className="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setHolidayConflict(null)}
+                className="rounded-full border border-white/10 px-5 py-3 text-sm font-semibold text-zinc-300 transition hover:bg-white/5"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleForceHoliday}
+                disabled={isHolidaySaving}
+                className="rounded-full bg-red-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-red-400 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isHolidaySaving ? 'Closing...' : 'Confirm & Force Close'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
