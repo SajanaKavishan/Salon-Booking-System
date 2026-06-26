@@ -132,8 +132,8 @@ const createAppointment = async (req, res) => {
         const nextAppointmentDate = new Date(appointmentDate);
         nextAppointmentDate.setUTCDate(nextAppointmentDate.getUTCDate() + 1);
 
-        const holiday = await Holiday.findOne({ date }).select('name').lean();
-        if (holiday) {
+        const holiday = await Holiday.findOne({ date, isActive: { $ne: false } }).select('name isFullDay hours').lean();
+        if (holiday && holiday.isFullDay !== false) {
             return res.status(400).json({
                 message: `The salon is closed on this date for ${holiday.name}. Please select another date.`
             });
@@ -156,6 +156,17 @@ const createAppointment = async (req, res) => {
         const endMins = slotEndTime ? timeToMinutes(slotEndTime) : calculatedEndMins;
         const formattedStartTime = minutesToTime(startMins);
         const formattedEndTime = minutesToTime(endMins);
+
+        if (holiday?.isFullDay === false) {
+            const closedStart = timeToMinutes(holiday.hours?.start);
+            const closedEnd = timeToMinutes(holiday.hours?.end);
+
+            if (startMins < closedEnd && endMins > closedStart) {
+                return res.status(400).json({
+                    message: `The salon is closed from ${holiday.hours.start} to ${holiday.hours.end} on this date for ${holiday.name}. Please select another time.`
+                });
+            }
+        }
 
         let stylistId = stylist;
         if (!stylistId || stylistId === 'Any Available Stylist') {

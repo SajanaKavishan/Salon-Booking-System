@@ -1,6 +1,7 @@
 const Appointment = require('../models/appointmentModel');
 const Holiday = require('../models/Holiday');
 const Notification = require('../models/Notification');
+const { syncSriLankanPublicHolidays } = require('../services/holidaySyncService');
 
 const ACTIVE_STATUSES = ['pending', 'confirmed'];
 
@@ -21,7 +22,35 @@ const toHolidayPayload = (body = {}) => ({
   date: String(body.date || '').slice(0, 10),
   name: String(body.name || body.description || '').trim(),
   type: body.type === 'public' ? 'public' : 'custom',
+  isFullDay: body.isFullDay !== false,
+  hours: {
+    start: body.isFullDay === false ? String(body.hours?.start || '').trim() : '',
+    end: body.isFullDay === false ? String(body.hours?.end || '').trim() : '',
+  },
 });
+
+const isValidTimeValue = (value) => (
+  typeof value === 'string'
+  && /^([01]\d|2[0-3]):[0-5]\d$/.test(value.trim())
+);
+
+const validateHolidayPayload = (payload) => {
+  if (!isValidDateKey(payload.date) || !payload.name) {
+    return 'A valid date (YYYY-MM-DD) and holiday name are required.';
+  }
+
+  if (!payload.isFullDay) {
+    if (!isValidTimeValue(payload.hours.start) || !isValidTimeValue(payload.hours.end)) {
+      return 'Partial closures require valid start and end times.';
+    }
+
+    if (payload.hours.end <= payload.hours.start) {
+      return 'Partial closure end time must be after start time.';
+    }
+  }
+
+  return '';
+};
 
 const getAppointmentDateRange = (date) => {
   const start = new Date(`${date}T00:00:00.000Z`);
@@ -49,17 +78,73 @@ const findActiveAppointmentsOnDate = (date) => (
     .populate('staffId', 'name')
 );
 
+const timeToMinutes = (value) => {
+  if (typeof value !== 'string') return null;
+
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i);
+  if (!match) return null;
+
+  let hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const period = match[3]?.toUpperCase();
+
+  if (Number.isNaN(hours) || Number.isNaN(minutes) || minutes > 59) return null;
+  if (period && (hours < 1 || hours > 12)) return null;
+  if (!period && hours > 23) return null;
+
+  if (period) {
+    if (hours === 12) hours = 0;
+    if (period === 'PM') hours += 12;
+  }
+
+  return hours * 60 + minutes;
+};
+
+const appointmentOverlapsHolidayHours = (appointment, hours) => {
+  const closureStart = timeToMinutes(hours.start);
+  const closureEnd = timeToMinutes(hours.end);
+  const appointmentStart = timeToMinutes(appointment.startTime);
+  const appointmentEnd = timeToMinutes(appointment.endTime);
+
+  if (
+    closureStart === null
+    || closureEnd === null
+    || appointmentStart === null
+    || appointmentEnd === null
+  ) {
+    return true;
+  }
+
+  return appointmentStart < closureEnd && appointmentEnd > closureStart;
+};
+
+const findConflictingAppointmentsForPayload = async (payload) => {
+  const appointments = await findActiveAppointmentsOnDate(payload.date);
+  if (payload.isFullDay) return appointments;
+
+  return appointments.filter((appointment) => (
+    appointmentOverlapsHolidayHours(appointment, payload.hours)
+  ));
+};
+
 const upsertHoliday = ({ date, name, type }) => (
   Holiday.findOneAndUpdate(
     { date },
-    { $set: { date, name, type } },
+    {
+      $set: {
+        date,
+        name,
+        type,
+        isActive: true,
+      },
+    },
     { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true }
   )
 );
 
 const getHolidays = async (_req, res) => {
   try {
-    const holidays = await Holiday.find({}).sort({ date: 1 }).lean();
+    const holidays = await Holiday.find({ isActive: { $ne: false } }).sort({ date: 1 }).lean();
     res.status(200).json({ success: true, holidays });
   } catch (error) {
     console.error('Get Holidays Error:', error);
@@ -70,17 +155,17 @@ const getHolidays = async (_req, res) => {
 const createHoliday = async (req, res) => {
   try {
     const payload = toHolidayPayload(req.body);
+    const validationMessage = validateHolidayPayload(payload);
 
-    if (!isValidDateKey(payload.date) || !payload.name) {
+    if (validationMessage) {
       return res.status(400).json({
         success: false,
-        message: 'A valid date (YYYY-MM-DD) and holiday name are required.',
+        message: validationMessage,
       });
     }
 
-    const appointmentCount = await Appointment.countDocuments(
-      buildAppointmentsOnDateQuery(payload.date)
-    );
+    const conflictingAppointments = await findConflictingAppointmentsForPayload(payload);
+    const appointmentCount = conflictingAppointments.length;
 
     if (appointmentCount > 0) {
       return res.status(409).json({
@@ -90,7 +175,18 @@ const createHoliday = async (req, res) => {
       });
     }
 
-    const holiday = await upsertHoliday(payload);
+    const holiday = await Holiday.findOneAndUpdate(
+      { date: payload.date },
+      {
+        $set: {
+          ...payload,
+          type: 'custom',
+          isSystemGenerated: false,
+          isActive: true,
+        },
+      },
+      { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true }
+    );
 
     return res.status(201).json({
       success: true,
@@ -105,16 +201,28 @@ const createHoliday = async (req, res) => {
 const forceCreateHoliday = async (req, res) => {
   try {
     const payload = toHolidayPayload(req.body);
+    const validationMessage = validateHolidayPayload(payload);
 
-    if (!isValidDateKey(payload.date) || !payload.name) {
+    if (validationMessage) {
       return res.status(400).json({
         success: false,
-        message: 'A valid date (YYYY-MM-DD) and holiday name are required.',
+        message: validationMessage,
       });
     }
 
-    const conflictingAppointments = await findActiveAppointmentsOnDate(payload.date);
-    const holiday = await upsertHoliday(payload);
+    const conflictingAppointments = await findConflictingAppointmentsForPayload(payload);
+    const holiday = await Holiday.findOneAndUpdate(
+      { date: payload.date },
+      {
+        $set: {
+          ...payload,
+          type: 'custom',
+          isSystemGenerated: false,
+          isActive: true,
+        },
+      },
+      { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true }
+    );
 
     if (conflictingAppointments.length > 0) {
       const appointmentIds = conflictingAppointments.map((appointment) => appointment._id);
@@ -159,17 +267,18 @@ const forceCreateHoliday = async (req, res) => {
 const updateHoliday = async (req, res) => {
   try {
     const payload = toHolidayPayload(req.body);
+    const validationMessage = validateHolidayPayload(payload);
 
-    if (!isValidDateKey(payload.date) || !payload.name) {
+    if (validationMessage) {
       return res.status(400).json({
         success: false,
-        message: 'A valid date (YYYY-MM-DD) and holiday name are required.',
+        message: validationMessage,
       });
     }
 
     const holiday = await Holiday.findByIdAndUpdate(
       req.params.id,
-      { $set: payload },
+      { $set: { ...payload, isActive: true } },
       { new: true, runValidators: true }
     );
 
@@ -196,7 +305,11 @@ const updateHoliday = async (req, res) => {
 
 const deleteHoliday = async (req, res) => {
   try {
-    const holiday = await Holiday.findByIdAndDelete(req.params.id);
+    const holiday = await Holiday.findByIdAndUpdate(
+      req.params.id,
+      { $set: { isActive: false } },
+      { new: true }
+    );
 
     if (!holiday) {
       return res.status(404).json({ success: false, message: 'Holiday not found.' });
@@ -213,10 +326,30 @@ const deleteHoliday = async (req, res) => {
   }
 };
 
+const syncPublicHolidays = async (req, res) => {
+  try {
+    const requestedYear = Number(req.body?.year || req.query?.year || new Date().getFullYear());
+    const year = Number.isInteger(requestedYear) ? requestedYear : new Date().getFullYear();
+    const result = await syncSriLankanPublicHolidays(year);
+
+    return res.status(200).json({
+      success: true,
+      ...result,
+    });
+  } catch (error) {
+    console.error('Sync Public Holidays Error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Could not sync Sri Lankan public holidays.',
+    });
+  }
+};
+
 module.exports = {
   getHolidays,
   createHoliday,
   forceCreateHoliday,
   updateHoliday,
   deleteHoliday,
+  syncPublicHolidays,
 };

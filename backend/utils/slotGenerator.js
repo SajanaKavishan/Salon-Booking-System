@@ -154,6 +154,18 @@ const findFirstConflict = (bookedRanges, windowStart, windowEnd) => (
   )
 );
 
+const getHolidayClosureRange = (holiday) => {
+  if (!holiday || holiday.isFullDay !== false) return null;
+
+  try {
+    const start = timeToMinutes(holiday.hours?.start || '');
+    const end = timeToMinutes(holiday.hours?.end || '');
+    return end > start ? { start, end } : null;
+  } catch {
+    return null;
+  }
+};
+
 const isStaffOnApprovedLeave = async (staff, requestedDate, nextDate) => {
   const leaveStaffIds = [staff?.userId, staff?._id].filter(Boolean);
   if (leaveStaffIds.length === 0) return false;
@@ -208,8 +220,12 @@ const generateAvailableSlots = async (
   }
 
   const requestedDate = parseBookingDate(requestedDateValue);
-  const holiday = await Holiday.exists({ date: requestedDateValue });
-  if (holiday) return [];
+  const holiday = await Holiday.findOne({
+    date: requestedDateValue,
+    isActive: { $ne: false },
+  }).lean();
+  if (holiday && holiday.isFullDay !== false) return [];
+  const holidayClosureRange = getHolidayClosureRange(holiday);
 
   const [staff, defaultBufferTime] = await Promise.all([
     Staff.findById(staffId)
@@ -281,6 +297,15 @@ const generateAvailableSlots = async (
 
     if (conflict) {
       currentTime = Math.max(conflict.end, currentTime + 1);
+      continue;
+    }
+
+    if (
+      holidayClosureRange
+      && currentTime < holidayClosureRange.end
+      && slotEnd > holidayClosureRange.start
+    ) {
+      currentTime = Math.max(holidayClosureRange.end, currentTime + 1);
       continue;
     }
 

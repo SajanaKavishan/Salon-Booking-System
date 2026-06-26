@@ -7,6 +7,7 @@ const cors = require("cors");
 const User = require("./models/userModel");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const { startHolidaySyncScheduler } = require("./services/holidaySyncService");
 
 dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
 
@@ -153,6 +154,7 @@ async function startServer() {
     }
 
     app.listen(PORT, () => {
+        startHolidaySyncScheduler();
         console.log(`✅ Server is running on port ${PORT}`);
     });
 }

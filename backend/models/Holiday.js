@@ -21,6 +21,31 @@ const holidaySchema = new mongoose.Schema(
       enum: ['public', 'custom'],
       default: 'custom',
     },
+    isSystemGenerated: {
+      type: Boolean,
+      default: false,
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+      index: true,
+    },
+    isFullDay: {
+      type: Boolean,
+      default: true,
+    },
+    hours: {
+      start: {
+        type: String,
+        trim: true,
+        default: '',
+      },
+      end: {
+        type: String,
+        trim: true,
+        default: '',
+      },
+    },
   },
   { timestamps: true }
 );
