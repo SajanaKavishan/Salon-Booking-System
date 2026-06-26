@@ -118,6 +118,7 @@ function BookAppointment({ userProfile, customerData }) {
     () => holidays.find((holiday) => holiday.date === date) || null,
     [date, holidays]
   );
+  const isSelectedDateFullyClosed = selectedHoliday && selectedHoliday.isFullDay !== false;
 
   useEffect(() => {
     let isCancelled = false;
@@ -657,7 +658,7 @@ function BookAppointment({ userProfile, customerData }) {
 
         }
 
-        if (selectedHoliday) {
+        if (isSelectedDateFullyClosed) {
 
           setAvailableSlots([]);
 
@@ -781,7 +782,7 @@ function BookAppointment({ userProfile, customerData }) {
 
       };
 
-    }, [date, stylist, stylistsList, totalDuration, selectedHoliday]);
+    }, [date, stylist, stylistsList, totalDuration, isSelectedDateFullyClosed]);
 
 
 
@@ -907,7 +908,7 @@ function BookAppointment({ userProfile, customerData }) {
 
       }
 
-      if (selectedHoliday) {
+      if (isSelectedDateFullyClosed) {
 
         toast.error(`The salon is closed on this date for ${selectedHoliday.name}. Please select another date.`);
 
@@ -1295,7 +1296,9 @@ function BookAppointment({ userProfile, customerData }) {
 
         {todayHoliday && (
           <div className="mx-auto mb-4 w-full max-w-7xl rounded-xl border border-[#D4AF37]/25 bg-[#D4AF37]/10 px-4 py-3 text-sm leading-6 text-[#ead28a]">
-            Notice: Today the salon is closed for {todayHoliday.name}. You can still schedule appointments for future dates.
+            {todayHoliday.isFullDay === false
+              ? `Notice: Today the salon is partly closed for ${todayHoliday.name} from ${todayHoliday.hours?.start || ''} to ${todayHoliday.hours?.end || ''}. Other available slots remain bookable.`
+              : `Notice: Today the salon is closed for ${todayHoliday.name}. You can still schedule appointments for future dates.`}
           </div>
         )}
 
@@ -1812,7 +1815,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                         {date && stylist ? (
 
-                          selectedHoliday ? (
+                          isSelectedDateFullyClosed ? (
 
                             <div className="rounded-lg bg-zinc-900/30 p-6 text-center text-sm text-zinc-400">
 

@@ -60,11 +60,18 @@ function SettingsPage() {
   const [holidays, setHolidays] = useState([]);
   const [holidayForm, setHolidayForm] = useState({
     date: '',
-    name: ''
+    name: '',
+    isFullDay: true,
+    hours: {
+      start: '14:00',
+      end: '17:00'
+    }
   });
   const [isHolidaySaving, setIsHolidaySaving] = useState(false);
+  const [isHolidaySyncing, setIsHolidaySyncing] = useState(false);
   const [holidayConflict, setHolidayConflict] = useState(null);
   const [editingHolidayId, setEditingHolidayId] = useState(null);
+  const [holidayDeleteTarget, setHolidayDeleteTarget] = useState(null);
 
   const getAuthConfig = () => {
     const token = localStorage.getItem('token');
@@ -140,8 +147,27 @@ function SettingsPage() {
   };
 
   const resetHolidayForm = () => {
-    setHolidayForm({ date: '', name: '' });
+    setHolidayForm({
+      date: '',
+      name: '',
+      isFullDay: true,
+      hours: {
+        start: '14:00',
+        end: '17:00'
+      }
+    });
     setEditingHolidayId(null);
+  };
+
+  const handleHolidayTimeChange = (event) => {
+    const { name, value } = event.target;
+    setHolidayForm((current) => ({
+      ...current,
+      hours: {
+        ...current.hours,
+        [name]: value
+      }
+    }));
   };
 
   const handleHolidaySubmit = async (event) => {
@@ -149,6 +175,19 @@ function SettingsPage() {
 
     if (!holidayForm.date || !holidayForm.name.trim()) {
       toast.error('Please add a closure date and description.');
+      return;
+    }
+
+    if (
+      !holidayForm.isFullDay
+      && (
+        !holidayForm.date
+        || !holidayForm.hours.start
+        || !holidayForm.hours.end
+        || holidayForm.hours.start >= holidayForm.hours.end
+      )
+    ) {
+      toast.error('Please select a valid date and time range for partial closure.');
       return;
     }
 
@@ -163,7 +202,16 @@ function SettingsPage() {
         {
           date: holidayForm.date,
           name: holidayForm.name.trim(),
-          type: 'custom'
+          type: editingHolidayId
+            ? holidays.find((holiday) => holiday._id === editingHolidayId)?.type || 'custom'
+            : 'custom',
+          isFullDay: holidayForm.isFullDay,
+          hours: holidayForm.isFullDay
+            ? { start: '', end: '' }
+            : {
+                start: holidayForm.hours.start,
+                end: holidayForm.hours.end
+              }
         },
         getAuthConfig()
       );
@@ -223,25 +271,76 @@ function SettingsPage() {
     setEditingHolidayId(holiday._id);
     setHolidayForm({
       date: holiday.date || '',
-      name: holiday.name || ''
+      name: holiday.name || '',
+      isFullDay: holiday.isFullDay !== false,
+      hours: {
+        start: holiday.hours?.start || '14:00',
+        end: holiday.hours?.end || '17:00'
+      }
     });
   };
 
-  const handleDeleteHoliday = async (holidayId) => {
-    if (!holidayId) return;
-
-    const shouldReopen = window.confirm('Are you sure you want to re-open the salon on this date?');
-    if (!shouldReopen) return;
-
+  const handleSyncPublicHolidays = async () => {
     try {
-      await axios.delete(`http://localhost:5000/api/holidays/${holidayId}`, getAuthConfig());
+      setIsHolidaySyncing(true);
+      const response = await axios.post(
+        'http://localhost:5000/api/holidays/sync',
+        { year: new Date().getFullYear() },
+        getAuthConfig()
+      );
+
+      toast.success(`Synced ${response.data?.fetched || 0} Sri Lankan public holidays.`);
+      fetchHolidays();
+    } catch (error) {
+      console.error('Error syncing holidays:', error);
+      toast.error(error.response?.data?.message || 'Could not sync public holidays.');
+    } finally {
+      setIsHolidaySyncing(false);
+    }
+  };
+
+  const handleDeleteHoliday = async () => {
+    if (!holidayDeleteTarget?._id) return;
+    
+    try {
+      await axios.delete(`http://localhost:5000/api/holidays/${holidayDeleteTarget._id}`, getAuthConfig());
       toast.success('Salon date reopened.');
+      setHolidayDeleteTarget(null);
       fetchHolidays();
     } catch (error) {
       console.error('Error deleting holiday:', error);
       toast.error(error.response?.data?.message || 'Could not reopen this date.');
     }
   };
+
+  const editingHoliday = editingHolidayId
+    ? holidays.find((holiday) => holiday._id === editingHolidayId)
+    : null;
+  const isHolidayFormDirty = !editingHoliday || (
+    holidayForm.date !== (editingHoliday.date || '')
+    || holidayForm.name.trim() !== (editingHoliday.name || '')
+    || holidayForm.isFullDay !== (editingHoliday.isFullDay !== false)
+    || (
+      !holidayForm.isFullDay
+      && (
+        holidayForm.hours.start !== (editingHoliday.hours?.start || '14:00')
+        || holidayForm.hours.end !== (editingHoliday.hours?.end || '17:00')
+      )
+    )
+  );
+  const isHolidayFormReady = Boolean(
+    holidayForm.date
+    && holidayForm.name.trim()
+    && isHolidayFormDirty
+    && (
+      holidayForm.isFullDay
+      || (
+        holidayForm.hours.start
+        && holidayForm.hours.end
+        && holidayForm.hours.start < holidayForm.hours.end
+      )
+    )
+  );
 
   return (
     <div className="mx-auto w-full max-w-7xl pb-24">
@@ -344,6 +443,12 @@ function SettingsPage() {
                   checked={settings.darkReceipts}
                   onChange={() => toggleSetting('darkReceipts')}
                 />
+                <SettingsToggle
+                  label="Partial Day Closure"
+                  description="Turn on to close only a selected time range for the holiday currently being created or edited."
+                  checked={!holidayForm.isFullDay}
+                  onChange={() => setHolidayForm((current) => ({ ...current, isFullDay: !current.isFullDay }))}
+                />
               </div>
             </div>
 
@@ -370,8 +475,20 @@ function SettingsPage() {
 
           <SectionPanel className="p-5 sm:p-8 xl:col-span-2">
             <div className="border-b border-white/10 pb-5">
-              <h2 className="salon-heading">Salon Holidays & Closures</h2>
-              <p className="salon-subtext mt-2">Block Poya days, Christmas, and owner-directed closures from the booking calendar.</p>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h2 className="salon-heading">Salon Holidays & Closures</h2>
+                  <p className="salon-subtext mt-2">Block Poya days, Christmas, and owner-directed closures from the booking calendar.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSyncPublicHolidays}
+                  disabled={isHolidaySyncing}
+                  className="inline-flex h-11 items-center justify-center rounded-full border border-white/10 px-4 text-sm font-semibold text-zinc-300 transition hover:border-[#d4af37]/40 hover:text-[#d4af37] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isHolidaySyncing ? 'Syncing...' : 'Sync Public Holidays'}
+                </button>
+              </div>
             </div>
 
             <form onSubmit={handleHolidaySubmit} className="mt-7 grid items-end gap-5 lg:grid-cols-[minmax(180px,0.6fr)_minmax(220px,1fr)_auto]">
@@ -400,11 +517,43 @@ function SettingsPage() {
 
               <button
                 type="submit"
-                disabled={isHolidaySaving}
-                className="inline-flex h-[52px] items-center justify-center rounded-full border border-[#d4af37]/40 px-5 text-sm font-semibold text-[#d4af37] transition hover:bg-[#d4af37]/10 disabled:cursor-not-allowed disabled:opacity-60 lg:self-end"
+                disabled={isHolidaySaving || !isHolidayFormReady}
+                className="inline-flex h-[52px] w-full items-center justify-center rounded-full border border-[#d4af37]/40 px-5 text-sm font-semibold text-[#d4af37] transition hover:bg-[#d4af37]/10 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-zinc-600 sm:w-auto lg:self-end"
               >
                 {isHolidaySaving ? 'Saving...' : editingHolidayId ? 'Update Closure' : 'Add Closure'}
               </button>
+
+              {!holidayForm.isFullDay && (
+                <div className="overflow-hidden rounded-xl border border-sky-400/15 bg-sky-400/[0.03] p-4 transition-all duration-300 lg:col-span-2">
+                  <p className="text-sm font-semibold text-white">Partial Closure Hours</p>
+                  <p className="mt-1 text-xs leading-5 text-gray-400">
+                    These hours will be blocked while time slots outside this range stay available.
+                  </p>
+                  <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-medium text-gray-300">Start Time</span>
+                      <input
+                        type="time"
+                        name="start"
+                        value={holidayForm.hours.start}
+                        onChange={handleHolidayTimeChange}
+                        className="salon-field [color-scheme:dark]"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-medium text-gray-300">End Time</span>
+                      <input
+                        type="time"
+                        name="end"
+                        value={holidayForm.hours.end}
+                        onChange={handleHolidayTimeChange}
+                        className="salon-field [color-scheme:dark]"
+                      />
+                    </label>
+                  </div>
+                </div>
+              )}
+
             </form>
 
             {editingHolidayId && (
@@ -429,7 +578,15 @@ function SettingsPage() {
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                           <div>
                             <p className="text-sm font-semibold text-white">{holiday.name}</p>
-                            <p className="mt-1 text-xs text-gray-500">{holiday.date}</p>
+                            <p className="mt-1 text-xs text-gray-500">
+                              {holiday.date}
+                              {holiday.isFullDay === false
+                                ? ` - Partial closure ${holiday.hours?.start || ''}-${holiday.hours?.end || ''}`
+                                : ' - Full day'}
+                            </p>
+                            {holiday.isSystemGenerated && (
+                              <p className="mt-1 text-[11px] uppercase tracking-wider text-[#d4af37]/70">Synced public holiday</p>
+                            )}
                           </div>
                           <div className="flex shrink-0 items-center gap-2">
                             <button
@@ -441,7 +598,7 @@ function SettingsPage() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => handleDeleteHoliday(holiday._id)}
+                              onClick={() => setHolidayDeleteTarget(holiday)}
                               className="rounded-md px-3 py-1.5 text-sm font-semibold text-red-400/75 transition-colors duration-200 hover:bg-red-500/10 hover:text-red-300"
                             >
                               Delete
@@ -492,6 +649,37 @@ function SettingsPage() {
                 className="rounded-full bg-red-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-red-400 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isHolidaySaving ? 'Closing...' : 'Confirm & Force Close'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {holidayDeleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-xl border border-zinc-800 bg-[#0c0c0e] p-6 shadow-2xl">
+            <h3 className="text-xl font-bold text-white">Re-open Salon?</h3>
+            <p className="mt-3 text-sm leading-6 text-zinc-400">
+              Are you sure you want to re-open the salon on this date? Clients will be able to book slots.
+            </p>
+            <div className="mt-5 rounded-lg border border-zinc-800 bg-zinc-950/70 p-4">
+              <p className="text-sm font-semibold text-white">{holidayDeleteTarget.name}</p>
+              <p className="mt-1 text-xs text-zinc-500">{holidayDeleteTarget.date}</p>
+            </div>
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setHolidayDeleteTarget(null)}
+                className="rounded-lg border border-zinc-700 px-4 py-2.5 text-sm font-semibold text-zinc-300 transition hover:bg-zinc-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteHoliday}
+                className="rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700"
+              >
+                Re-open Date
               </button>
             </div>
           </div>
