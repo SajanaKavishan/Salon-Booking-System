@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
+import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { GlassCard, GoldButton, SectionPanel } from '../../components/admin/SystemUI';
 import { useSalonSettings } from '../../hooks/useSalonSettings';
@@ -53,6 +54,226 @@ const normalizeMinutes = (value, fallback = 15) => {
   const numericValue = Number(value);
   return Number.isFinite(numericValue) && numericValue >= 0 ? numericValue : fallback;
 };
+
+const MONTH_LABELS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December'
+];
+
+const WEEKDAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+
+const toDateKey = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+};
+
+const parseDateKey = (dateKey) => {
+  if (!dateKey) return null;
+
+  const [year, month, day] = dateKey.split('-').map(Number);
+
+  if (!year || !month || !day) return null;
+
+  return new Date(year, month - 1, day);
+};
+
+const formatDisplayDate = (dateKey) => {
+  const date = parseDateKey(dateKey);
+
+  if (!date) return 'Select Date...';
+
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
+};
+
+function DarkCalendarPicker({ value, onChange, holidays = [] }) {
+  const pickerRef = useRef(null);
+  const selectedDate = parseDateKey(value);
+  const [isOpen, setIsOpen] = useState(false);
+  const [openDirection, setOpenDirection] = useState('down');
+  const [viewDate, setViewDate] = useState(() => selectedDate || new Date());
+
+  const holidayDateKeys = useMemo(
+    () => new Set(
+      holidays
+        .map((holiday) => holiday.date)
+        .filter(Boolean)
+    ),
+    [holidays]
+  );
+
+  useEffect(() => {
+    if (selectedDate) {
+      setViewDate(selectedDate);
+    }
+  }, [value]);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    const updateOpenDirection = () => {
+      if (!pickerRef.current) return;
+
+      const triggerRect = pickerRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - triggerRect.bottom;
+      const spaceAbove = triggerRect.top;
+
+      setOpenDirection(spaceBelow < 360 && spaceAbove > spaceBelow ? 'up' : 'down');
+    };
+
+    const handleClickOutside = (event) => {
+      if (pickerRef.current && !pickerRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+
+    updateOpenDirection();
+    document.addEventListener('mousedown', handleClickOutside);
+    window.addEventListener('resize', updateOpenDirection);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('resize', updateOpenDirection);
+    };
+  }, [isOpen]);
+
+  const calendarDays = useMemo(() => {
+    const year = viewDate.getFullYear();
+    const month = viewDate.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const gridStart = new Date(year, month, 1 - firstDay.getDay());
+
+    return Array.from({ length: 42 }, (_, index) => {
+      const date = new Date(gridStart);
+      date.setDate(gridStart.getDate() + index);
+
+      return date;
+    });
+  }, [viewDate]);
+
+  const moveMonth = (offset) => {
+    setViewDate((current) => new Date(current.getFullYear(), current.getMonth() + offset, 1));
+  };
+
+  const handleSelectDate = (date) => {
+    onChange(toDateKey(date));
+    setIsOpen(false);
+  };
+
+  const handleToggleCalendar = () => {
+    if (!pickerRef.current) {
+      setIsOpen((current) => !current);
+      return;
+    }
+
+    const triggerRect = pickerRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - triggerRect.bottom;
+    const spaceAbove = triggerRect.top;
+
+    setOpenDirection(spaceBelow < 360 && spaceAbove > spaceBelow ? 'up' : 'down');
+    setIsOpen((current) => !current);
+  };
+
+  return (
+    <div ref={pickerRef} className="relative">
+      <button
+        type="button"
+        onClick={handleToggleCalendar}
+        className="flex w-full cursor-pointer items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-left text-zinc-300 transition hover:border-[#c5a880]/50 hover:text-white focus:outline-none focus:ring-2 focus:ring-[#c5a880]/30"
+        aria-expanded={isOpen}
+      >
+        <span className={value ? 'text-sm font-medium text-zinc-200' : 'text-sm text-zinc-500'}>
+          {formatDisplayDate(value)}
+        </span>
+        <CalendarDays className="h-4 w-4 text-[#c5a880]" />
+      </button>
+
+      {isOpen && (
+        <div className={`absolute left-0 z-50 w-[min(20rem,calc(100vw-3rem))] rounded-xl border border-zinc-800/80 bg-[#0c0c0e] p-4 shadow-2xl ${
+          openDirection === 'up' ? 'bottom-full mb-2' : 'mt-2'
+        }`}>
+          <div className="mb-4 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => moveMonth(-1)}
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-900 hover:text-[#c5a880]"
+              aria-label="Previous month"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <p className="text-sm font-semibold text-zinc-100">
+              {MONTH_LABELS[viewDate.getMonth()]} {viewDate.getFullYear()}
+            </p>
+            <button
+              type="button"
+              onClick={() => moveMonth(1)}
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-900 hover:text-[#c5a880]"
+              aria-label="Next month"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-7 gap-1 text-center">
+            {WEEKDAY_LABELS.map((weekday) => (
+              <div key={weekday} className="py-2 text-xs font-semibold text-zinc-500">
+                {weekday}
+              </div>
+            ))}
+
+            {calendarDays.map((date) => {
+              const dateKey = toDateKey(date);
+              const isCurrentMonth = date.getMonth() === viewDate.getMonth();
+              const isSelected = dateKey === value;
+              const isClosed = holidayDateKeys.has(dateKey);
+
+              return (
+                <button
+                  key={dateKey}
+                  type="button"
+                  onClick={() => handleSelectDate(date)}
+                  className={`relative flex h-9 items-center justify-center rounded-lg text-sm transition-all ${
+                    isSelected
+                      ? 'bg-[#c5a880] font-bold text-black'
+                      : isCurrentMonth
+                        ? 'text-zinc-200 hover:bg-[#c5a880]/20 hover:text-[#c5a880]'
+                        : 'text-zinc-700 hover:bg-zinc-900/70 hover:text-zinc-500'
+                  } ${isClosed && !isSelected ? 'bg-red-500/5 text-red-300/70 ring-1 ring-inset ring-red-500/15' : ''}`}
+                  aria-label={`${formatDisplayDate(dateKey)}${isClosed ? ' closed' : ''}`}
+                >
+                  {date.getDate()}
+                  {isClosed && (
+                    <span
+                      className={`absolute bottom-1 h-1 w-1 rounded-full ${
+                        isSelected ? 'bg-black/70' : 'bg-red-400/80'
+                      }`}
+                    />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function SettingsPage() {
   const { settings, setSettings, isLoading } = useSalonSettings();
@@ -494,12 +715,10 @@ function SettingsPage() {
             <form onSubmit={handleHolidaySubmit} className="mt-7 grid items-end gap-5 lg:grid-cols-[minmax(180px,0.6fr)_minmax(220px,1fr)_auto]">
               <label className="block">
                 <span className="mb-2 block text-sm font-medium text-gray-300">Closure Date</span>
-                <input
-                  type="date"
-                  name="date"
+                <DarkCalendarPicker
                   value={holidayForm.date}
-                  onChange={handleHolidayChange}
-                  className="salon-field [&::-webkit-calendar-picker-indicator]:opacity-50 [&::-webkit-calendar-picker-indicator]:invert"
+                  onChange={(date) => setHolidayForm((current) => ({ ...current, date }))}
+                  holidays={holidays}
                 />
               </label>
 
