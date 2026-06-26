@@ -1,4 +1,5 @@
 const Appointment = require('../models/appointmentModel');
+const LeaveRequest = require('../models/LeaveRequest');
 const Service = require('../models/Service');
 const Staff = require('../models/Staff');
 const User = require('../models/User');
@@ -38,35 +39,67 @@ const formatDate = (date) => {
 // @access  Private/Admin
 const getDashboardSummary = async (req, res) => {
   try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+
+    const todayKey = formatDate(today);
+    const todayAppointmentQuery = {
+      $or: [
+        { date: todayKey },
+        { bookingDate: { $gte: today, $lt: tomorrow } },
+      ],
+    };
+
     const [
-      totalAppointments,
-      pendingAppointments,
-      revenueResult,
+      todaysAppointments,
+      pendingBookings,
+      pendingLeaveRequests,
+      todaysRevenueResult,
       totalStaff,
+      approvedLeaveUserIds,
     ] = await Promise.all([
-      Appointment.countDocuments(),
+      Appointment.countDocuments(todayAppointmentQuery),
       Appointment.countDocuments({ status: { $in: ['pending', 'Pending'] } }),
+      LeaveRequest.countDocuments({ status: { $in: ['Pending', 'pending'] } }),
       Appointment.aggregate([
-        { $match: { status: { $in: ['completed', 'Completed'] } } },
+        {
+          $match: {
+            status: { $in: ['completed', 'Completed'] },
+            ...todayAppointmentQuery,
+          },
+        },
         {
           $group: {
             _id: null,
-            totalRevenue: { $sum: '$totalAmount' },
+            todaysRevenue: { $sum: '$totalAmount' },
           },
         },
       ]),
       Staff.countDocuments(),
+      LeaveRequest.find({
+        status: { $in: ['Approved', 'approved'] },
+        startDate: { $lt: tomorrow },
+        endDate: { $gte: today },
+      }).distinct('staffId'),
     ]);
 
-    const totalRevenue = revenueResult[0]?.totalRevenue ?? 0;
+    const staffOnLeave = approvedLeaveUserIds.length > 0
+      ? await Staff.countDocuments({ userId: { $in: approvedLeaveUserIds } })
+      : 0;
+    const pendingApprovals = pendingBookings + pendingLeaveRequests;
+    const todaysRevenue = todaysRevenueResult[0]?.todaysRevenue ?? 0;
+    const staffOnDuty = Math.max(totalStaff - staffOnLeave, 0);
 
     return res.status(200).json({
       success: true,
       data: {
-        totalAppointments,
-        pendingAppointments,
-        totalRevenue,
-        totalStaff,
+        todaysAppointments,
+        pendingApprovals,
+        todaysRevenue,
+        staffOnDuty,
       },
     });
   } catch (error) {

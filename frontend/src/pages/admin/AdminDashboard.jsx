@@ -10,7 +10,7 @@ import { createPortal } from "react-dom";
 
 import { useNavigate } from "react-router-dom";
 
-import { AlertTriangle, CalendarDays, Clock, DollarSign, Loader2, RotateCw, Users, XCircle } from "lucide-react";
+import { AlertCircle, AlertTriangle, CalendarDays, DollarSign, Loader2, RotateCw, Users, XCircle } from "lucide-react";
 
 import {
   ResponsiveContainer,
@@ -517,6 +517,31 @@ function AdminDashboard() {
 
   };
 
+  const pendingApprovals = summaryData?.pendingApprovals || 0;
+  const operationMetricCards = [
+    {
+      title: "Today's Appointments",
+      value: summaryData?.todaysAppointments || 0,
+      icon: <CalendarDays className="h-7 w-7 shrink-0 text-[#d4af37] sm:h-8 sm:w-8" />,
+    },
+    {
+      title: "Pending Approvals",
+      value: pendingApprovals,
+      icon: <AlertCircle className="h-7 w-7 shrink-0 text-[#d4af37] sm:h-8 sm:w-8" />,
+      valueClassName: pendingApprovals > 0 ? "text-[#d4af37]" : "text-white",
+    },
+    {
+      title: "Today's Revenue",
+      value: `Rs. ${(summaryData?.todaysRevenue || 0).toLocaleString()}`,
+      icon: <DollarSign className="h-7 w-7 shrink-0 text-[#d4af37] sm:h-8 sm:w-8" />,
+    },
+    {
+      title: "Staff On-Duty",
+      value: summaryData?.staffOnDuty || 0,
+      icon: <Users className="h-7 w-7 shrink-0 text-[#d4af37] sm:h-8 sm:w-8" />,
+    },
+  ];
+
 
 
   return (
@@ -525,7 +550,7 @@ function AdminDashboard() {
 
       <header className="mb-8">
 
-        <h1 className="font-serif text-3xl font-bold tracking-tight text-white sm:text-4xl">Admin Dashboard</h1>
+        <h1 className="font-serif text-2xl font-bold tracking-tight text-white sm:text-4xl">Admin Dashboard</h1>
 
         <p className="mt-3 text-sm leading-6 text-gray-400 sm:text-base">
 
@@ -539,87 +564,23 @@ function AdminDashboard() {
 
       <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
 
-        <GlassCard className="flex items-center justify-between gap-4 p-5 sm:p-6">
-
-          <div>
-
-            <p className="text-sm font-medium text-gray-400">Total Appointments</p>
-
-            <p className="text-2xl font-bold text-white sm:text-3xl">
-
-              {loading ? "..." : summaryData?.totalAppointments || 0}
-
-            </p>
-
-          </div>
-
-          <CalendarDays className="h-7 w-7 shrink-0 text-[#d4af37] sm:h-8 sm:w-8" />
-
-        </GlassCard>
-
-        <GlassCard className="flex items-center justify-between gap-4 p-5 sm:p-6">
-
-          <div>
-
-            <p className="text-sm font-medium text-gray-400">Pending Appointments</p>
-
-            <p className="text-2xl font-bold text-white sm:text-3xl">
-
-              {loading ? "..." : summaryData?.pendingAppointments || 0}
-
-            </p>
-
-          </div>
-
-          <Clock className="h-7 w-7 shrink-0 text-[#d4af37] sm:h-8 sm:w-8" />
-
-        </GlassCard>
-
-        <GlassCard className="flex items-center justify-between gap-4 p-5 sm:p-6">
-
-          <div>
-
-            <p className="text-sm font-medium text-gray-400">Total Revenue</p>
-
-            <p className="text-2xl font-bold text-white sm:text-3xl">
-
-              {loading
-
-                ? "..."
-
-                : `Rs. ${(summaryData?.totalRevenue || 0).toLocaleString()}`}
-
-            </p>
-
-          </div>
-
-          <DollarSign className="h-7 w-7 shrink-0 text-[#d4af37] sm:h-8 sm:w-8" />
-
-        </GlassCard>
-
-        <GlassCard className="flex items-center justify-between gap-4 p-5 sm:p-6">
-
-          <div>
-
-            <p className="text-sm font-medium text-gray-400">Total Staff</p>
-
-            <p className="text-2xl font-bold text-white sm:text-3xl">
-
-              {loading ? "..." : summaryData?.totalStaff || 0}
-
-            </p>
-
-          </div>
-
-          <Users className="h-7 w-7 shrink-0 text-[#d4af37] sm:h-8 sm:w-8" />
-
-        </GlassCard>
+        {operationMetricCards.map(({ title, value, icon, valueClassName = "text-white" }) => (
+          <GlassCard key={title} className="flex min-w-0 items-center justify-between gap-4 p-5 sm:p-6">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-gray-400">{title}</p>
+              <p className={`break-words text-2xl font-bold leading-tight sm:text-3xl ${valueClassName}`}>
+                {loading ? "..." : value}
+              </p>
+            </div>
+            {icon}
+          </GlassCard>
+        ))}
 
       </section>
 
       <div className="group lux-card backdrop-blur-xl bg-card/40 border border-white/[0.04] p-4 sm:p-6 rounded-2xl shadow-2xl mt-8">
         <div className="mb-6">
-          <h3 className="text-xl font-brand font-semibold text-white">Weekly Revenue Analytics</h3>
+          <h3 className="text-lg font-brand font-semibold text-white sm:text-xl">Weekly Revenue Analytics</h3>
           <p className="text-neutral-500 text-xs mt-1">Completed appointment revenue from Monday to Sunday</p>
         </div>
 
@@ -658,7 +619,7 @@ function AdminDashboard() {
             <h2 className="mt-2 text-xl font-semibold text-white">Today's Roster</h2>
             <p className="mt-1 text-sm text-gray-400">Monitor late arrivals and cascade each stylist's remaining schedule when needed.</p>
           </div>
-          <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-medium text-gray-400">
+          <div className="w-fit rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-medium text-gray-400">
             {todayDateKey}
           </div>
         </div>
@@ -679,7 +640,7 @@ function AdminDashboard() {
                 });
 
                 return (
-                  <div key={group.stylistId || group.stylistName} className="rounded-2xl border border-white/10 bg-[#0a0a0a]/55 p-4">
+                  <div key={group.stylistId || group.stylistName} className="min-w-0 rounded-2xl border border-white/10 bg-[#0a0a0a]/55 p-4">
                     <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div>
                         <h3 className="text-base font-semibold text-white">{group.stylistName}</h3>
@@ -690,7 +651,7 @@ function AdminDashboard() {
                         type="button"
                         onClick={() => setShiftTarget(group)}
                         disabled={!hasUpcoming}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 ${
+                        className={`flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-all sm:w-auto ${
                           hasUpcoming
                             ? "border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 cursor-pointer"
                             : "border border-zinc-800 text-zinc-600 bg-zinc-900/50 cursor-not-allowed"
@@ -719,7 +680,7 @@ function AdminDashboard() {
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <p className="truncate text-sm font-semibold text-white">{clientName}</p>
-                            <p className="mt-1 text-xs text-gray-500">{appointment.user?.phone || appointment.user?.email || "No contact details"}</p>
+                            <p className="mt-1 break-words text-xs text-gray-500">{appointment.user?.phone || appointment.user?.email || "No contact details"}</p>
                           </div>
                           <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getStatusBadgeClass(appointment.status)}`}>
                             {appointment.status}
@@ -745,7 +706,7 @@ function AdminDashboard() {
                           </div>
                           <div>
                             <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Service</p>
-                            <p className="mt-1 text-sm leading-6 text-gray-300">{services}</p>
+                            <p className="mt-1 break-words text-sm leading-6 text-gray-300">{services}</p>
                           </div>
                         </div>
                       </article>
@@ -800,7 +761,7 @@ function AdminDashboard() {
                                 <span className="font-semibold text-white">{clientName}</span>
                                 {isLate && (
                                   <span className="inline-flex items-center gap-1 bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] px-1.5 py-0.5 rounded-md ml-2 font-medium">
-                                    ⚠️ Late {appointment.lateMinutes || 0}m
+                                    Late {appointment.lateMinutes || 0}m
                                   </span>
                                 )}
                               </div>
@@ -843,7 +804,7 @@ function AdminDashboard() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-white">{appointment.user?.name || "Unknown customer"}</p>
-                      <p className="mt-1 text-xs text-gray-500">{appointment.stylist?.name || "Unassigned"}</p>
+                      <p className="mt-1 truncate text-xs text-gray-500">{appointment.stylist?.name || "Unassigned"}</p>
                     </div>
                     <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${getStatusBadgeClass(appointment.status)}`}>
                       {appointment.status}
@@ -962,7 +923,7 @@ function AdminDashboard() {
               onClick={() => navigate("/admin/staff?tab=leaves")}
               className="w-fit text-xs font-semibold uppercase tracking-[0.18em] text-[#d4af37] transition hover:text-[#f4d77d]"
             >
-              View All →
+              View All {"->"}
             </button>
 
           </div>
@@ -1139,7 +1100,7 @@ function AdminDashboard() {
         {reviewLeaveRequest && (
 
           <motion.div
-            className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-black/95 px-4 py-8 backdrop-blur-xl"
+            className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto bg-black/95 px-3 py-4 backdrop-blur-xl sm:items-center sm:px-4 sm:py-8"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -1154,7 +1115,7 @@ function AdminDashboard() {
               role="dialog"
               aria-modal="true"
               aria-labelledby="leave-review-title"
-              className="relative w-full max-w-2xl overflow-hidden rounded-2xl border border-[#d4af37]/25 bg-[#050505]/95 p-5 shadow-[0_30px_100px_rgba(0,0,0,0.75)] sm:p-7"
+              className="relative max-h-[calc(100vh-2rem)] w-full max-w-2xl overflow-y-auto rounded-2xl border border-[#d4af37]/25 bg-[#050505]/95 p-4 shadow-[0_30px_100px_rgba(0,0,0,0.75)] sm:p-7"
               initial={{ opacity: 0, y: 24, scale: 0.96 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 18, scale: 0.97 }}
@@ -1172,7 +1133,7 @@ function AdminDashboard() {
                     Leave Request Review
                   </p>
 
-                  <h3 id="leave-review-title" className="mt-3 font-serif text-3xl font-semibold text-white">
+                  <h3 id="leave-review-title" className="mt-3 break-words font-serif text-2xl font-semibold text-white sm:text-3xl">
                     {reviewLeaveRequest.staffId?.name || "Former staff member"}
                   </h3>
 
@@ -1218,7 +1179,7 @@ function AdminDashboard() {
                       type="button"
                       onClick={() => handleApproveLeave(reviewLeaveRequest)}
                       disabled={isLeaveActionLoading}
-                      className="px-5 py-2 shadow-[0_0_24px_rgba(212,175,55,0.2)]"
+                      className="w-full px-5 py-2 shadow-[0_0_24px_rgba(212,175,55,0.2)] sm:w-auto"
                     >
                       {isLeaveActionLoading && leaveActionType === "approve" && currentLeaveRequest?._id === reviewLeaveRequest._id ? "Checking..." : "Approve"}
                     </GoldButton>
@@ -1228,7 +1189,7 @@ function AdminDashboard() {
                       variant="outline"
                       onClick={() => handleRejectLeave(reviewLeaveRequest)}
                       disabled={isLeaveActionLoading}
-                      className="border-red-400/35 px-5 py-2 text-red-300 hover:bg-red-500/10 hover:text-red-200"
+                      className="w-full border-red-400/35 px-5 py-2 text-red-300 hover:bg-red-500/10 hover:text-red-200 sm:w-auto"
                     >
                       {isLeaveActionLoading && leaveActionType === "reject" && currentLeaveRequest?._id === reviewLeaveRequest._id ? "Rejecting..." : "Reject"}
                     </GoldButton>
@@ -1241,7 +1202,7 @@ function AdminDashboard() {
                     type="button"
                     variant="ghost"
                     onClick={() => setReviewLeaveRequest(null)}
-                    className="border border-white/10 px-5 py-2 text-white hover:bg-white/10"
+                    className="w-full border border-white/10 px-5 py-2 text-white hover:bg-white/10 sm:w-auto"
                   >
                     Close
                   </GoldButton>
@@ -1266,9 +1227,9 @@ function AdminDashboard() {
 
       {shiftTarget && (
 
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 px-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-black/80 px-3 py-4 backdrop-blur-sm sm:items-center sm:px-4 sm:py-8">
 
-          <div className="w-full max-w-sm rounded-xl border border-zinc-800 bg-zinc-950 p-6 shadow-2xl">
+          <div className="w-full max-w-sm rounded-xl border border-zinc-800 bg-zinc-950 p-5 shadow-2xl sm:p-6">
 
             <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10 text-amber-400">
 
@@ -1276,7 +1237,7 @@ function AdminDashboard() {
 
             </div>
 
-            <h4 className="mt-5 text-xl font-semibold text-white">Confirm Schedule Cascade Shift?</h4>
+            <h4 className="mt-5 text-lg font-semibold text-white sm:text-xl">Confirm Schedule Cascade Shift?</h4>
 
             <p className="mt-3 text-sm leading-6 text-zinc-400">
 
@@ -1292,7 +1253,7 @@ function AdminDashboard() {
 
             </div>
 
-            <div className="mt-7 flex items-center justify-end gap-3">
+            <div className="mt-7 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-end">
 
               <button
                 type="button"
@@ -1309,7 +1270,7 @@ function AdminDashboard() {
                 type="button"
                 onClick={handleConfirmShiftSlots}
                 disabled={isShiftLoading}
-                className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-xs font-semibold text-black shadow-lg shadow-amber-500/15 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-xs font-semibold text-black shadow-lg shadow-amber-500/15 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
               >
 
                 {isShiftLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
@@ -1333,17 +1294,17 @@ function AdminDashboard() {
       {isConflictModalOpen && (
 
         <motion.div
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 px-4 backdrop-blur-xl"
+          className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto bg-black/90 px-3 py-4 backdrop-blur-xl sm:items-center sm:px-4 sm:py-8"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
 
-          <GlassCard className="mx-4 w-full max-w-lg border-t-4 border-t-red-600 bg-[#111111] p-6">
+          <GlassCard className="w-full max-w-lg border-t-4 border-t-red-600 bg-[#111111] p-4 sm:p-6">
 
-            <h4 className="mb-3 text-xl font-semibold text-white flex items-center gap-2">
+            <h4 className="mb-3 flex items-start gap-2 text-lg font-semibold text-white sm:text-xl">
 
-              <XCircle className="text-red-400" size={24} /> Warning: Conflicts Detected
+              <XCircle className="shrink-0 text-red-400" size={24} /> Warning: Conflicts Detected
 
             </h4>
 
@@ -1374,7 +1335,7 @@ function AdminDashboard() {
 
             </ul>
 
-            <div className="flex items-center justify-end gap-3">
+            <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-end">
 
               <GoldButton
 
