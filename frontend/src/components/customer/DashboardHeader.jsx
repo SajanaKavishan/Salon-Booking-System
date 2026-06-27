@@ -92,9 +92,9 @@ function DashboardHeader({ firstName, nextAppointment, formatDate, onBook }) {
         }}
       ></div>
 
-      <div className="relative flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
-        <div className="max-w-2xl">
-          <h1 className="mt-4 font-serif text-3xl leading-tight text-white sm:text-4xl">
+      <div className="relative flex flex-col gap-6 sm:gap-8 lg:flex-row lg:items-end lg:justify-between">
+        <div className="min-w-0 max-w-2xl">
+          <h1 className="mt-2 break-words font-serif text-2xl leading-tight text-white sm:mt-4 sm:text-4xl">
             {greeting}, <span className="bg-gradient-to-r from-[#FFF1B8] via-[#D4AF37] to-[#B8872A] bg-clip-text text-transparent">{firstName}</span>
           </h1>
           <motion.p
@@ -106,11 +106,11 @@ function DashboardHeader({ firstName, nextAppointment, formatDate, onBook }) {
             {isAvailabilityLoading ? 'Checking today’s exclusive availability...' : availability.message}
           </motion.p>
 
-          <div className="mt-7 text-sm text-neutral-400">
+          <div className="mt-6 text-sm text-neutral-400 sm:mt-7">
             {nextAppointment ? (
               <div>
                 <p>Your next appointment is on</p>
-                <p className="mt-3 inline-flex flex-wrap items-center gap-2 font-semibold text-[#D4AF37]">
+                <p className="mt-3 inline-flex max-w-full flex-wrap items-center gap-2 font-semibold text-[#D4AF37]">
                   <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                     <path d="M7 3v3M17 3v3M4.5 9h15M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
@@ -128,7 +128,7 @@ function DashboardHeader({ firstName, nextAppointment, formatDate, onBook }) {
         <button
           type="button"
           onClick={onBook}
-          className="w-full rounded-lg bg-[#D4AF37] px-6 py-3 text-sm font-bold text-black shadow-lg shadow-[#D4AF37]/15 transition hover:bg-[#b8952e] sm:w-fit"
+          className="w-full rounded-lg bg-[#D4AF37] px-5 py-3 text-sm font-bold text-black shadow-lg shadow-[#D4AF37]/15 transition hover:bg-[#b8952e] sm:w-fit sm:px-6"
         >
           + Book New Appointment
         </button>

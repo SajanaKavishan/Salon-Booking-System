@@ -191,7 +191,7 @@ function BookingCalendarPicker({ value, onChange, holidays = [], minDate, weeken
       </button>
 
       {isOpen && (
-        <div className={`absolute left-0 z-50 w-[min(20rem,calc(100vw-3rem))] rounded-xl border border-zinc-800/80 bg-[#0c0c0e] p-4 shadow-2xl ${
+        <div className={`absolute left-1/2 z-50 w-[min(20rem,calc(100vw-2rem))] -translate-x-1/2 rounded-xl border border-zinc-800/80 bg-[#0c0c0e] p-3 shadow-2xl sm:left-0 sm:translate-x-0 sm:p-4 ${
           openDirection === 'up' ? 'bottom-full mb-2' : 'mt-2'
         }`}>
           <div className="mb-4 flex items-center justify-between">
@@ -1533,7 +1533,7 @@ function BookAppointment({ userProfile, customerData }) {
 
     return (
 
-      <div className="flex h-[calc(100dvh-104px)] flex-col overflow-hidden bg-[#070707] text-white md:h-[calc(100dvh-136px)] lg:h-[calc(100dvh-152px)]">
+      <div className="flex min-h-[calc(100dvh-104px)] flex-col bg-[#070707] text-white md:h-[calc(100dvh-136px)] md:min-h-0 md:overflow-hidden lg:h-[calc(100dvh-152px)]">
 
         {todayHoliday && (
           <div className="mx-auto mb-4 w-full max-w-7xl rounded-xl border border-[#D4AF37]/25 bg-[#D4AF37]/10 px-4 py-3 text-sm leading-6 text-[#ead28a]">
@@ -1545,7 +1545,7 @@ function BookAppointment({ userProfile, customerData }) {
 
         <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-1 flex-col">
 
-          <div className="flex h-full min-h-0 flex-col gap-4 sm:gap-6">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 sm:gap-6">
 
             <div className="rounded-2xl border border-white/5 bg-white/[0.02] px-4 py-3 backdrop-blur-sm sm:px-6 sm:py-4">
 
@@ -1613,7 +1613,7 @@ function BookAppointment({ userProfile, customerData }) {
 
             <div className="flex flex-col gap-2">
 
-              <h1 className="font-brand text-2xl text-white sm:text-4xl lg:text-5xl">
+              <h1 className="font-brand text-2xl leading-tight text-white sm:text-4xl lg:text-5xl">
 
                 Step {step}: {currentStepLabel}
 
@@ -1635,7 +1635,7 @@ function BookAppointment({ userProfile, customerData }) {
 
 
 
-              <div className={`min-h-0 flex-1 pr-1 ${step === 3 ? 'overflow-hidden' : 'overflow-y-auto'} ${step === 4 ? '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden' : ''}`}>
+              <div className={`min-h-0 flex-1 pr-0 sm:pr-1 ${step === 3 ? 'overflow-visible md:overflow-hidden' : 'overflow-visible md:overflow-y-auto'} ${step === 4 ? 'md:[scrollbar-width:none] md:[&::-webkit-scrollbar]:hidden' : ''}`}>
 
               {isOptionsLoading ? (
 
@@ -1661,7 +1661,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                     transition={{ duration: 0.32, ease: 'easeOut' }}
 
-                    className={step === 3 ? 'h-full min-h-0' : 'space-y-8'}
+                    className={step === 3 ? 'min-h-0 md:h-full' : 'space-y-8'}
 
                   >
 
@@ -1685,7 +1685,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                                 onClick={() => handleServiceToggle(serviceItem._id)}
 
-                                className={`group flex w-full items-center justify-between gap-6 rounded-[1.75rem] border px-5 py-4 text-left transition-all duration-300 sm:px-6 ${
+                                className={`group flex w-full flex-col items-start justify-between gap-4 rounded-[1.25rem] border px-4 py-4 text-left transition-all duration-300 sm:flex-row sm:items-center sm:gap-6 sm:rounded-[1.75rem] sm:px-6 ${
 
                                   isSelected
 
@@ -1709,7 +1709,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                                 </div>
 
-                                <div className="flex items-center gap-3 sm:gap-5">
+                                <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:gap-5">
 
                                   <span className="text-sm text-white/55 sm:text-base">Rs. {serviceItem.price || 0}</span>
 
@@ -2006,7 +2006,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                     {step === 3 && (
 
-                      <div className="flex h-full min-h-0 flex-col gap-6">
+                      <div className="flex min-h-0 flex-col gap-6 md:h-full">
 
                         <div className="shrink-0 grid gap-4 border-y border-white/8 py-5 md:grid-cols-[0.9fr_1.1fr] md:items-end">
 
@@ -2070,7 +2070,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                             <div className="min-h-0 flex-1 overflow-y-auto pr-1">
 
-                              <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                              <div className="grid gap-3 min-[420px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
 
                               {availableSlots.map(({ slot }) => (
 
@@ -2082,7 +2082,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                                     onClick={() => setTimeSlot(slot)}
 
-                                    className={`rounded-full border px-4 py-3 text-xs uppercase tracking-[0.22em] transition-all duration-300 ${
+                                    className={`rounded-full border px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.12em] transition-all duration-300 sm:px-4 sm:text-xs sm:tracking-[0.22em] ${
 
                                       timeSlot === slot
 
@@ -2138,11 +2138,11 @@ function BookAppointment({ userProfile, customerData }) {
 
                     {step === 4 && (
 
-                      <div className="grid grid-cols-1 items-start gap-4 overflow-hidden sm:gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.85fr)] lg:gap-6">
+                      <div className="grid grid-cols-1 items-start gap-4 sm:gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.85fr)] lg:gap-6">
 
                         <div className="order-1 min-w-0 rounded-[2rem] border border-white/8 bg-white/[0.02] p-5 sm:p-6 md:order-none lg:p-7">
 
-                          <h2 className="mt-3 font-brand text-3xl text-white">Final composition</h2>
+                          <h2 className="mt-3 font-brand text-2xl text-white sm:text-3xl">Final composition</h2>
 
 
 
@@ -2232,7 +2232,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                         <aside className="order-2 h-fit min-w-0 self-start rounded-[2rem] border border-[#D4AF37]/20 bg-[linear-gradient(180deg,rgba(212,175,55,0.08),rgba(255,255,255,0.02))] p-5 shadow-[0_18px_45px_rgba(0,0,0,0.22)] sm:p-6 md:order-none lg:p-7">
 
-                          <p className="text-[0.65rem] uppercase tracking-[0.35em] text-[#D4AF37]">Appointment Summary</p>
+                          <p className="text-[0.65rem] uppercase tracking-[0.22em] text-[#D4AF37] sm:tracking-[0.35em]">Appointment Summary</p>
 
                           <div className="space-y-4 border-b border-white/8 pb-5">
 
@@ -2258,7 +2258,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                             <p className="text-xs uppercase tracking-[0.3em] text-white/35">Total Investment</p>
 
-                            <p className="mt-3 font-brand text-4xl text-white sm:text-5xl">Rs. {totalPrice}</p>
+                            <p className="mt-3 break-words font-brand text-3xl text-white sm:text-5xl">Rs. {totalPrice}</p>
 
                           </div>
 
@@ -2318,7 +2318,7 @@ function BookAppointment({ userProfile, customerData }) {
 
 
 
-            <div className="flex shrink-0 flex-wrap items-center justify-between gap-4 border-t border-white/8 pt-4 sm:pt-6">
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-white/8 pt-4 sm:gap-4 sm:pt-6">
 
               <motion.button
 
@@ -2330,7 +2330,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                 whileHover={{ scale: 1.02 }}
 
-                className="text-xs uppercase tracking-[0.3em] text-neutral-300 transition hover:text-white disabled:cursor-not-allowed disabled:text-white/20"
+                className="text-xs uppercase tracking-[0.18em] text-neutral-300 transition hover:text-white disabled:cursor-not-allowed disabled:text-white/20 sm:tracking-[0.3em]"
 
               >
 
@@ -2352,7 +2352,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                   whileTap={{ scale: 0.98 }}
 
-                  className="rounded-full bg-[#D4AF37] px-8 py-3 text-xs font-semibold uppercase tracking-[0.38em] text-black shadow-[0_18px_36px_rgba(212,175,55,0.18)] transition"
+                  className="min-w-[9rem] rounded-full bg-[#D4AF37] px-5 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-black shadow-[0_18px_36px_rgba(212,175,55,0.18)] transition sm:px-8 sm:tracking-[0.38em]"
 
                 >
 
@@ -2374,7 +2374,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                   whileTap={canConfirmBooking ? { scale: 0.98 } : undefined}
 
-                  className="rounded-full bg-[#D4AF37] px-8 py-3 text-xs font-semibold uppercase tracking-[0.38em] text-black shadow-[0_18px_36px_rgba(212,175,55,0.28),0_0_30px_rgba(212,175,55,0.16)] transition hover:bg-amber-300 hover:shadow-[0_20px_44px_rgba(212,175,55,0.32),0_0_42px_rgba(212,175,55,0.22)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-[#D4AF37] disabled:hover:shadow-[0_18px_36px_rgba(212,175,55,0.18)]"
+                  className="min-w-[12rem] rounded-full bg-[#D4AF37] px-5 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-black shadow-[0_18px_36px_rgba(212,175,55,0.28),0_0_30px_rgba(212,175,55,0.16)] transition hover:bg-amber-300 hover:shadow-[0_20px_44px_rgba(212,175,55,0.32),0_0_42px_rgba(212,175,55,0.22)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-[#D4AF37] disabled:hover:shadow-[0_18px_36px_rgba(212,175,55,0.18)] sm:px-8 sm:tracking-[0.38em]"
 
                 >
 
@@ -2394,7 +2394,7 @@ function BookAppointment({ userProfile, customerData }) {
 
         {isPhoneVerificationModalOpen && (
 
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 px-4 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/85 px-4 py-6 backdrop-blur-sm">
 
             <motion.div 
 
@@ -2436,7 +2436,7 @@ function BookAppointment({ userProfile, customerData }) {
 
 
 
-                  <div className="mt-7 flex gap-3">
+                  <div className="mt-7 flex flex-col gap-3 sm:flex-row">
 
                     <button
 
@@ -2446,7 +2446,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                       disabled={isPhoneVerificationLoading}
 
-                      className="flex-1 rounded-full border border-white/15 px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-white transition hover:border-white/30 hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-50"
+                      className="flex-1 rounded-full border border-white/15 px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-white transition hover:border-white/30 hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-50 sm:tracking-[0.3em]"
 
                     >
 
@@ -2462,7 +2462,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                       disabled={isPhoneVerificationLoading}
 
-                      className="flex-1 rounded-full bg-[#D4AF37] px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-black transition hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-60"
+                      className="flex-1 rounded-full bg-[#D4AF37] px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-black transition hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-60 sm:tracking-[0.3em]"
 
                     >
 
@@ -2506,7 +2506,7 @@ function BookAppointment({ userProfile, customerData }) {
 
 
 
-                  <div className="mt-8 flex gap-3">
+                  <div className="mt-8 flex flex-col gap-3 sm:flex-row">
 
                     <button
 
@@ -2522,7 +2522,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                       disabled={isPhoneVerificationLoading}
 
-                      className="flex-1 rounded-full border border-white/15 px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-white transition hover:border-white/30 hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-50"
+                      className="flex-1 rounded-full border border-white/15 px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-white transition hover:border-white/30 hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-50 sm:tracking-[0.3em]"
 
                     >
 
@@ -2538,7 +2538,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                       disabled={isPhoneVerificationLoading || !phoneVerificationInput.trim()}
 
-                      className="flex-1 rounded-full bg-[#D4AF37] px-4 py-3 text-xs font-semibold uppercase tracking-[0.3em] text-black transition hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-60"
+                      className="flex-1 rounded-full bg-[#D4AF37] px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-black transition hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-60 sm:tracking-[0.3em]"
 
                     >
 

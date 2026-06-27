@@ -95,9 +95,9 @@ function History() {
   };
 
   return (
-    <div className="mx-auto min-h-screen w-full max-w-7xl bg-[#070707] text-white">
+    <div className="mx-auto min-h-screen w-full max-w-7xl overflow-hidden bg-[#070707] text-white">
       <section className="min-w-0 space-y-8">
-        <div className="relative w-full overflow-hidden rounded-2xl border border-[#D4AF37]/20 bg-gradient-to-r from-[#0a0a0a] via-[#111111] to-[#1a170c] p-6 shadow-2xl shadow-black/30 sm:p-8">
+        <div className="relative w-full overflow-hidden rounded-2xl border border-[#D4AF37]/20 bg-gradient-to-r from-[#0a0a0a] via-[#111111] to-[#1a170c] p-5 shadow-2xl shadow-black/30 sm:p-8">
           <div
             className="pointer-events-none absolute inset-0 opacity-30"
             style={{
@@ -113,48 +113,48 @@ function History() {
           ></div>
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-[#0a0a0a]/95 via-45% to-[#0a0a0a]/42"></div>
 
-          <div className="relative flex flex-col gap-4">
-            <h1 className="text-2xl font-serif text-white sm:text-3xl">Your recent visits & outcomes</h1>
+          <div className="relative flex min-w-0 flex-col gap-4">
+            <h1 className="break-words font-serif text-2xl text-white sm:text-3xl">Your recent visits & outcomes</h1>
             <p className="text-sm text-white/60">
               Review completed services, track totals, and revisit your favorite sessions.
             </p>
           </div>
         </div>
 
-        <section className="grid grid-cols-1 gap-6 md:grid-cols-3">
-          <div className="bg-[#111111] border-neutral-850 rounded-xl p-5 flex items-center gap-5">
-            <div className="w-12 h-12 rounded-lg bg-[#D4AF37]/10 text-[#D4AF37] flex items-center justify-center">
+        <section className="grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-3">
+          <div className="flex min-w-0 items-center gap-4 rounded-xl border-neutral-850 bg-[#111111] p-4 sm:gap-5 sm:p-5">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[#D4AF37]/10 text-[#D4AF37] sm:h-12 sm:w-12">
               <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M9.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM21 20.5v-1.7a3.5 3.5 0 0 0-2.7-3.4M16 3.2a4 4 0 0 1 0 7.6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-400">Total visits</p>
               <p className="mt-2 text-2xl font-bold text-white">{isLoading ? '...' : historyAppointments.length}</p>
               <p className="mt-1 text-sm text-neutral-400">Your completed and closed sessions</p>
             </div>
           </div>
-          <div className="bg-[#111111] border-neutral-850 rounded-xl p-5 flex items-center gap-5">
-            <div className="w-12 h-12 rounded-lg bg-[#D4AF37]/10 text-[#D4AF37] flex items-center justify-center">
+          <div className="flex min-w-0 items-center gap-4 rounded-xl border-neutral-850 bg-[#111111] p-4 sm:gap-5 sm:p-5">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[#D4AF37]/10 text-[#D4AF37] sm:h-12 sm:w-12">
               <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M7 12l3 3 7-7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                 <path d="M12 3a9 9 0 1 0 0 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-400">Completed</p>
               <p className="mt-2 text-2xl font-bold text-white">{isLoading ? '...' : completedCount}</p>
               <p className="mt-1 text-sm text-neutral-400">Successful visits</p>
             </div>
           </div>
-          <div className="bg-[#111111] border-neutral-850 rounded-xl p-5 flex items-center gap-5">
-            <div className="w-12 h-12 rounded-lg bg-[#D4AF37]/10 text-[#D4AF37] flex items-center justify-center">
+          <div className="flex min-w-0 items-center gap-4 rounded-xl border-neutral-850 bg-[#111111] p-4 sm:gap-5 sm:p-5">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[#D4AF37]/10 text-[#D4AF37] sm:h-12 sm:w-12">
               <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M6 6l12 12M18 6l-12 12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                 <path d="M12 3a9 9 0 1 0 0 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-400">Cancelled</p>
               <p className="mt-2 text-2xl font-bold text-white">{isLoading ? '...' : cancelledCount}</p>
               <p className="mt-1 text-sm text-neutral-400">Closed without service</p>
@@ -162,10 +162,10 @@ function History() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-white/10 bg-[#111111] p-6 shadow-xl">
+        <section className="rounded-2xl border border-white/10 bg-[#111111] p-4 shadow-xl sm:p-6">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-lg font-serif text-white">Visit timeline</h2>
-            <span className="text-xs uppercase tracking-[0.3em] text-white/40">{filteredAppointments.length} entries</span>
+            <span className="text-xs uppercase tracking-[0.18em] text-white/40 sm:tracking-[0.3em]">{filteredAppointments.length} entries</span>
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -224,21 +224,21 @@ function History() {
               {filteredAppointments.map((appt) => (
                 <article
                   key={appt._id || appt.id}
-                  className="flex flex-col gap-4 rounded-xl border border-white/10 bg-[#0d1117] p-5 shadow-sm md:flex-row md:items-center md:justify-between"
+                  className="flex min-w-0 flex-col gap-4 rounded-xl border border-white/10 bg-[#0d1117] p-4 shadow-sm md:flex-row md:items-center md:justify-between md:p-5"
                 >
-                  <div>
-                    <h3 className="text-base font-semibold text-white">
+                  <div className="min-w-0">
+                    <h3 className="break-words text-base font-semibold text-white">
                       {formatServices(appt.services)}
                     </h3>
-                    <p className="mt-2 text-sm text-slate-400">
+                    <p className="mt-2 break-words text-sm text-slate-400">
                       {formatDate(appt.date)} &bull; {appt.startTime || 'Time pending'}
                       {appt.endTime ? ` - ${appt.endTime}` : ''}
                     </p>
-                    <p className="mt-1 text-xs text-slate-500">
+                    <p className="mt-1 break-words text-xs text-slate-500">
                       Stylist: {appt.stylist?.name || 'Stylist not available'}
                     </p>
                   </div>
-                  <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3 md:justify-end">
                     <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusClassName(appt.status)}`}>
                       {appt.status}
                     </span>

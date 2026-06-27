@@ -89,27 +89,27 @@ function ActiveBookingCard({
 
   return (
     <>
-      <article className="rounded-xl border border-white/10 border-l-[#d4af37] border-l-4 bg-[#0d1117] p-5 shadow-sm">
+      <article className="min-w-0 rounded-xl border border-white/10 border-l-4 border-l-[#d4af37] bg-[#0d1117] p-4 shadow-sm sm:p-5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <h3 className="text-lg font-bold text-white">{formatServices(appointment.services)}</h3>
-            <div className="mt-4 grid gap-3 text-sm text-slate-400 sm:grid-cols-3">
-              <span className="flex items-center gap-2">
+          <div className="min-w-0">
+            <h3 className="break-words text-base font-bold text-white sm:text-lg">{formatServices(appointment.services)}</h3>
+            <div className="mt-4 grid gap-3 text-sm text-slate-400 sm:grid-cols-2 xl:grid-cols-3">
+              <span className="flex min-w-0 items-center gap-2">
                 <UserRound className="h-4 w-4 text-slate-500" />
-                {getStylistDisplayName(appointment) || 'Any Available Artist'}
+                <span className="min-w-0 break-words">{getStylistDisplayName(appointment) || 'Any Available Artist'}</span>
               </span>
-              <span className="flex items-center gap-2">
+              <span className="flex min-w-0 items-center gap-2">
                 <CalendarDays className="h-4 w-4 text-slate-500" />
-                {formatDate(appointment.date || appointment.bookingDate)}
+                <span className="min-w-0 break-words">{formatDate(appointment.date || appointment.bookingDate)}</span>
               </span>
-              <span className="flex items-center gap-2">
+              <span className="flex min-w-0 items-center gap-2">
                 <Clock className="h-4 w-4 text-slate-500" />
-                {appointment.startTime || 'Time pending'}
+                <span className="min-w-0 break-words">{appointment.startTime || 'Time pending'}</span>
               </span>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 lg:justify-end">
             <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusClassName(appointment.status)}`}>
               {appointment.status}
             </span>
@@ -118,7 +118,7 @@ function ActiveBookingCard({
               <button
                 type="button"
                 onClick={() => setIsReportDelayOpen(true)}
-                className="border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 shadow-[0_10px_24px_rgba(245,158,11,0.08)]"
+                className="flex items-center gap-1.5 rounded-lg border border-amber-500/30 px-3 py-1.5 text-xs font-medium text-amber-400 shadow-[0_10px_24px_rgba(245,158,11,0.08)] transition-all hover:bg-amber-500/10"
               >
                 <Clock className="h-3.5 w-3.5" />
                 I'm Running Late

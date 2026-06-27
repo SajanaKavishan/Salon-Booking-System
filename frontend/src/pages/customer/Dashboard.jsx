@@ -289,7 +289,7 @@ function Dashboard() {
   }, [user]);
 
   return (
-    <div className="mx-auto min-h-screen w-full max-w-7xl bg-[#070707] text-white">
+    <div className="mx-auto min-h-screen w-full max-w-7xl overflow-hidden bg-[#070707] text-white">
       <section className="min-w-0">
         <DashboardHeader
           firstName={firstName}
@@ -298,38 +298,38 @@ function Dashboard() {
           onBook={() => navigate('/book')}
         />
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-          <div className="bg-[#111111] border-neutral-850 rounded-xl p-5 flex items-center gap-5">
-            <div className="w-12 h-12 rounded-lg bg-[#D4AF37]/10 text-[#D4AF37] flex items-center justify-center">
+        <div className="mb-10 grid grid-cols-1 gap-4 sm:gap-6 md:grid-cols-3">
+          <div className="flex min-w-0 items-center gap-4 rounded-xl border-neutral-850 bg-[#111111] p-4 sm:gap-5 sm:p-5">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[#D4AF37]/10 text-[#D4AF37] sm:h-12 sm:w-12">
               <DollarSign className="h-6 w-6" strokeWidth={1.8} />
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-400">Total Spend</p>
-              <p className="mt-2 text-2xl font-bold text-white">Rs. {isLoading ? '...' : totalSpend.toLocaleString()}</p>
+              <p className="mt-2 break-words text-xl font-bold text-white sm:text-2xl">Rs. {isLoading ? '...' : totalSpend.toLocaleString()}</p>
               <p className="mt-1 text-sm text-neutral-400">All appointment payments</p>
             </div>
           </div>
 
-          <div className="bg-[#111111] border-neutral-850 rounded-xl p-5 flex items-center gap-5">
-            <div className="w-12 h-12 rounded-lg bg-[#D4AF37]/10 text-[#D4AF37] flex items-center justify-center">
+          <div className="flex min-w-0 items-center gap-4 rounded-xl border-neutral-850 bg-[#111111] p-4 sm:gap-5 sm:p-5">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[#D4AF37]/10 text-[#D4AF37] sm:h-12 sm:w-12">
               <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M9.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM21 20.5v-1.7a3.5 3.5 0 0 0-2.7-3.4M16 3.2a4 4 0 0 1 0 7.6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-400">Total Visits</p>
               <p className="mt-2 text-2xl font-bold text-white">{isLoading ? '...' : completedAppointments.length}</p>
               <p className="mt-1 text-sm text-neutral-400">Completed visits</p>
             </div>
           </div>
 
-          <div className="bg-[#111111] border-neutral-850 rounded-xl p-5 flex items-center gap-5">
-            <div className="w-12 h-12 rounded-lg bg-[#D4AF37]/10 text-[#D4AF37] flex items-center justify-center">
+          <div className="flex min-w-0 items-center gap-4 rounded-xl border-neutral-850 bg-[#111111] p-4 sm:gap-5 sm:p-5">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[#D4AF37]/10 text-[#D4AF37] sm:h-12 sm:w-12">
               <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-400">Appointments</p>
               <p className="mt-2 text-2xl font-bold text-white">{isLoading ? '...' : totalAppointments}</p>
               <p className="mt-1 text-sm text-neutral-400">All time bookings</p>
@@ -378,10 +378,10 @@ function Dashboard() {
               pastAppointments.slice(0, 3).map((appointment) => (
                 <article
                   key={appointment._id || appointment.id}
-                  className="flex flex-col gap-4 rounded-xl border border-white/10 bg-[#0d1117] p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between"
+                  className="flex min-w-0 flex-col gap-4 rounded-xl border border-white/10 bg-[#0d1117] p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between sm:p-5"
                 >
-                  <div>
-                    <h3 className="text-lg font-semibold text-white">{formatServices(appointment.services)}</h3>
+                  <div className="min-w-0">
+                    <h3 className="break-words text-base font-semibold text-white sm:text-lg">{formatServices(appointment.services)}</h3>
                     <p className="mt-2 text-sm text-slate-400">
                       {formatDate(appointment.date)} &bull; {getStylistDisplayName(appointment)} &bull; <span className="font-medium">{appointment.status}</span>
                     </p>
@@ -389,7 +389,7 @@ function Dashboard() {
                   <button
                     type="button"
                     onClick={() => handleRebook(appointment)}
-                    className="w-fit rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-semibold text-white transition hover:border-[#d4af37]/40 hover:text-[#d4af37]"
+                    className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-semibold text-white transition hover:border-[#d4af37]/40 hover:text-[#d4af37] sm:w-fit"
                   >
                     Rebook
                   </button>
@@ -446,7 +446,7 @@ function Dashboard() {
                   type="button"
                   disabled={isCancelling}
                   onClick={() => setAppointmentToCancel(null)}
-                  className="rounded-full border border-white/15 px-5 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-white/70 transition hover:border-[#D4AF37]/45 hover:text-[#D4AF37] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-full border border-white/15 px-5 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-white/70 transition hover:border-[#D4AF37]/45 hover:text-[#D4AF37] disabled:cursor-not-allowed disabled:opacity-50 sm:tracking-[0.24em]"
                 >
                   No, Retain Booking
                 </button>
@@ -454,7 +454,7 @@ function Dashboard() {
                   type="button"
                   disabled={isCancelling}
                   onClick={handleConfirmCancel}
-                  className="rounded-full border border-red-400/30 bg-red-500/15 px-5 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-red-100 transition hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="rounded-full border border-red-400/30 bg-red-500/15 px-5 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-red-100 transition hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-60 sm:tracking-[0.24em]"
                 >
                   {isCancelling ? 'Cancelling...' : 'Yes, Cancel Session'}
                 </button>
