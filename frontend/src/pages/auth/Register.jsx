@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
@@ -20,6 +20,23 @@ const itemVariants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: 'easeOut' } }
 };
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const MIN_PASSWORD_LENGTH = 6;
+
+const getRoleRedirectPath = (role, isFirstLogin = false) => {
+  if (role === 'admin') return '/admin';
+  if (role === 'staff') return '/staff/dashboard';
+  if (isFirstLogin) return '/onboarding';
+  return '/dashboard';
+};
+
+const isValidPhoneNumber = (phoneValue) => {
+  const trimmedPhone = phoneValue.trim();
+  const digitsOnly = trimmedPhone.replace(/\D/g, '');
+
+  return /^[+()\-\s\d]+$/.test(trimmedPhone) && digitsOnly.length >= 7 && digitsOnly.length <= 15;
+};
+
 function Register() {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
@@ -33,6 +50,22 @@ function Register() {
 
   const { name, email, phone, password } = formData;
 
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const userRole = localStorage.getItem('userRole');
+
+    if (!token || !userRole) return;
+
+    let isFirstLogin = false;
+    try {
+      isFirstLogin = JSON.parse(localStorage.getItem('user') || '{}')?.isFirstLogin === true;
+    } catch {
+      isFirstLogin = false;
+    }
+
+    navigate(getRoleRedirectPath(userRole, isFirstLogin), { replace: true });
+  }, [navigate]);
+
   const onChange = (e) => {
     setFormData((prevState) => ({
       ...prevState,
@@ -42,10 +75,26 @@ function Register() {
 
   const onSubmit = async (e) => {
     e.preventDefault();
+
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      toast.error(`Password must be at least ${MIN_PASSWORD_LENGTH} characters long.`);
+      return;
+    }
+
+    if (!isValidPhoneNumber(phone)) {
+      toast.error('Please enter a valid phone number.');
+      return;
+    }
+
     setIsLoading(true);
 
     try {
-      const response = await axios.post('http://localhost:5000/api/users/register', formData);
+      const response = await axios.post(`${API_BASE_URL}/api/users/register`, {
+        name: name.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+        password,
+      });
 
       localStorage.setItem('token', response.data.token);
       localStorage.setItem('userRole', response.data.role || 'customer');
@@ -195,6 +244,8 @@ function Register() {
                 onChange={onChange}
                 placeholder="Enter your phone number"
                 required
+                pattern="[+()\-\s0-9]{7,20}"
+                title="Enter a valid phone number using 7 to 15 digits."
                 className="w-full rounded-md bg-slate-100 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/40 focus:border-[#D4AF37] transition-all duration-300"
               />
             </div>
@@ -209,6 +260,7 @@ function Register() {
                   onChange={onChange}
                   placeholder="Create a password"
                   required
+                  minLength={MIN_PASSWORD_LENGTH}
                   className="w-full rounded-md bg-slate-100 px-4 py-2.5 pr-12 text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/40 focus:border-[#D4AF37] transition-all duration-300"
                 />
                 <button

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
@@ -22,6 +22,15 @@ const itemVariants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: 'easeOut' } }
 };
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+const getRoleRedirectPath = (role, isFirstLogin = false) => {
+  if (role === 'admin') return '/admin';
+  if (role === 'staff') return '/staff/dashboard';
+  if (isFirstLogin) return '/onboarding';
+  return '/dashboard';
+};
+
 function Login() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -33,6 +42,22 @@ function Login() {
   const [isLoading, setIsLoading] = useState(false);
 
   const { email, password } = formData;
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const userRole = localStorage.getItem('userRole');
+
+    if (!token || !userRole) return;
+
+    let isFirstLogin = false;
+    try {
+      isFirstLogin = JSON.parse(localStorage.getItem('user') || '{}')?.isFirstLogin === true;
+    } catch {
+      isFirstLogin = false;
+    }
+
+    navigate(getRoleRedirectPath(userRole, isFirstLogin), { replace: true });
+  }, [navigate]);
 
   const getRedirectPath = (role, isFirstLogin = false) => {
     if (role === 'admin') return '/admin';
@@ -69,7 +94,7 @@ function Login() {
     setIsLoading(true);
 
     try {
-      const response = await axios.post('/api/auth/login', {
+      const response = await axios.post(`${API_BASE_URL}/api/users/login`, {
         email: email.trim(),
         password,
       });
@@ -105,7 +130,7 @@ function Login() {
     onSuccess: async (tokenResponse) => {
       try {
         setIsLoading(true);
-        const response = await axios.post('http://localhost:5000/api/users/google-login', {
+        const response = await axios.post(`${API_BASE_URL}/api/users/google-login`, {
           token: tokenResponse.access_token
         });
 
