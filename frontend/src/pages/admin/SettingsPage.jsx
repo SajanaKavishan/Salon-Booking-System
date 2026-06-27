@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
-import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { GlassCard, GoldButton, SectionPanel } from '../../components/admin/SystemUI';
-import { useSalonSettings } from '../../hooks/useSalonSettings';
+import { WEEKLY_OPENING_HOURS, defaultOpeningHours, useSalonSettings } from '../../hooks/useSalonSettings';
 
 function SettingsToggle({ label, description, checked, onChange }) {
   return (
@@ -54,6 +54,268 @@ const normalizeMinutes = (value, fallback = 15) => {
   const numericValue = Number(value);
   return Number.isFinite(numericValue) && numericValue >= 0 ? numericValue : fallback;
 };
+
+const normalizeOpeningHours = (openingHours = {}) => (
+  WEEKLY_OPENING_HOURS.reduce((normalized, day) => ({
+    ...normalized,
+    [day.key]: {
+      ...defaultOpeningHours[day.key],
+      ...(openingHours?.[day.key] || {})
+    }
+  }), {})
+);
+
+const createOpeningSlot = (overrides = {}) => ({
+  id: `slot-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+  activeDays: [],
+  openTime: '09:00',
+  closeTime: '22:00',
+  ...overrides
+});
+
+const getOpeningHoursSignature = (openingHours = {}) => (
+  JSON.stringify(
+    WEEKLY_OPENING_HOURS.map((day) => {
+      const dayHours = {
+        ...defaultOpeningHours[day.key],
+        ...(openingHours?.[day.key] || {})
+      };
+
+      return [day.key, dayHours.isOpen, dayHours.start, dayHours.end];
+    })
+  )
+);
+
+const getSettingsSignature = (settings = {}) => (
+  JSON.stringify({
+    salonName: settings.salonName || '',
+    supportEmail: settings.supportEmail || '',
+    contactNumber: settings.contactNumber || '',
+    address: settings.address || '',
+    bookingAlerts: Boolean(settings.bookingAlerts),
+    customerEmails: Boolean(settings.customerEmails),
+    weekendBookings: Boolean(settings.weekendBookings),
+    darkReceipts: Boolean(settings.darkReceipts),
+    defaultBufferTime: normalizeMinutes(settings.defaultBufferTime),
+    gracePeriod: normalizeMinutes(settings.gracePeriod),
+    openingHours: getOpeningHoursSignature(settings.openingHours)
+  })
+);
+
+const openingHoursToSlots = (openingHours = {}) => {
+  const normalizedHours = normalizeOpeningHours(openingHours);
+  const groups = [];
+
+  WEEKLY_OPENING_HOURS.forEach((day) => {
+    const dayHours = normalizedHours[day.key];
+
+    if (!dayHours.isOpen) return;
+
+    const existingGroup = groups.find((group) => (
+      group.openTime === dayHours.start && group.closeTime === dayHours.end
+    ));
+
+    if (existingGroup) {
+      existingGroup.activeDays.push(day.key);
+      return;
+    }
+
+    groups.push(createOpeningSlot({
+      activeDays: [day.key],
+      openTime: dayHours.start,
+      closeTime: dayHours.end
+    }));
+  });
+
+  return groups.length > 0 ? groups : [createOpeningSlot()];
+};
+
+const slotsToOpeningHours = (slots = []) => {
+  const openingHours = WEEKLY_OPENING_HOURS.reduce((hours, day) => ({
+    ...hours,
+    [day.key]: {
+      ...defaultOpeningHours[day.key],
+      isOpen: false
+    }
+  }), {});
+
+  slots.forEach((slot) => {
+    slot.activeDays.forEach((dayKey) => {
+      if (!openingHours[dayKey]) return;
+
+      openingHours[dayKey] = {
+        isOpen: true,
+        start: slot.openTime,
+        end: slot.closeTime
+      };
+    });
+  });
+
+  return openingHours;
+};
+
+function OpeningHoursScheduler({ value, onChange }) {
+  const [slots, setSlots] = useState(() => openingHoursToSlots(value));
+  const lastEmittedSignatureRef = useRef('');
+  const valueSignature = useMemo(() => getOpeningHoursSignature(value), [value]);
+
+  useEffect(() => {
+    if (valueSignature === lastEmittedSignatureRef.current) return;
+    setSlots(openingHoursToSlots(value));
+  }, [valueSignature, value]);
+
+  const emitSlots = (nextSlots) => {
+    setSlots(nextSlots);
+
+    const nextOpeningHours = slotsToOpeningHours(nextSlots);
+    lastEmittedSignatureRef.current = getOpeningHoursSignature(nextOpeningHours);
+    onChange(nextOpeningHours);
+  };
+
+  const handleDayToggle = (slotId, dayKey) => {
+    const slotHasDay = slots.find((slot) => slot.id === slotId)?.activeDays.includes(dayKey);
+    const nextSlots = slots.map((slot) => {
+      if (slot.id === slotId) {
+        return {
+          ...slot,
+          activeDays: slotHasDay
+            ? slot.activeDays.filter((activeDay) => activeDay !== dayKey)
+            : [...slot.activeDays.filter((activeDay) => activeDay !== dayKey), dayKey]
+        };
+      }
+
+      return {
+        ...slot,
+        activeDays: slot.activeDays.filter((activeDay) => activeDay !== dayKey)
+      };
+    });
+
+    emitSlots(nextSlots);
+  };
+
+  const handleTimeChange = (slotId, field, value) => {
+    emitSlots(slots.map((slot) => (
+      slot.id === slotId ? { ...slot, [field]: value } : slot
+    )));
+  };
+
+  const handleAddSlot = () => {
+    emitSlots([...slots, createOpeningSlot()]);
+  };
+
+  const handleRemoveSlot = (slotId) => {
+    if (slots.length === 1) return;
+    emitSlots(slots.filter((slot) => slot.id !== slotId));
+  };
+
+  const selectedDayCount = new Set(slots.flatMap((slot) => slot.activeDays)).size;
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-black/20 p-3 sm:p-5">
+      <div className="flex flex-col gap-2 border-b border-white/10 pb-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-white">Opening Hours</p>
+          <p className="mt-1 text-xs leading-5 text-gray-400">Create time slots, then assign each day once. Unselected days stay closed.</p>
+        </div>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#d4af37]/80">
+          {selectedDayCount}/7 Open Days
+        </p>
+      </div>
+
+      <div className="mt-4 grid gap-3">
+        {slots.map((slot, slotIndex) => {
+          const hasInvalidTime = slot.openTime >= slot.closeTime;
+
+          return (
+            <div
+              key={slot.id}
+              className={`rounded-xl border bg-zinc-950/60 p-3 transition sm:p-4 ${
+                hasInvalidTime ? 'border-red-400/40' : 'border-white/10 hover:border-[#d4af37]/35'
+              }`}
+            >
+              <div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-end xl:flex-nowrap">
+                <div className="w-full min-w-0 lg:min-w-[18rem] lg:flex-1">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
+                    Slot {slotIndex + 1}
+                  </p>
+                  <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
+                    {WEEKLY_OPENING_HOURS.map((day) => {
+                      const isActive = slot.activeDays.includes(day.key);
+
+                      return (
+                        <button
+                          key={day.key}
+                          type="button"
+                          onClick={() => handleDayToggle(slot.id, day.key)}
+                          className={`flex aspect-square min-h-8 items-center justify-center rounded-full border text-xs font-bold transition focus:outline-none focus:ring-2 focus:ring-[#d4af37]/40 sm:min-h-10 sm:text-sm ${
+                            isActive
+                              ? 'border-[#d4af37] bg-[#d4af37] text-black shadow-[0_0_22px_rgba(212,175,55,0.22)]'
+                              : 'border-white/10 bg-white/[0.03] text-zinc-400 hover:border-[#d4af37]/50 hover:text-[#d4af37]'
+                          }`}
+                          aria-pressed={isActive}
+                          aria-label={`${isActive ? 'Remove' : 'Assign'} ${day.label} for slot ${slotIndex + 1}`}
+                        >
+                          {day.shortLabel.charAt(0)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="grid w-full gap-3 sm:grid-cols-[minmax(9rem,1fr)_auto_minmax(9rem,1fr)] sm:items-end lg:w-[23rem] lg:flex-none">
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs font-medium text-gray-400">Start Time</span>
+                    <input
+                      type="time"
+                      value={slot.openTime}
+                      onChange={(event) => handleTimeChange(slot.id, 'openTime', event.target.value)}
+                      className="salon-field h-11 w-full min-w-0 pr-3 [color-scheme:dark] sm:min-w-[9rem]"
+                    />
+                  </label>
+
+                  <span className="hidden pb-3 text-sm font-semibold text-zinc-600 sm:block">to</span>
+
+                  <label className="block">
+                    <span className="mb-1.5 block text-xs font-medium text-gray-400">End Time</span>
+                    <input
+                      type="time"
+                      value={slot.closeTime}
+                      onChange={(event) => handleTimeChange(slot.id, 'closeTime', event.target.value)}
+                      className="salon-field h-11 w-full min-w-0 pr-3 [color-scheme:dark] sm:min-w-[9rem]"
+                    />
+                  </label>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleRemoveSlot(slot.id)}
+                  disabled={slotIndex === 0}
+                  className="flex h-11 w-full flex-none items-center justify-center rounded-lg border border-white/10 text-zinc-500 transition hover:border-red-400/35 hover:bg-red-500/10 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-white/10 disabled:hover:bg-transparent disabled:hover:text-zinc-500 sm:w-11 lg:ml-auto"
+                  aria-label={`Remove slot ${slotIndex + 1}`}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+
+              {hasInvalidTime && (
+                <p className="mt-3 text-xs font-medium text-red-300">End time must be after start time.</p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <button
+        type="button"
+        onClick={handleAddSlot}
+        className="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-[#d4af37] transition hover:text-[#f3d978]"
+      >
+        <Plus className="h-4 w-4" />
+        Add Specific Hours
+      </button>
+    </div>
+  );
+}
 
 const MONTH_LABELS = [
   'January',
@@ -278,6 +540,7 @@ function DarkCalendarPicker({ value, onChange, holidays = [] }) {
 function SettingsPage() {
   const { settings, setSettings, isLoading } = useSalonSettings();
   const [isSaving, setIsSaving] = useState(false);
+  const [savedSettingsSignature, setSavedSettingsSignature] = useState('');
   const [holidays, setHolidays] = useState([]);
   const [holidayForm, setHolidayForm] = useState({
     date: '',
@@ -313,6 +576,20 @@ function SettingsPage() {
     fetchHolidays();
   }, []);
 
+  const currentSettingsSignature = useMemo(
+    () => getSettingsSignature(settings),
+    [settings]
+  );
+  const hasSettingsChanges = Boolean(
+    savedSettingsSignature && currentSettingsSignature !== savedSettingsSignature
+  );
+
+  useEffect(() => {
+    if (!isLoading && !savedSettingsSignature) {
+      setSavedSettingsSignature(currentSettingsSignature);
+    }
+  }, [currentSettingsSignature, isLoading, savedSettingsSignature]);
+
   const toggleSetting = (key) => {
     setSettings((current) => ({
       ...current,
@@ -336,12 +613,33 @@ function SettingsPage() {
     }));
   };
 
+  const handleOpeningHoursChange = (openingHours) => {
+    setSettings((current) => ({
+      ...current,
+      openingHours
+    }));
+  };
+
   const handleSave = async () => {
+    if (!hasSettingsChanges) return;
+
     try {
+      const openingHours = normalizeOpeningHours(settings.openingHours);
+      const invalidDay = WEEKLY_OPENING_HOURS.find((day) => {
+        const dayHours = openingHours[day.key];
+        return dayHours.isOpen && (!dayHours.start || !dayHours.end || dayHours.start >= dayHours.end);
+      });
+
+      if (invalidDay) {
+        toast.error(`Please select valid opening hours for ${invalidDay.label}.`);
+        return;
+      }
+
       setIsSaving(true);
       const token = localStorage.getItem('token');
       const payload = {
         ...settings,
+        openingHours,
         defaultBufferTime: normalizeMinutes(settings.defaultBufferTime),
         gracePeriod: normalizeMinutes(settings.gracePeriod)
       };
@@ -352,7 +650,17 @@ function SettingsPage() {
         }
       });
 
-      setSettings((current) => ({ ...current, ...response.data }));
+      const nextSettings = {
+        ...settings,
+        ...response.data,
+        openingHours: normalizeOpeningHours(response.data?.openingHours)
+      };
+
+      setSettings((current) => ({
+        ...current,
+        ...nextSettings
+      }));
+      setSavedSettingsSignature(getSettingsSignature(nextSettings));
       toast.success('Settings updated successfully.');
     } catch (error) {
       console.error('Error saving settings:', error);
@@ -562,33 +870,32 @@ function SettingsPage() {
       )
     )
   );
-
   return (
-    <div className="mx-auto w-full max-w-7xl pb-24">
-      <header className="mb-8 flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+    <div className="mx-auto w-full max-w-7xl overflow-x-hidden px-1 pb-28 sm:px-0 sm:pb-24">
+      <header className="mb-6 flex flex-col gap-4 sm:mb-8 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <h1 className="mt-4 text-4xl font-serif font-bold tracking-tight text-white">
+          <h1 className="mt-2 text-3xl font-serif font-bold tracking-tight text-white sm:mt-4 sm:text-4xl">
             System <span className="text-[#d4af37]">Settings</span>
           </h1>
-          <p className="mt-3 max-w-2xl text-base leading-7 text-gray-400">
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-400 sm:mt-3 sm:text-base sm:leading-7">
             Manage the salon identity, client communications, and appointment timing rules from one focused workspace.
           </p>
         </div>
       </header>
 
       {isLoading ? (
-        <GlassCard className="p-8">
+        <GlassCard className="p-5 sm:p-8">
           <p className="text-sm text-gray-400">Loading settings...</p>
         </GlassCard>
       ) : (
-        <section className="grid gap-8 xl:grid-cols-[1.05fr_0.95fr]">
-          <SectionPanel className="p-5 sm:p-8">
+        <section className="grid gap-5 sm:gap-8 xl:grid-cols-[1.05fr_0.95fr]">
+          <SectionPanel className="p-4 sm:p-8">
             <div className="border-b border-white/10 pb-5">
               <h2 className="salon-heading">Brand Profile Info</h2>
               <p className="salon-subtext mt-2">Keep client-facing contact details accurate across bookings and notifications.</p>
             </div>
 
-            <div className="mt-7 grid gap-5">
+            <div className="mt-5 grid gap-4 sm:mt-7 sm:gap-5">
               <label className="block">
                 <span className="mb-2 block text-sm font-medium text-gray-300">Salon Name</span>
                 <input
@@ -611,7 +918,7 @@ function SettingsPage() {
                 />
               </label>
 
-              <div className="grid gap-5 md:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-2 md:gap-5">
                 <label className="block">
                   <span className="mb-2 block text-sm font-medium text-gray-300">Contact Number</span>
                   <input
@@ -634,10 +941,15 @@ function SettingsPage() {
                   />
                 </label>
               </div>
+
+              <OpeningHoursScheduler
+                value={settings.openingHours}
+                onChange={handleOpeningHoursChange}
+              />
             </div>
           </SectionPanel>
 
-          <SectionPanel className="p-5 sm:p-8">
+          <SectionPanel className="p-4 sm:p-8">
             <div className="border-b border-white/10 pb-5">
               <h2 className="salon-heading">Operations & Scheduling</h2>
               <p className="salon-subtext mt-2">Control communication rules and smart appointment timing without extra noise.</p>
@@ -694,7 +1006,7 @@ function SettingsPage() {
             </div>
           </SectionPanel>
 
-          <SectionPanel className="p-5 sm:p-8 xl:col-span-2">
+          <SectionPanel className="p-4 sm:p-8 xl:col-span-2">
             <div className="border-b border-white/10 pb-5">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
@@ -705,14 +1017,14 @@ function SettingsPage() {
                   type="button"
                   onClick={handleSyncPublicHolidays}
                   disabled={isHolidaySyncing}
-                  className="inline-flex h-11 items-center justify-center rounded-full border border-white/10 px-4 text-sm font-semibold text-zinc-300 transition hover:border-[#d4af37]/40 hover:text-[#d4af37] disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex h-11 w-full items-center justify-center rounded-full border border-white/10 px-4 text-sm font-semibold text-zinc-300 transition hover:border-[#d4af37]/40 hover:text-[#d4af37] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                 >
                   {isHolidaySyncing ? 'Syncing...' : 'Sync Public Holidays'}
                 </button>
               </div>
             </div>
 
-            <form onSubmit={handleHolidaySubmit} className="mt-7 grid items-end gap-5 lg:grid-cols-[minmax(180px,0.6fr)_minmax(220px,1fr)_auto]">
+            <form onSubmit={handleHolidaySubmit} className="mt-5 grid items-end gap-4 sm:mt-7 sm:gap-5 lg:grid-cols-[minmax(180px,0.6fr)_minmax(220px,1fr)_auto]">
               <label className="block">
                 <span className="mb-2 block text-sm font-medium text-gray-300">Closure Date</span>
                 <DarkCalendarPicker
@@ -737,18 +1049,18 @@ function SettingsPage() {
               <button
                 type="submit"
                 disabled={isHolidaySaving || !isHolidayFormReady}
-                className="inline-flex h-[52px] w-full items-center justify-center rounded-full border border-[#d4af37]/40 px-5 text-sm font-semibold text-[#d4af37] transition hover:bg-[#d4af37]/10 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-zinc-600 sm:w-auto lg:self-end"
+                className="inline-flex h-12 w-full items-center justify-center rounded-full border border-[#d4af37]/40 px-5 text-sm font-semibold text-[#d4af37] transition hover:bg-[#d4af37]/10 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-zinc-600 sm:h-[52px] sm:w-auto lg:self-end"
               >
                 {isHolidaySaving ? 'Saving...' : editingHolidayId ? 'Update Closure' : 'Add Closure'}
               </button>
 
               {!holidayForm.isFullDay && (
-                <div className="overflow-hidden rounded-xl border border-sky-400/15 bg-sky-400/[0.03] p-4 transition-all duration-300 lg:col-span-2">
+                <div className="overflow-hidden rounded-xl border border-sky-400/15 bg-sky-400/[0.03] p-3 transition-all duration-300 sm:p-4 lg:col-span-2">
                   <p className="text-sm font-semibold text-white">Partial Closure Hours</p>
                   <p className="mt-1 text-xs leading-5 text-gray-400">
                     These hours will be blocked while time slots outside this range stay available.
                   </p>
-                  <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                  <div className="mt-4 grid gap-4 sm:mt-5 sm:grid-cols-2">
                     <label className="block">
                       <span className="mb-2 block text-sm font-medium text-gray-300">Start Time</span>
                       <input
@@ -785,7 +1097,7 @@ function SettingsPage() {
               </button>
             )}
 
-            <div className="mt-7 rounded-xl border border-white/10 bg-black/20 p-4">
+            <div className="mt-6 rounded-xl border border-white/10 bg-black/20 p-3 sm:mt-7 sm:p-4">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#d4af37]">Active Closed Dates</p>
               <div className="mt-3">
                 {holidays.length === 0 ? (
@@ -793,7 +1105,7 @@ function SettingsPage() {
                 ) : (
                   <div className="grid gap-3 md:grid-cols-2">
                     {holidays.map((holiday) => (
-                      <div key={holiday._id || holiday.date} className="rounded-lg border border-white/10 bg-zinc-950/70 px-4 py-3">
+                      <div key={holiday._id || holiday.date} className="rounded-lg border border-white/10 bg-zinc-950/70 px-3 py-3 sm:px-4">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                           <div>
                             <p className="text-sm font-semibold text-white">{holiday.name}</p>
@@ -834,8 +1146,8 @@ function SettingsPage() {
         </section>
       )}
 
-      <div className="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-end border-t border-zinc-800/80 bg-[#0a0a0c]/90 px-6 py-4 backdrop-blur-md md:left-80">
-        <GoldButton type="button" onClick={handleSave} disabled={isSaving || isLoading} className="w-full px-6 py-3 text-base sm:w-fit">
+      <div className="fixed bottom-0 left-0 right-0 z-20 flex items-center justify-end border-t border-zinc-800/80 bg-[#0a0a0c]/90 px-4 py-3 backdrop-blur-md sm:px-6 sm:py-4 md:left-80 md:z-40">
+        <GoldButton type="button" onClick={handleSave} disabled={isSaving || isLoading || !hasSettingsChanges} className="w-full px-6 py-3 text-sm disabled:opacity-45 sm:w-fit sm:text-base">
           {isSaving ? 'Saving...' : 'Save Changes'}
         </GoldButton>
       </div>
