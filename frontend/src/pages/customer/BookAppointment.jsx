@@ -16,10 +16,6 @@ import { useSalonSettings } from '../../hooks/useSalonSettings';
 
 import { useAppointments } from '../../context/AppointmentsContext';
 
-
-
-const ANY_STYLIST = '__ANY_STYLIST__';
-
 const getLocalDateKey = () => {
   const now = new Date();
   const year = now.getFullYear();
@@ -382,54 +378,6 @@ function BookAppointment({ userProfile, customerData }) {
     };
   }, []);
 
-
-
-  // Helper to resolve stylist display name from hex ID or direct name
-
-  const resolveStylistName = (stylistValue) => {
-
-    if (!stylistValue) return 'Any Available Artist';
-
-    
-
-    // If it's a hex ID (24-char MongoDB ObjectId), look it up in stylistsList
-
-    if (typeof stylistValue === 'string' && /^[0-9a-fA-F]{24}$/.test(stylistValue)) {
-
-      const stylistObj = stylistsList.find((s) => s._id === stylistValue);
-
-      return stylistObj?.name || 'Any Available Artist';
-
-    }
-
-    
-
-    // If it's already a string name, return it
-
-    if (typeof stylistValue === 'string') {
-
-      return stylistValue.trim() || 'Any Available Artist';
-
-    }
-
-    
-
-    // If it's an object with a name, return the name
-
-    if (typeof stylistValue === 'object' && stylistValue?.name) {
-
-      return stylistValue.name;
-
-    }
-
-    
-
-    return 'Any Available Artist';
-
-  };
-
-
-
   const fallbackAvatar = (
 
     <svg viewBox="0 0 64 64" aria-hidden="true" className="h-9 w-9 text-[#D4AF37]">
@@ -643,12 +591,12 @@ function BookAppointment({ userProfile, customerData }) {
 
       const stylistPayload = location.state.stylistId || location.state.staffId || location.state.stylist;
       const resolvedStylist = (() => {
-        if (!stylistPayload) return ANY_STYLIST;
+        if (!stylistPayload) return '';
 
         if (typeof stylistPayload === 'string') {
           return stylistsList.some((stylistItem) => stylistItem._id === stylistPayload)
             ? stylistPayload
-            : ANY_STYLIST;
+            : '';
         }
 
         const stylistId = stylistPayload._id || stylistPayload.id;
@@ -657,7 +605,7 @@ function BookAppointment({ userProfile, customerData }) {
         }
 
         const matchingStylist = stylistsList.find((stylistItem) => stylistItem.name === stylistPayload.name);
-        return matchingStylist?._id || ANY_STYLIST;
+        return matchingStylist?._id || '';
       })();
 
       setSelectedServices([...new Set(originalServices)]);
@@ -665,9 +613,13 @@ function BookAppointment({ userProfile, customerData }) {
       setStylistSearch('');
       setDate('');
       setTimeSlot('');
-      setHasUserSelectedStylist(true);
-      setStep(location.state.startStep || 3);
-      toast.info('Your affected service and artist are ready. Pick a new date and time.');
+      setHasUserSelectedStylist(Boolean(resolvedStylist));
+      setStep(resolvedStylist ? location.state.startStep || 3 : 2);
+      toast.info(
+        resolvedStylist
+          ? 'Your affected service and artist are ready. Pick a new date and time.'
+          : 'Your affected service is selected. Choose a stylist for the new booking.'
+      );
 
     }, [location.state, servicesList, stylistsList]);
 
@@ -723,11 +675,11 @@ function BookAppointment({ userProfile, customerData }) {
 
 
 
-      const stylistPayload = rebookAppointment.stylist;
+      const stylistPayload = rebookAppointment.stylist || rebookAppointment.staffId || rebookAppointment.stylistId;
 
       const resolvedStylist = (() => {
 
-        if (!stylistPayload) return ANY_STYLIST;
+        if (!stylistPayload) return '';
 
 
 
@@ -737,7 +689,7 @@ function BookAppointment({ userProfile, customerData }) {
 
             ? stylistPayload
 
-            : ANY_STYLIST;
+            : '';
 
         }
 
@@ -755,7 +707,7 @@ function BookAppointment({ userProfile, customerData }) {
 
         const matchingStylist = stylistsList.find((stylistItem) => stylistItem.name === stylistPayload.name);
 
-        return matchingStylist?._id || ANY_STYLIST;
+        return matchingStylist?._id || '';
 
       })();
 
@@ -771,13 +723,17 @@ function BookAppointment({ userProfile, customerData }) {
 
       setTimeSlot('');
 
-      setHasUserSelectedStylist(true);
+      setHasUserSelectedStylist(Boolean(resolvedStylist));
 
-      setStep(location.state?.startStep || 3);
+      setStep(resolvedStylist ? location.state?.startStep || 3 : 2);
 
       setHasHydratedRebook(true);
 
-      toast.info('Your previous service and artist choices are ready. Pick a new date and time.');
+      toast.info(
+        resolvedStylist
+          ? 'Your previous service and artist choices are ready. Pick a new date and time.'
+          : 'Your previous services are selected. Choose a stylist for the new booking.'
+      );
 
     }, [hasHydratedRebook, location.state, servicesList, stylistsList]);
 
@@ -913,11 +869,9 @@ function BookAppointment({ userProfile, customerData }) {
 
         }
 
-        const staffIds = stylist === ANY_STYLIST
-
-          ? stylistsList.map((stylistItem) => stylistItem._id).filter(Boolean)
-
-          : [stylist];
+        const staffIds = stylistsList.some((stylistItem) => stylistItem._id === stylist)
+          ? [stylist]
+          : [];
 
         if (staffIds.length === 0) {
 
@@ -1047,9 +1001,9 @@ function BookAppointment({ userProfile, customerData }) {
 
     const canMoveToStylist = selectedServices.length > 0;
 
-    const canMoveToTime = stylist !== '';
+    const canMoveToTime = Boolean(selectedStylist?._id);
 
-    const canMoveToReview = Boolean(date && timeSlot && stylist);
+    const canMoveToReview = Boolean(date && timeSlot && selectedStylist?._id);
 
     const canConfirmBooking = agreedToPolicy && !isSubmitting && canMoveToReview && selectedServices.length > 0;
 
@@ -1186,16 +1140,17 @@ function BookAppointment({ userProfile, customerData }) {
 
 
         const stylistRecord = stylistsList.find((item) => item._id === stylist);
+        const stylistId = stylistRecord?._id || '';
 
-        const stylistId = stylist === ANY_STYLIST ? '' : stylistRecord?._id || '';
+        if (!stylistId) {
+          toast.error('Please select a valid stylist before confirming.');
+          setIsSubmitting(false);
+          return;
+        }
 
         // Ensure stylist name is always human-readable (not hex ID)
 
-        const stylistName = stylist === ANY_STYLIST 
-
-          ? 'Any Available Artist' 
-
-          : (stylistRecord?.name || 'Any Available Artist');
+        const stylistName = stylistRecord?.name || 'Selected stylist';
 
 
 
@@ -1501,7 +1456,7 @@ function BookAppointment({ userProfile, customerData }) {
 
       if (step === 2 && !canMoveToTime) {
 
-        toast.error('Please select a stylist option first.');
+        toast.error('Please select a stylist first.');
 
         return;
 
@@ -1806,84 +1761,6 @@ function BookAppointment({ userProfile, customerData }) {
 
 
                         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-
-                          <button
-
-                            type="button"
-
-                            onClick={() => {
-
-                              setStylist(ANY_STYLIST);
-
-                              setHasUserSelectedStylist(true);
-
-                            }}
-
-                            className={`group flex items-center gap-4 rounded-[1.5rem] border border-dashed px-4 py-4 text-left transition-all duration-300 ${
-
-                              stylist === ANY_STYLIST
-
-                                ? 'border-[#D4AF37] bg-[#D4AF37]/10 shadow-[0_0_0_1px_rgba(212,175,55,0.16)]'
-
-                                : 'border-neutral-800 bg-white/[0.012] hover:border-[#D4AF37]/45 hover:bg-[#D4AF37]/5'
-
-                            }`}
-
-                          >
-
-                            <div
-
-                              className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-full border transition-all duration-300 ${
-
-                                stylist === ANY_STYLIST
-
-                                  ? 'border-[#D4AF37]/70 bg-[#D4AF37]/15 text-[#D4AF37]'
-
-                                  : 'border-white/10 bg-white/[0.02] text-[#D4AF37]/70 group-hover:border-[#D4AF37]/35 group-hover:text-[#D4AF37]'
-
-                              }`}
-
-                            >
-
-                              <svg viewBox="0 0 64 64" className="h-8 w-8" aria-hidden="true" fill="none">
-
-                                <circle cx="22" cy="25" r="6" stroke="currentColor" strokeWidth="2" />
-
-                                <circle cx="41" cy="22" r="4" stroke="currentColor" strokeWidth="2" />
-
-                                <circle cx="36" cy="42" r="5" stroke="currentColor" strokeWidth="2" />
-
-                                <path
-
-                                  d="M27 28l6 8M39 26l-2 10M25 41h6"
-
-                                  stroke="currentColor"
-
-                                  strokeLinecap="round"
-
-                                  strokeWidth="2"
-
-                                />
-
-                              </svg>
-
-                            </div>
-
-                            <div className="min-w-0 flex-1">
-
-                              <p className="font-brand text-base text-white">Any Available Artist</p>
-
-                              <p className="mt-2 font-serif text-sm leading-5 text-white/45">
-
-                                Optimal choice for expedited booking slots
-
-                              </p>
-
-                            </div>
-
-                          </button>
-
-
 
                           {filteredStylists.map((stylistItem) => {
 
@@ -2196,7 +2073,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                                 <p className="mt-3 text-sm text-white">
 
-                                  {stylist === ANY_STYLIST ? 'Any Available Stylist' : selectedStylist?.name || 'Not selected'}
+                                  {selectedStylist?.name || 'Not selected'}
 
                                 </p>
 

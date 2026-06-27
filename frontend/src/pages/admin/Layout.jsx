@@ -109,9 +109,15 @@ function Layout() {
   const shouldShowNotificationDot = unreadCount > acknowledgedUnreadCount && !isNotificationOpen;
 
   useEffect(() => {
-    if (unreadCount < acknowledgedUnreadCount) {
+    if (unreadCount >= acknowledgedUnreadCount) return undefined;
+
+    const timeoutId = window.setTimeout(() => {
       setAcknowledgedUnreadCount(unreadCount);
-    }
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
   }, [acknowledgedUnreadCount, unreadCount]);
 
   const handleNotificationBellClick = () => {
@@ -232,10 +238,10 @@ function Layout() {
     }
 
     if (path.startsWith('/booking') || path.startsWith('/book')) {
-      return 'Book Appointment';
+      return 'Booking Wizard';
     }
     if (path.startsWith('/history')) {
-      return 'Booking History';
+      return 'Booked History';
     }
     if (path.startsWith('/profile')) {
       return 'My Profile';
