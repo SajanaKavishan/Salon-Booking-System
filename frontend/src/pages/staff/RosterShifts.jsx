@@ -325,35 +325,35 @@ export default function RosterShifts() {
   }
 
   return (
-    <div className="w-full max-w-7xl mx-auto py-8">
-      <header className="mb-8">
-        <h1 className="text-4xl font-serif font-bold tracking-tight text-white">Your Roster & Leave</h1>
-        <p className="mt-3 text-base text-gray-400">
+    <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-0">
+      <header className="mb-6 sm:mb-8">
+        <h1 className="font-serif text-2xl font-bold tracking-tight text-white sm:text-4xl">Your Roster & Leave</h1>
+        <p className="mt-3 text-sm leading-6 text-gray-400 sm:text-base">
           Manage your weekly schedule and apply for leaves.
         </p>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start mt-6">
+      <div className="mt-6 grid grid-cols-1 items-start gap-5 lg:grid-cols-3 lg:gap-6">
         {/* LEFT COLUMN (2/3 width) */}
         <div className="lg:col-span-2 space-y-6">
           {/* 1. Leave Balance Card (full width of left column) */}
-          <GlassCard className="p-6 flex items-center justify-between">
+          <GlassCard className="flex items-center justify-between p-4 sm:p-6">
             <div>
               <p className="text-sm font-medium text-gray-400">Leave Balance</p>
-              <p className="text-3xl font-bold text-white">{metrics.leaveBalance} Requests</p>
+              <p className="text-2xl font-bold text-white sm:text-3xl">{metrics.leaveBalance} Requests</p>
             </div>
             <Palmtree className="h-8 w-8 text-[#d4af37]" />
           </GlassCard>
 
           {/* 2. Weekly Planner (full width of left column) */}
-          <GlassCard className="p-6 flex-1">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+          <GlassCard className="flex-1 p-4 sm:p-6">
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="flex items-center gap-2 text-lg font-semibold text-white sm:text-xl">
                 <Calendar className="w-5 h-5 text-[#d4af37]" /> Weekly Planner
               </h2>
-              <div className="flex gap-2">
-                <GoldButton onClick={() => setCurrentWeek(addDays(currentWeek, -7))} variant="outline" className="px-3 py-1 text-sm">Previous</GoldButton>
-                <GoldButton onClick={() => setCurrentWeek(addDays(currentWeek, 7))} variant="outline" className="px-3 py-1 text-sm">Next</GoldButton>
+              <div className="grid grid-cols-2 gap-2 sm:flex">
+                <GoldButton onClick={() => setCurrentWeek(addDays(currentWeek, -7))} variant="outline" className="px-3 py-2 text-sm">Previous</GoldButton>
+                <GoldButton onClick={() => setCurrentWeek(addDays(currentWeek, 7))} variant="outline" className="px-3 py-2 text-sm">Next</GoldButton>
               </div>
             </div>
             <div className="w-full overflow-x-auto scrollbar-none pb-2">
@@ -362,7 +362,7 @@ export default function RosterShifts() {
               </div>
               <div className="grid grid-cols-7 gap-2 min-w-[650px] lg:min-w-0">
                 {getWeekDays().map((date, index) => (
-                  <div key={index} className={`flex flex-col items-center justify-center p-3 rounded-lg border ${isSameDay(date, new Date())
+                  <div key={index} className={`flex flex-col items-center justify-center rounded-lg border p-3 ${isSameDay(date, new Date())
                       ? "border-[#d4af37] bg-[#d4af37]/10"
                       : getDayStatusClass(getDayStatus(date))
                     }`}>
@@ -385,15 +385,15 @@ export default function RosterShifts() {
           </GlassCard>
 
           {/* 3. Recent Leave Requests (full width of left column) */}
-          <GlassCard className="p-6">
-            <h2 className="text-lg font-semibold text-white mb-5 flex items-center gap-2">
+          <GlassCard className="p-4 sm:p-6">
+            <h2 className="mb-5 flex items-center gap-2 text-lg font-semibold text-white">
               <NotebookText className="w-5 h-5 text-[#d4af37]" /> Recent Leave Requests
             </h2>
             <div className="flex flex-col gap-3">
               {leaveHistory.length > 0 ? (
                 leaveHistory.map((leave) => (
-                  <div key={leave.id} className="flex flex-col gap-2 p-3.5 bg-[#07090d] border border-slate-800/80 rounded-xl hover:border-slate-700 transition-colors">
-                    <div className="flex items-center justify-between">
+                  <div key={leave.id} className="flex flex-col gap-2 rounded-xl border border-slate-800/80 bg-[#07090d] p-3.5 transition-colors hover:border-slate-700">
+                    <div className="flex items-start justify-between gap-3">
                       <span className="text-sm font-medium text-slate-200">{leave.type}</span>
                       {getLeaveStatusBadge(leave.status)}
                     </div>
@@ -411,8 +411,8 @@ export default function RosterShifts() {
         {/* RIGHT COLUMN (1/3 width) */}
         <div className="lg:col-span-1">
           {/* Apply Leave Form */}
-          <GlassCard className="p-6">
-            <h2 className="text-lg font-semibold text-white mb-5 flex items-center gap-2">
+          <GlassCard className="p-4 sm:p-6">
+            <h2 className="mb-5 flex items-center gap-2 text-lg font-semibold text-white">
               <Briefcase className="w-5 h-5 text-[#d4af37]" /> Apply for Leave
             </h2>
             <form onSubmit={handleLeaveSubmit} className="flex flex-col gap-4">
@@ -431,11 +431,11 @@ export default function RosterShifts() {
                 </select>
               </div>
               <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Select Leave Dates</label>
                   <span className="text-xs font-semibold text-[#d4af37]">Total: {selectedDates.length} Days</span>
                 </div>
-                <div className="rounded-xl border border-slate-800 bg-[#07090d] p-3">
+                <div className="rounded-xl border border-slate-800 bg-[#07090d] p-2.5 sm:p-3">
                   <div className="mb-3 flex items-center justify-between">
                     <button
                       type="button"
@@ -477,7 +477,7 @@ export default function RosterShifts() {
                           key={calendarDay.id}
                           onClick={() => toggleSelectedDate(calendarDay.date)}
                           disabled={isOffDay}
-                          className={`aspect-square rounded-lg text-xs font-semibold transition ${
+                          className={`aspect-square min-h-9 rounded-lg text-xs font-semibold transition ${
                             isOffDay
                               ? "opacity-40 cursor-not-allowed pointer-events-none text-slate-600 bg-slate-900/40"
                               : isSelected
@@ -495,7 +495,7 @@ export default function RosterShifts() {
                     })}
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex max-h-24 flex-wrap items-center gap-2 overflow-y-auto pr-1">
                   {sortedSelectedDates.length > 0 ? (
                     sortedSelectedDates.map((dateKey) => (
                       <span

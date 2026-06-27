@@ -295,12 +295,12 @@ function AppointmentsPage() {
     }
 
     return (
-      <div className="flex flex-wrap gap-2">
+      <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
         {allowedStatuses.includes('Approved') && (
           <GoldButton
             type="button"
             onClick={() => handleStatusChange(appointment._id, 'Approved')}
-            className="rounded-lg px-4 py-2 text-sm"
+            className="w-full rounded-lg px-4 py-2 text-sm sm:w-auto"
           >
             Accept
           </GoldButton>
@@ -310,7 +310,7 @@ function AppointmentsPage() {
             type="button"
             variant="ghost"
             onClick={() => handleStatusChange(appointment._id, 'Rejected')}
-            className="rounded-lg border border-red-900/50 bg-[#1a1a1a] px-4 py-2 text-sm text-red-400 hover:border-transparent hover:bg-red-900/80 hover:text-white"
+            className="w-full rounded-lg border border-red-900/50 bg-[#1a1a1a] px-4 py-2 text-sm text-red-400 hover:border-transparent hover:bg-red-900/80 hover:text-white sm:w-auto"
           >
             Reject
           </GoldButton>
@@ -319,7 +319,7 @@ function AppointmentsPage() {
           <GoldButton
             type="button"
             onClick={() => handleStatusChange(appointment._id, 'Completed')}
-            className="rounded-lg px-4 py-2 text-sm"
+            className="w-full rounded-lg px-4 py-2 text-sm sm:w-auto"
           >
             Complete
           </GoldButton>
@@ -329,7 +329,7 @@ function AppointmentsPage() {
             type="button"
             variant="ghost"
             onClick={() => handleStatusChange(appointment._id, 'No-Show')}
-            className="rounded-lg border border-white/10 bg-black/20 px-4 py-2 text-sm text-gray-300 hover:border-[#d4af37]/40 hover:text-[#d4af37]"
+            className="w-full rounded-lg border border-white/10 bg-black/20 px-4 py-2 text-sm text-gray-300 hover:border-[#d4af37]/40 hover:text-[#d4af37] sm:w-auto"
           >
             No-Show
           </GoldButton>
@@ -339,7 +339,7 @@ function AppointmentsPage() {
             type="button"
             variant="ghost"
             onClick={() => handleStatusChange(appointment._id, 'Pending')}
-            className="rounded-lg border border-white/10 bg-black/20 px-4 py-2 text-sm text-gray-300 hover:border-[#d4af37]/40 hover:text-[#d4af37]"
+            className="w-full rounded-lg border border-white/10 bg-black/20 px-4 py-2 text-sm text-gray-300 hover:border-[#d4af37]/40 hover:text-[#d4af37] sm:w-auto"
           >
             Mark Pending
           </GoldButton>
@@ -349,10 +349,10 @@ function AppointmentsPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-7xl">
+    <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-0">
       <header className="mb-6 flex flex-col gap-4 sm:mb-8 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="font-serif text-3xl font-bold tracking-tight text-white sm:text-4xl">Appointments</h1>
+          <h1 className="font-serif text-2xl font-bold tracking-tight text-white sm:text-4xl">Appointments</h1>
           <p className="mt-3 text-sm leading-6 text-gray-400 sm:text-base">
             Review bookings, refine the queue, and update customer appointment status.
           </p>
@@ -377,7 +377,7 @@ function AppointmentsPage() {
         onCreated={handleAppointmentCreated}
       />
 
-      <section className="rounded-2xl border border-white/10 bg-[#111111]/70 p-4 shadow-xl backdrop-blur-md sm:p-6">
+      <section className="rounded-2xl border border-white/10 bg-[#111111]/70 p-3 shadow-xl backdrop-blur-md sm:p-6">
         <div className="flex flex-col gap-5 border-b border-white/10 pb-5 sm:gap-6 sm:pb-6 xl:flex-row xl:items-start xl:justify-between">
           <div className="salon-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:flex-wrap sm:gap-3 sm:overflow-visible sm:px-0 sm:pb-0">
             {tabs.map((tab) => (
@@ -401,7 +401,7 @@ function AppointmentsPage() {
             ))}
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center xl:shrink-0">
             <div className="relative w-full sm:w-auto">
               <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">
                 <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -453,7 +453,7 @@ function AppointmentsPage() {
             <p className="mt-2 text-sm text-gray-400">Try a different status, date range, or search term to broaden the results.</p>
           </div>
         ) : (
-          <div className="salon-scrollbar max-h-[520px] overflow-y-auto pt-5 sm:pt-6">
+          <div className="salon-scrollbar max-h-none overflow-visible pt-5 sm:pt-6 md:max-h-[520px] md:overflow-y-auto">
             <div className="space-y-3 md:hidden">
               {filteredAppointments.map((appt) => {
                 const customerPhone = appt.user?.phone || appt.user?.phoneNumber;
@@ -462,11 +462,11 @@ function AppointmentsPage() {
                 return (
                   <div
                     key={appt._id}
-                    className="flex flex-col gap-3 rounded-xl border border-white/10 bg-[#111111]/70 p-4 backdrop-blur-md"
+                    className="flex flex-col gap-3 rounded-xl border border-white/10 bg-[#111111]/70 p-3.5 backdrop-blur-md"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="truncate text-base font-semibold text-white">{customerName}</p>
+                        <p className="break-words text-base font-semibold text-white">{customerName}</p>
                         <p className="mt-1 text-sm text-gray-400">{new Date(appt.date).toLocaleDateString()}</p>
                       </div>
                       <div className="shrink-0">
@@ -477,15 +477,15 @@ function AppointmentsPage() {
                     <div className="grid gap-2 rounded-xl border border-white/5 bg-black/15 p-3">
                       <p className="text-sm">
                         <span className="text-gray-400">Client:</span>{' '}
-                        <span className="text-white">{customerName}</span>
+                        <span className="break-words text-white">{customerName}</span>
                       </p>
                       <p className="text-sm">
                         <span className="text-gray-400">Phone:</span>{' '}
-                        <span className="text-white">{customerPhone || 'No phone provided'}</span>
+                        <span className="break-words text-white">{customerPhone || 'No phone provided'}</span>
                       </p>
                       <p className="text-sm">
                         <span className="text-gray-400">Service:</span>{' '}
-                        <span className="text-white">{getServicesLabel(appt)}</span>
+                        <span className="break-words text-white">{getServicesLabel(appt)}</span>
                       </p>
                       <p className="text-sm">
                         <span className="text-gray-400">Time:</span>{' '}

@@ -211,13 +211,13 @@ function StaffEarnings() {
   ];
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] space-y-6 sm:space-y-8">
+    <div className="mx-auto w-full max-w-[1600px] space-y-6 px-4 sm:space-y-8 sm:px-6 lg:px-0">
       <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-[0.24em] text-[#d4af37]">
             Staff Analytics
           </p>
-          <h1 className="font-serif text-3xl font-bold tracking-tight text-white sm:text-4xl">
+          <h1 className="font-serif text-2xl font-bold tracking-tight text-white sm:text-4xl">
             Earnings
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-neutral-400 sm:text-base">
@@ -225,12 +225,12 @@ function StaffEarnings() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div ref={yearRef} className="relative w-fit">
+        <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center">
+          <div ref={yearRef} className="relative w-full sm:w-fit">
             <button
               type="button"
               onClick={() => setIsYearOpen((isOpen) => !isOpen)}
-              className={`flex min-h-11 items-center gap-2.5 rounded-full border px-4 py-2 text-sm font-semibold transition ${
+              className={`flex min-h-11 w-full items-center justify-center gap-2.5 rounded-full border px-4 py-2 text-sm font-semibold transition sm:w-auto ${
                 isYearOpen
                   ? "border-[#d4af37]/40 bg-[#d4af37]/10 text-white"
                   : "border-white/10 bg-white/[0.04] text-white hover:border-[#d4af37]/30"
@@ -245,7 +245,7 @@ function StaffEarnings() {
 
             {isYearOpen && (
               <div
-                className="absolute left-0 top-full z-30 mt-2 max-h-52 w-32 overflow-y-auto rounded-xl border border-white/10 bg-[#111]/95 p-1.5 shadow-2xl backdrop-blur-xl"
+                className="absolute left-0 top-full z-30 mt-2 max-h-52 w-full overflow-y-auto rounded-xl border border-white/10 bg-[#111]/95 p-1.5 shadow-2xl backdrop-blur-xl sm:w-32"
                 role="listbox"
                 aria-label="Earnings year"
               >
@@ -272,11 +272,11 @@ function StaffEarnings() {
             )}
           </div>
 
-          <div ref={rangeRef} className="relative w-fit">
+          <div ref={rangeRef} className="relative w-full sm:w-fit">
             <button
               type="button"
               onClick={() => setIsRangeOpen((isOpen) => !isOpen)}
-              className="flex min-h-11 items-center gap-2.5 rounded-full border border-[#d4af37]/20 bg-[#d4af37]/10 px-4 py-2 text-sm font-semibold text-[#d4af37] transition hover:border-[#d4af37]/40 hover:bg-[#d4af37]/15"
+              className="flex min-h-11 w-full items-center justify-center gap-2.5 rounded-full border border-[#d4af37]/20 bg-[#d4af37]/10 px-4 py-2 text-sm font-semibold text-[#d4af37] transition hover:border-[#d4af37]/40 hover:bg-[#d4af37]/15 sm:w-auto"
               aria-haspopup="listbox"
               aria-expanded={isRangeOpen}
             >
@@ -287,7 +287,7 @@ function StaffEarnings() {
 
             {isRangeOpen && (
               <div
-                className="absolute right-0 top-full z-20 mt-2 w-44 overflow-hidden rounded-xl border border-white/10 bg-[#111]/95 p-1.5 shadow-2xl backdrop-blur-xl"
+                className="absolute right-0 top-full z-20 mt-2 w-full overflow-hidden rounded-xl border border-white/10 bg-[#111]/95 p-1.5 shadow-2xl backdrop-blur-xl sm:w-44"
                 role="listbox"
                 aria-label="Earnings range"
               >
@@ -316,22 +316,22 @@ function StaffEarnings() {
         </div>
       </header>
 
-      <section className="grid grid-cols-1 gap-5 lg:grid-cols-3" aria-label="Staff earnings summary">
+      <section className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-3" aria-label="Staff earnings summary">
         {statCards.map((card) => (
           <article
             key={card.label}
-            className="relative overflow-hidden rounded-2xl border border-white/[0.05] bg-white/[0.02] p-6 shadow-2xl backdrop-blur-xl"
+            className="relative overflow-hidden rounded-2xl border border-white/[0.05] bg-white/[0.02] p-4 shadow-2xl backdrop-blur-xl sm:p-6"
           >
             <div className="absolute -right-10 -top-10 h-28 w-28 rounded-full bg-[#d4af37]/[0.06] blur-2xl" />
             <div className="relative flex items-start justify-between gap-4">
               <div>
                 <p className="text-sm font-medium text-neutral-400">{card.label}</p>
-                <p className="mt-3 text-3xl font-bold tracking-tight text-white">
+                <p className="mt-3 text-2xl font-bold tracking-tight text-white sm:text-3xl">
                   {isLoading ? "..." : card.value}
                 </p>
                 <p className="mt-2 text-xs text-neutral-500">{card.subtitle}</p>
               </div>
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-[#d4af37]/20 bg-[#d4af37]/10 text-[#d4af37]">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-[#d4af37]/20 bg-[#d4af37]/10 text-[#d4af37] sm:h-12 sm:w-12">
                 {card.icon}
               </div>
             </div>
@@ -339,17 +339,17 @@ function StaffEarnings() {
         ))}
       </section>
 
-      <section className="relative overflow-hidden rounded-2xl border border-white/[0.05] bg-white/[0.02] p-5 shadow-2xl backdrop-blur-xl sm:p-6">
+      <section className="relative overflow-hidden rounded-2xl border border-white/[0.05] bg-white/[0.02] p-4 shadow-2xl backdrop-blur-xl sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-xl font-semibold text-white">Revenue Analytics Over Time</h2>
+            <h2 className="text-lg font-semibold text-white sm:text-xl">Revenue Analytics Over Time</h2>
             <p className="mt-1 text-sm text-neutral-500">
               Completed appointment revenue for {summary.rangeLabel.toLowerCase()}.
             </p>
           </div>
         </div>
 
-        <div className="mt-6 h-[350px] w-full min-w-0">
+        <div className="mt-5 h-[280px] w-full min-w-0 sm:mt-6 sm:h-[350px]">
           {isLoading ? (
             <div className="flex h-full items-center justify-center">
               <Loader2 className="h-10 w-10 animate-spin text-[#d4af37]" />
@@ -359,12 +359,12 @@ function StaffEarnings() {
               width="100%"
               height="100%"
               minWidth={1}
-              minHeight={350}
-              initialDimension={{ width: 1, height: 350 }}
+              minHeight={isNarrowViewport ? 280 : 350}
+              initialDimension={{ width: 1, height: isNarrowViewport ? 280 : 350 }}
             >
               <AreaChart
                 data={summary.revenueTrends}
-                margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+                margin={{ top: 10, right: isNarrowViewport ? 4 : 10, left: isNarrowViewport ? -8 : 0, bottom: 0 }}
               >
                 <defs>
                   <linearGradient id="staffRevenueGradient" x1="0" y1="0" x2="0" y2="1">
@@ -387,11 +387,11 @@ function StaffEarnings() {
                 />
                 <YAxis
                   width={revenueYAxisWidth}
-                  tickMargin={4}
+                  tickMargin={isNarrowViewport ? 2 : 4}
                   stroke="#737373"
                   tickLine={false}
                   axisLine={false}
-                  tick={{ fill: "#a3a3a3", fontSize: 12 }}
+                  tick={{ fill: "#a3a3a3", fontSize: isNarrowViewport ? 10 : 12 }}
                   tickFormatter={formatRevenueAxis}
                 />
                 <Tooltip
