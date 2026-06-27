@@ -1,14 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
 function AdminMessages() {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const getAuthConfig = () => ({
+    headers: {
+      Authorization: `Bearer ${localStorage.getItem('token')}`
+    }
+  });
+
   // Get all messages from the backend when the component mounts
   const fetchMessages = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/messages');
+      const response = await axios.get(`${API_BASE_URL}/api/messages`, getAuthConfig());
       setMessages(response.data);
     } catch (error) {
       console.error('Error fetching messages:', error);
@@ -25,7 +33,7 @@ function AdminMessages() {
   const handleDelete = async (id) => {
     if (window.confirm("Are you sure you want to delete this message?")) {
       try {
-        await axios.delete(`http://localhost:5000/api/messages/${id}`);
+        await axios.delete(`${API_BASE_URL}/api/messages/${id}`, getAuthConfig());
         // Remove the deleted message from the state to update the UI
         setMessages(messages.filter((msg) => msg._id !== id));
       } catch (error) {
@@ -54,7 +62,7 @@ function AdminMessages() {
                 className="absolute top-4 right-4 text-red-500 hover:text-red-700 transition"
                 title="Delete Message"
               >
-                ✕
+                X
               </button>
 
               <div className="mb-4 border-b border-white/5 pb-4">

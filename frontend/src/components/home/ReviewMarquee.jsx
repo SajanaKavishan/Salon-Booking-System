@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { Star } from 'lucide-react';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 const getClientName = (review) => review?.user?.name || 'Valued Client';
 
@@ -100,7 +100,7 @@ function ReviewMarquee({ reviews: providedReviews }) {
 
     const fetchPublicReviews = async () => {
       try {
-        const response = await axios.get(`${API_BASE_URL}/appointments/reviews/public`);
+        const response = await axios.get(`${API_BASE_URL}/api/appointments/reviews/public`);
         const publicReviews = Array.isArray(response.data) ? response.data : [];
 
         if (isMounted) {

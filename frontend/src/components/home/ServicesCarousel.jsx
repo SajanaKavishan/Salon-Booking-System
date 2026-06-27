@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion';
+import { ArrowRight } from 'lucide-react';
 import { FreeMode } from 'swiper/modules';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import 'swiper/css';
@@ -112,7 +113,7 @@ function ServicesCarousel({ services, loading, onBook }) {
                       className="flex items-center gap-1.5 whitespace-nowrap text-sm font-medium text-[#d4af37] transition-all duration-300 hover:opacity-80"
                       aria-label={`Book ${service.name}`}
                     >
-                      Book now <span aria-hidden="true">→</span>
+                      Book now <ArrowRight className="h-4 w-4" aria-hidden="true" />
                     </button>
                   </div>
                 </motion.article>

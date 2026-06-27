@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
 export const WEEKLY_OPENING_HOURS = [
   { key: 'monday', shortLabel: 'Mon', label: 'Monday' },
   { key: 'tuesday', shortLabel: 'Tue', label: 'Tuesday' },
@@ -43,7 +45,7 @@ export function useSalonSettings() {
 
     const fetchSettings = async () => {
       try {
-        const response = await axios.get('http://localhost:5000/api/settings');
+        const response = await axios.get(`${API_BASE_URL}/api/settings`);
         if (isMounted) {
           setSettings((current) => ({
             ...current,

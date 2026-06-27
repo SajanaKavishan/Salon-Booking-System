@@ -3,9 +3,64 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { motion } from 'framer-motion';
 import { ArrowRight, Clock, MapPin, Star } from 'lucide-react';
-import { useSalonSettings } from '../../hooks/useSalonSettings';
+import { WEEKLY_OPENING_HOURS, defaultOpeningHours, useSalonSettings } from '../../hooks/useSalonSettings';
 import ServicesCarousel from '../../components/home/ServicesCarousel';
 import ReviewMarquee from '../../components/home/ReviewMarquee';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+
+const formatTime = (timeValue) => {
+  if (!timeValue) return '';
+
+  const [rawHours, rawMinutes] = timeValue.split(':').map(Number);
+
+  if (Number.isNaN(rawHours) || Number.isNaN(rawMinutes)) return timeValue;
+
+  const period = rawHours >= 12 ? 'PM' : 'AM';
+  const displayHours = rawHours % 12 || 12;
+
+  return `${displayHours}:${String(rawMinutes).padStart(2, '0')} ${period}`;
+};
+
+const formatDayRange = (startIndex, endIndex) => {
+  const startLabel = WEEKLY_OPENING_HOURS[startIndex].shortLabel;
+  const endLabel = WEEKLY_OPENING_HOURS[endIndex].shortLabel;
+
+  return startIndex === endIndex ? startLabel : `${startLabel} - ${endLabel}`;
+};
+
+const formatOpeningHours = (openingHours = {}) => {
+  const normalizedHours = WEEKLY_OPENING_HOURS.map((day) => {
+    const dayHours = {
+      ...defaultOpeningHours[day.key],
+      ...(openingHours?.[day.key] || {})
+    };
+
+    return {
+      ...day,
+      displayHours: dayHours.isOpen ? `${formatTime(dayHours.start)} - ${formatTime(dayHours.end)}` : 'Closed'
+    };
+  });
+
+  const groups = [];
+
+  normalizedHours.forEach((day, index) => {
+    const previousGroup = groups[groups.length - 1];
+
+    if (previousGroup && previousGroup.displayHours === day.displayHours) {
+      previousGroup.endIndex = index;
+      return;
+    }
+
+    groups.push({
+      startIndex: index,
+      endIndex: index,
+      displayHours: day.displayHours
+    });
+  });
+
+  return groups.map((group) => `${formatDayRange(group.startIndex, group.endIndex)}: ${group.displayHours}`);
+};
 
 function Home() {
   const navigate = useNavigate();
@@ -14,15 +69,21 @@ function Home() {
   const [loading, setLoading] = useState(true);
   const userRole = localStorage.getItem('userRole');
   const { settings } = useSalonSettings();
+  const openingHoursText = useMemo(
+    () => formatOpeningHours(settings.openingHours),
+    [settings.openingHours]
+  );
 
   // Contact Form State
   const [formData, setFormData] = useState({ name: '', email: '', message: '' });
   const [submitStatus, setSubmitStatus] = useState('');
 
   useEffect(() => {
+    let isMounted = true;
+
     const fetchServices = async () => {
       try {
-        const response = await axios.get('http://localhost:5000/api/services');
+        const response = await axios.get(`${API_BASE_URL}/api/services`);
         const fetchedServices = Array.isArray(response.data?.data)
           ? response.data.data
           : Array.isArray(response.data)
@@ -31,16 +92,26 @@ function Home() {
               ? response.data.services
               : [];
 
-        setServices(fetchedServices);
+        if (isMounted) {
+          setServices(fetchedServices);
+        }
       } catch (error) {
         console.error('Error fetching services:', error);
-        setServices([]);
+        if (isMounted) {
+          setServices([]);
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
     fetchServices();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -48,7 +119,7 @@ function Home() {
 
     const fetchPublicReviews = async () => {
       try {
-        const response = await axios.get('http://localhost:5000/api/appointments/reviews/public');
+        const response = await axios.get(`${API_BASE_URL}/api/appointments/reviews/public`);
         const approvedReviews = Array.isArray(response.data) ? response.data : [];
 
         if (isMounted) {
@@ -140,7 +211,7 @@ function Home() {
     setSubmitStatus('Sending...');
 
     try {
-      await axios.post('http://localhost:5000/api/messages', formData);
+      await axios.post(`${API_BASE_URL}/api/messages`, formData);
       setSubmitStatus('Success! We will get back to you soon.');
       setFormData({ name: '', email: '', message: '' });
 
@@ -356,7 +427,7 @@ function Home() {
             {
               icon: Clock,
               label: 'Hours',
-              value: 'Mon - Sat: 9:00 AM - 10:00 PM',
+              value: openingHoursText,
               hideOnMobile: true
             },
             {
@@ -394,7 +465,9 @@ function Home() {
                     <div className="min-w-0">
                       <p className="text-neutral-500 text-xs uppercase tracking-wider">{item.label}</p>
                       <p className="mt-2 break-words font-sans text-sm font-semibold leading-snug text-white sm:text-base">
-                        {item.value}
+                        {Array.isArray(item.value)
+                          ? item.value.map((line) => <span key={line} className="block">{line}</span>)
+                          : item.value}
                       </p>
                     </div>
                   </div>
@@ -592,7 +665,11 @@ function Home() {
 
               <div>
                 <p className="text-white text-xs uppercase tracking-wider">Open Hours</p>
-                <p className="mt-2 text-white font-sans font-semibold">Mon - Sun: 9:00 AM - 10:00 PM</p>
+                <div className="mt-2 space-y-1 text-white font-sans font-semibold">
+                  {openingHoursText.map((line) => (
+                    <p key={line}>{line}</p>
+                  ))}
+                </div>
               </div>
             </div>
           </motion.div>
