@@ -16,6 +16,11 @@ import { useSalonSettings } from '../../hooks/useSalonSettings';
 
 import { useAppointments } from '../../context/AppointmentsContext';
 
+const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/$/, '');
+
+const SRI_LANKAN_MOBILE_REGEX = /^(?:\+94|0)[7][0-9]{8}$/;
+const TEN_DIGIT_PHONE_REGEX = /^[0-9]{10}$/;
+
 const getLocalDateKey = () => {
   const now = new Date();
   const year = now.getFullYear();
@@ -268,6 +273,8 @@ function BookingCalendarPicker({ value, onChange, holidays = [], minDate, weeken
 
 function BookAppointment({ userProfile, customerData }) {
 
+  const hasHydrated = useRef(false);
+
   const [step, setStep] = useState(1);
 
   const [hasHydratedRebook, setHasHydratedRebook] = useState(false);
@@ -362,7 +369,7 @@ function BookAppointment({ userProfile, customerData }) {
 
     const fetchHolidays = async () => {
       try {
-        const response = await axios.get('http://localhost:5000/api/holidays');
+        const response = await axios.get(`${API_BASE_URL}/api/holidays`);
         if (!isCancelled) {
           setHolidays(Array.isArray(response.data?.holidays) ? response.data.holidays : []);
         }
@@ -414,9 +421,9 @@ function BookAppointment({ userProfile, customerData }) {
 
           const [servicesRes, staffRes] = await Promise.all([
 
-            axios.get('http://localhost:5000/api/services'),
+            axios.get(`${API_BASE_URL}/api/services`),
 
-            axios.get('http://localhost:5000/api/staff')
+            axios.get(`${API_BASE_URL}/api/staff`)
 
           ]);
 
@@ -430,7 +437,7 @@ function BookAppointment({ userProfile, customerData }) {
 
           setServicesList(fetchedServices);
 
-          setStylistsList(staffRes.data);
+          setStylistsList(Array.isArray(staffRes.data) ? staffRes.data : staffRes.data?.staff || []);
 
         } catch (error) {
 
@@ -474,7 +481,7 @@ function BookAppointment({ userProfile, customerData }) {
 
         try {
 
-          const response = await axios.get('http://localhost:5000/api/users/me', {
+          const response = await axios.get(`${API_BASE_URL}/api/users/me`, {
 
             headers: { Authorization: `Bearer ${token}` }
 
@@ -561,7 +568,7 @@ function BookAppointment({ userProfile, customerData }) {
 
     useEffect(() => {
 
-      if (location.state?.emergencyReschedule) return;
+      if (hasHydrated.current || location.state?.emergencyReschedule) return;
 
       if (!location.state?.isReschedule) return;
 
@@ -573,6 +580,7 @@ function BookAppointment({ userProfile, customerData }) {
 
       setSelectedServices([...new Set(originalServices)]);
       setStep(2);
+      hasHydrated.current = true;
       toast.info('Your original services are selected. Choose a stylist for the new booking.');
 
     }, [location.state]);
@@ -581,7 +589,7 @@ function BookAppointment({ userProfile, customerData }) {
 
     useEffect(() => {
 
-      if (!location.state?.emergencyReschedule || servicesList.length === 0 || stylistsList.length === 0) return;
+      if (hasHydrated.current || !location.state?.emergencyReschedule || servicesList.length === 0 || stylistsList.length === 0) return;
 
       const originalServices = Array.isArray(location.state.originalServices)
         ? location.state.originalServices
@@ -615,6 +623,7 @@ function BookAppointment({ userProfile, customerData }) {
       setTimeSlot('');
       setHasUserSelectedStylist(Boolean(resolvedStylist));
       setStep(resolvedStylist ? location.state.startStep || 3 : 2);
+      hasHydrated.current = true;
       toast.info(
         resolvedStylist
           ? 'Your affected service and artist are ready. Pick a new date and time.'
@@ -901,7 +910,7 @@ function BookAppointment({ userProfile, customerData }) {
 
             staffIds.map((staffId) =>
 
-              axios.get('http://localhost:5000/api/appointments/availability', {
+              axios.get(`${API_BASE_URL}/api/appointments/availability`, {
 
                 params: {
 
@@ -1006,6 +1015,18 @@ function BookAppointment({ userProfile, customerData }) {
     const canMoveToReview = Boolean(date && timeSlot && selectedStylist?._id);
 
     const canConfirmBooking = agreedToPolicy && !isSubmitting && canMoveToReview && selectedServices.length > 0;
+
+    const currentPhone = String(user?.phone || user?.mobile || user?.phoneNumber || '').trim();
+    const hasConfirmedPhone = Boolean(currentPhone && currentPhone.toLowerCase() !== 'no number on file');
+    const phoneVerificationError = useMemo(() => {
+      const phoneValue = phoneVerificationInput;
+
+      if (!phoneValue.trim()) return '';
+      if (SRI_LANKAN_MOBILE_REGEX.test(phoneValue) || TEN_DIGIT_PHONE_REGEX.test(phoneValue)) return '';
+
+      return 'Enter a valid mobile number: 07XXXXXXXX, +947XXXXXXXX, or 10 digits only.';
+    }, [phoneVerificationInput]);
+    const isPhoneVerificationInputValid = Boolean(phoneVerificationInput.trim() && !phoneVerificationError);
 
 
 
@@ -1178,7 +1199,7 @@ function BookAppointment({ userProfile, customerData }) {
 
         const response = await axios.post(
 
-          'http://localhost:5000/api/appointments',
+          `${API_BASE_URL}/api/appointments`,
 
           bookingData,
 
@@ -1330,7 +1351,15 @@ function BookAppointment({ userProfile, customerData }) {
 
       // User confirmed their phone number - proceed with booking
 
-      const currentPhone = user?.phone || user?.mobile || user?.phoneNumber || '';
+      if (!hasConfirmedPhone) {
+
+        toast.error('Please update your mobile number before confirming.');
+
+        setPhoneVerificationStep('edit');
+
+        return;
+
+      }
 
       setIsPhoneVerificationModalOpen(false);
 
@@ -1366,6 +1395,14 @@ function BookAppointment({ userProfile, customerData }) {
 
       }
 
+      if (phoneVerificationError) {
+
+        toast.error(phoneVerificationError);
+
+        return;
+
+      }
+
 
 
       setIsPhoneVerificationLoading(true);
@@ -1382,7 +1419,7 @@ function BookAppointment({ userProfile, customerData }) {
 
         const response = await axios.put(
 
-          'http://localhost:5000/api/users/profile',
+          `${API_BASE_URL}/api/users/profile`,
 
           { phone: newPhone },
 
@@ -2305,7 +2342,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                     <p className="mt-3 text-lg font-semibold text-[#D4AF37]">
 
-                      {user?.phone || user?.mobile || user?.phoneNumber || 'No number on file'}
+                      {hasConfirmedPhone ? currentPhone : 'No number on file'}
 
                     </p>
 
@@ -2337,7 +2374,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                       onClick={handlePhoneVerificationYes}
 
-                      disabled={isPhoneVerificationLoading}
+                      disabled={isPhoneVerificationLoading || !hasConfirmedPhone}
 
                       className="flex-1 rounded-full bg-[#D4AF37] px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-black transition hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-60 sm:tracking-[0.3em]"
 
@@ -2381,6 +2418,16 @@ function BookAppointment({ userProfile, customerData }) {
 
                   />
 
+                  {phoneVerificationError && (
+
+                    <p className="mt-3 text-xs font-medium text-red-300">
+
+                      {phoneVerificationError}
+
+                    </p>
+
+                  )}
+
 
 
                   <div className="mt-8 flex flex-col gap-3 sm:flex-row">
@@ -2413,7 +2460,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                       onClick={handlePhoneVerificationSaveAndBook}
 
-                      disabled={isPhoneVerificationLoading || !phoneVerificationInput.trim()}
+                      disabled={isPhoneVerificationLoading || !isPhoneVerificationInputValid}
 
                       className="flex-1 rounded-full bg-[#D4AF37] px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-black transition hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-60 sm:tracking-[0.3em]"
 
