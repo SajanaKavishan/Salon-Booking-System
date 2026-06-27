@@ -171,13 +171,33 @@ const resolvePreferredStylistId = async (preferredStylist) => {
   throw error;
 };
 
+const isValidPhoneNumber = (phoneValue) => {
+  const trimmedPhone = String(phoneValue || '').trim();
+  const digitsOnly = trimmedPhone.replace(/\D/g, '');
+
+  return /^[+()\-\s\d]+$/.test(trimmedPhone) && digitsOnly.length >= 7 && digitsOnly.length <= 15;
+};
+
 const registerUser = async (req, res) => { // Register a new user
     try {
     const { name, email, password, phone, preferredStylist } = req.body;
     if (!name || !email || !password || !phone) { // Check if all required fields are provided
             return res.status(400).json({ message: 'Please enter all details' });
         }
-        const userExists = await User.findOne({ email });
+
+        const normalizedName = String(name).trim();
+        const normalizedEmail = String(email).trim().toLowerCase();
+        const normalizedPhone = String(phone).trim();
+
+        if (String(password).length < 6) {
+            return res.status(400).json({ message: 'Password must be at least 6 characters long.' });
+        }
+
+        if (!isValidPhoneNumber(normalizedPhone)) {
+            return res.status(400).json({ message: 'Please enter a valid phone number.' });
+        }
+
+        const userExists = await User.findOne({ email: normalizedEmail });
         if (userExists) { // If a user with the same email already exists, return an error
             return res.status(400).json({ message: 'User with this email already exists' });
         }
@@ -186,9 +206,9 @@ const registerUser = async (req, res) => { // Register a new user
         const hashedPassword = await bcrypt.hash(password, salt);
         const resolvedPreferredStylist = await resolvePreferredStylistId(preferredStylist);
         const user = await User.create({ // Create a new user in the database with the provided details and hashed password
-            name,
-            email,
-            phone,
+            name: normalizedName,
+            email: normalizedEmail,
+            phone: normalizedPhone,
             preferredStylist: resolvedPreferredStylist || null,
             profileImage: req.body.profileImage || '',
             password: hashedPassword,
