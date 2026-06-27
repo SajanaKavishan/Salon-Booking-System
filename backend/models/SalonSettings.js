@@ -1,5 +1,25 @@
 const mongoose = require('mongoose');
 
+const dayHoursSchema = new mongoose.Schema(
+  {
+    isOpen: {
+      type: Boolean,
+      default: true,
+    },
+    start: {
+      type: String,
+      default: '09:00',
+      trim: true,
+    },
+    end: {
+      type: String,
+      default: '22:00',
+      trim: true,
+    },
+  },
+  { _id: false }
+);
+
 const salonSettingsSchema = new mongoose.Schema(
   {
     salonName: {
@@ -22,6 +42,36 @@ const salonSettingsSchema = new mongoose.Schema(
       type: String,
       default: 'Colombo, Sri Lanka',
       trim: true,
+    },
+    openingHours: {
+      monday: {
+        type: dayHoursSchema,
+        default: () => ({}),
+      },
+      tuesday: {
+        type: dayHoursSchema,
+        default: () => ({}),
+      },
+      wednesday: {
+        type: dayHoursSchema,
+        default: () => ({}),
+      },
+      thursday: {
+        type: dayHoursSchema,
+        default: () => ({}),
+      },
+      friday: {
+        type: dayHoursSchema,
+        default: () => ({}),
+      },
+      saturday: {
+        type: dayHoursSchema,
+        default: () => ({}),
+      },
+      sunday: {
+        type: dayHoursSchema,
+        default: () => ({}),
+      },
     },
     bookingAlerts: {
       type: Boolean,
