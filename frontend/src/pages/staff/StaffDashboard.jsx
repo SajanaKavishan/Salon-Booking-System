@@ -102,6 +102,57 @@ const getTodayDateKey = () => {
   return `${year}-${month}-${day}`;
 };
 
+const getLocalDateKey = (dateValue) => {
+  const parsedDate = dateValue instanceof Date ? dateValue : new Date(dateValue);
+  if (Number.isNaN(parsedDate.getTime())) return '';
+
+  const year = parsedDate.getFullYear();
+  const month = String(parsedDate.getMonth() + 1).padStart(2, '0');
+  const day = String(parsedDate.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getDateKeyFromValue = (dateValue) => {
+  if (!dateValue) return '';
+  const rawDate = String(dateValue);
+  if (/^\d{4}-\d{2}-\d{2}/.test(rawDate)) return rawDate.slice(0, 10);
+  return getLocalDateKey(dateValue);
+};
+
+const parseDateKey = (dateKey) => {
+  if (!dateKey) return null;
+  const [year, month, day] = String(dateKey).slice(0, 10).split('-').map(Number);
+  if ([year, month, day].some(Number.isNaN)) return null;
+  return new Date(year, month - 1, day);
+};
+
+const formatDisplayDate = (dateKey) => {
+  const parsedDate = parseDateKey(dateKey);
+  if (!parsedDate) return 'your next working day';
+
+  return new Intl.DateTimeFormat('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(parsedDate);
+};
+
+const formatDisplayDay = (dateKey) => {
+  const parsedDate = parseDateKey(dateKey);
+  if (!parsedDate) return 'your next shift';
+
+  return new Intl.DateTimeFormat('en-US', {
+    weekday: 'long',
+  }).format(parsedDate);
+};
+
+const isTomorrowDateKey = (dateKey) => {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return getLocalDateKey(tomorrow) === dateKey;
+};
+
 const getCurrentWeekRange = () => {
   const now = new Date();
   const dayIndex = now.getDay();
@@ -148,6 +199,9 @@ const getServicesLabel = (appointment) => (
 
 function StaffDashboard() {
   const [_user, setUser] = useState(null);
+  const [staffProfile, setStaffProfile] = useState(null);
+  const [leaveRequests, setLeaveRequests] = useState([]);
+  const [staffMetrics, setStaffMetrics] = useState(null);
   const [appointments, setAppointments] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -167,13 +221,23 @@ function StaffDashboard() {
     try {
       if (showLoading) setIsLoading(true);
       setError(null);
-      const response = await axios.get('http://localhost:5000/api/appointments/staff', {
+      const config = {
         headers: {
           Authorization: `Bearer ${token}`
         }
-      });
-      console.log("Get data from backend:", response.data);
-      setAppointments(response.data);
+      };
+      const [appointmentsResponse, profileResponse, leavesResponse, metricsResponse] = await Promise.all([
+        axios.get('http://localhost:5000/api/appointments/staff', config),
+        axios.get('http://localhost:5000/api/users/me', config),
+        axios.get('http://localhost:5000/api/leaves', config),
+        axios.get('http://localhost:5000/api/roster/metrics', config),
+      ]);
+
+      console.log("Get data from backend:", appointmentsResponse.data);
+      setAppointments(appointmentsResponse.data);
+      setStaffProfile(profileResponse.data || null);
+      setLeaveRequests(Array.isArray(leavesResponse.data) ? leavesResponse.data : []);
+      setStaffMetrics(metricsResponse.data || null);
       setCurrentTime(Date.now());
     } catch (error) {
       console.error('Error fetching staff appointments:', {
@@ -221,6 +285,58 @@ function StaffDashboard() {
       .filter((appointment) => getAppointmentDateKey(appointment) === todayKey)
       .sort((first, second) => sortAppointmentsByPriority(first, second, currentTime));
   }, [appointments, currentTime]);
+
+  const localIsLeaveDay = useMemo(() => {
+    const today = new Date();
+    const todayKey = getTodayDateKey();
+    const todayDayName = new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(today);
+    const offDays = Array.isArray(staffProfile?.offDays)
+      ? staffProfile.offDays
+      : staffProfile?.offDays
+        ? [staffProfile.offDays]
+        : [];
+
+    const isRegisteredOffDay = offDays.some((day) => (
+      String(day).trim().toLowerCase() === todayDayName.toLowerCase()
+    ));
+
+    const isApprovedLeaveToday = leaveRequests.some((leave) => {
+      if (String(leave?.status || '').trim().toLowerCase() !== 'approved') return false;
+
+      const startKey = getDateKeyFromValue(leave.startDate);
+      const endKey = getDateKeyFromValue(leave.endDate || leave.startDate);
+      return startKey <= todayKey && todayKey <= endKey;
+    });
+
+    return isRegisteredOffDay || isApprovedLeaveToday;
+  }, [staffProfile, leaveRequests]);
+
+  const isLeaveDay = Boolean(staffMetrics?.isLeaveDay ?? localIsLeaveDay);
+  const nextActiveDate = staffMetrics?.nextActiveDate || null;
+  const nextShiftTime = staffMetrics?.nextShiftTime || 'your usual start time';
+  const nextActiveDateLabel = formatDisplayDate(nextActiveDate);
+  const nextActiveDayLabel = formatDisplayDay(nextActiveDate);
+  const totalConsecutiveDaysOff = Number(staffMetrics?.totalConsecutiveDaysOff || 1);
+  const leaveDayBanner = totalConsecutiveDaysOff > 1
+    ? {
+        prefix: 'Enjoy your extended',
+        highlight: `${totalConsecutiveDaysOff}-day break`,
+        suffix: `, ${staffName}!`,
+      }
+    : nextActiveDate && isTomorrowDateKey(nextActiveDate)
+      ? {
+          prefix: 'Enjoy your day off',
+          highlight: staffName,
+          suffix: '! See you tomorrow.',
+        }
+      : {
+          prefix: 'Enjoy your well-deserved break',
+          highlight: staffName,
+          suffix: '!',
+        };
+  const nextDutySubtext = totalConsecutiveDaysOff > 1
+    ? `See you on ${nextActiveDayLabel}. Enjoy the full break until then.`
+    : `See you on ${nextActiveDayLabel}.`;
 
   const inProgressAppointment = useMemo(
     () => todayAppointments.find((appointment) => getAppointmentSortGroup(appointment, currentTime) === 0),
@@ -293,7 +409,7 @@ function StaffDashboard() {
   };
 
   const renderFocusAppointment = (title, appointment, emptyText, isActive = false, eyebrow = 'Active Status') => (
-    <div className={`${appointment ? 'min-h-[250px]' : 'min-h-[170px]'} rounded-2xl border p-6 shadow-xl backdrop-blur-md ${
+    <div className={`${appointment ? 'min-h-[250px]' : 'min-h-[170px]'} rounded-2xl border p-4 shadow-xl backdrop-blur-md sm:p-6 ${
       isActive
         ? 'border-emerald-400/20 bg-emerald-400/10'
         : 'border-[#d4af37]/20 bg-[#d4af37]/10'
@@ -303,7 +419,7 @@ function StaffDashboard() {
           <p className={`text-xs font-bold uppercase tracking-[0.18em] ${isActive ? 'text-emerald-300' : 'text-[#d4af37]'}`}>
             {eyebrow}
           </p>
-          <h2 className="mt-3 text-2xl font-serif text-white">{title}</h2>
+          <h2 className="mt-3 font-serif text-xl text-white sm:text-2xl">{title}</h2>
         </div>
         <div className="flex items-center gap-2">
           {appointment && (
@@ -318,7 +434,7 @@ function StaffDashboard() {
           <button
             type="button"
             onClick={() => fetchSchedule()}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-black/20 text-gray-300 transition hover:border-[#d4af37]/40 hover:text-[#d4af37]"
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-black/20 text-gray-300 transition hover:border-[#d4af37]/40 hover:text-[#d4af37] sm:h-10 sm:w-10"
             aria-label="Refresh queue"
             title="Refresh queue"
           >
@@ -332,12 +448,12 @@ function StaffDashboard() {
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <p className="text-xs uppercase tracking-[0.16em] text-gray-500">Client</p>
-              <p className="mt-2 text-lg font-semibold text-white">{appointment.user?.name || 'Client'}</p>
+              <p className="mt-2 text-base font-semibold text-white sm:text-lg">{appointment.user?.name || 'Client'}</p>
               <p className="mt-1 text-sm text-gray-400">{appointment.user?.phone || appointment.user?.email || 'No contact details'}</p>
             </div>
             <div>
               <p className="text-xs uppercase tracking-[0.16em] text-gray-500">Time</p>
-              <p className="mt-2 text-lg font-semibold text-white">
+              <p className="mt-2 text-base font-semibold text-white sm:text-lg">
                 {appointment.startTime} {appointment.endTime ? `- ${appointment.endTime}` : ''}
               </p>
               <p className="mt-1 text-sm text-gray-400">{formatRosterDate(appointment)}</p>
@@ -348,11 +464,11 @@ function StaffDashboard() {
             </div>
           </div>
 
-          <div className="mt-6 flex flex-wrap gap-2 border-t border-white/10 pt-4">
+          <div className="mt-6 flex flex-col gap-2 border-t border-white/10 pt-4 sm:flex-row sm:flex-wrap">
             {appointment.user?.phone && (
               <a
                 href={`tel:${appointment.user.phone}`}
-                className="inline-flex items-center rounded-lg border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-gray-200 transition hover:border-[#d4af37]/40 hover:text-[#d4af37]"
+                className="inline-flex items-center justify-center rounded-lg border border-white/10 bg-black/20 px-4 py-2 text-sm font-semibold text-gray-200 transition hover:border-[#d4af37]/40 hover:text-[#d4af37]"
               >
                 Contact Client
               </a>
@@ -384,6 +500,7 @@ function StaffDashboard() {
       label: "Today's Appointments",
       value: todayAppointments.length,
       subtitle: 'Scheduled for today',
+      mutedOnLeaveDay: true,
       icon: (
         <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M7 3v3M17 3v3M4.5 9h15M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -394,6 +511,7 @@ function StaffDashboard() {
       label: 'Pending Approvals',
       value: pendingApprovals,
       subtitle: 'Waiting for confirmation',
+      mutedOnLeaveDay: true,
       icon: (
         <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M12 8v4l2.5 2.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -404,6 +522,7 @@ function StaffDashboard() {
       label: 'Completed Sessions',
       value: completedSessions,
       subtitle: "Today's Finished Appointments",
+      mutedOnLeaveDay: true,
       icon: (
         <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="m5 12 4.2 4.2L19 6.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -414,42 +533,75 @@ function StaffDashboard() {
       label: "This Week's Earnings",
       value: formatCurrency(weeklyEarnings),
       subtitle: 'UPDATED REAL-TIME',
+      mutedOnLeaveDay: false,
       icon: <DollarSign className="h-5 w-5" />
     }
   ];
 
   return (
-    <div className="w-full max-w-7xl mx-auto">
-      <header className="mb-8 rounded-2xl border border-white/10 bg-[#111111]/70 p-6 shadow-xl backdrop-blur-md">
-        <h1 className="text-4xl font-serif font-bold tracking-tight text-white">
-          Welcome back, <span className="text-[#d4af37]">{staffName}</span>
+    <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-0">
+      <header className={`mb-6 rounded-2xl border border-white/10 p-4 shadow-xl backdrop-blur-md sm:mb-8 sm:p-6 ${
+        isLeaveDay ? 'bg-zinc-900/50' : 'bg-[#111111]/70'
+      }`}>
+        <h1 className="break-words font-serif text-2xl font-bold leading-tight tracking-tight text-white sm:text-4xl">
+          {isLeaveDay ? (
+            <>
+              {leaveDayBanner.prefix}{' '}
+              <span className="text-[#d4af37]">{leaveDayBanner.highlight}</span>
+              <span className="text-white">{leaveDayBanner.suffix}</span>
+            </>
+          ) : (
+            <>Welcome back, <span className="text-[#d4af37]">{staffName}</span></>
+          )}
         </h1>
-        <p className="mt-3 text-base text-gray-400">Here is your schedule for today.</p>
+        <p className="mt-3 text-sm leading-6 text-gray-400 sm:text-base">
+          {isLeaveDay
+            ? 'Your schedule is clear for today. Rest up and recharge.'
+            : 'Here is your schedule for today.'}
+        </p>
       </header>
 
-      <section className="mb-8 grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 xl:grid-cols-4">
         {statCards.map((card) => (
           <div
             key={card.label}
-            className="flex min-h-[150px] flex-col justify-between rounded-2xl border border-white/10 bg-[#111111]/70 p-6 shadow-xl backdrop-blur-md"
+            className={`relative min-h-[132px] rounded-2xl border border-white/10 bg-[#111111]/70 p-4 shadow-xl backdrop-blur-md sm:min-h-[150px] sm:p-6 ${
+              isLeaveDay && card.mutedOnLeaveDay ? 'hidden sm:block' : ''
+            } ${isLeaveDay && !card.mutedOnLeaveDay ? 'sm:col-span-2 xl:col-span-1' : ''}`}
           >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-sm text-gray-400">{card.label}</p>
-                <p className="mt-2 font-serif text-4xl text-[#d4af37]">{card.value}</p>
+            <div className="flex min-h-[96px] flex-col justify-between sm:min-h-[102px]">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className={`text-sm ${
+                    isLeaveDay && card.mutedOnLeaveDay ? 'text-zinc-500' : 'text-gray-400'
+                  }`}>
+                    {card.label}
+                  </p>
+                  <p className={`mt-2 font-serif text-3xl sm:text-4xl ${
+                    isLeaveDay && card.mutedOnLeaveDay ? 'text-white' : 'text-[#d4af37]'
+                  }`}>
+                    {card.value}
+                  </p>
+                </div>
+                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border sm:h-11 sm:w-11 ${
+                  isLeaveDay && card.mutedOnLeaveDay
+                    ? 'border-zinc-800 bg-zinc-900/70 text-zinc-500'
+                    : 'border-[#d4af37]/20 bg-[#d4af37]/10 text-[#d4af37]'
+                }`}>
+                  {card.icon}
+                </div>
               </div>
-              <div className="flex h-11 w-11 items-center justify-center rounded-full border border-[#d4af37]/20 bg-[#d4af37]/10 text-[#d4af37]">
-                {card.icon}
-              </div>
+              <p className={`mt-5 text-xs uppercase tracking-[0.16em] ${
+                isLeaveDay && card.mutedOnLeaveDay ? 'text-zinc-600' : 'text-gray-500'
+              }`}>
+                {card.subtitle}
+              </p>
             </div>
-            <p className="mt-5 text-xs uppercase tracking-[0.16em] text-gray-500">
-              {card.subtitle}
-            </p>
           </div>
         ))}
       </section>
 
-      {!isLoading && todayAppointments.length > 0 && (
+      {!isLoading && !isLeaveDay && todayAppointments.length > 0 && (
         <section className="mb-8 grid grid-cols-1 gap-6 xl:grid-cols-2">
           {renderFocusAppointment(
             'In Progress',
@@ -468,16 +620,24 @@ function StaffDashboard() {
         </section>
       )}
 
-      <section id="today-schedule" className="rounded-2xl border border-white/10 bg-[#111111]/70 p-6 shadow-xl backdrop-blur-md">
-        <div className="mb-6 flex flex-col gap-2 border-b border-white/10 pb-4 sm:flex-row sm:items-end sm:justify-between">
+      <section id="today-schedule" className="rounded-2xl border border-white/10 bg-[#111111]/70 p-4 shadow-xl backdrop-blur-md sm:p-6">
+        <div className="mb-6 flex flex-col gap-3 border-b border-white/10 pb-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-gray-500">Actionable Tasks</p>
-            <h2 className="mt-2 text-2xl font-serif text-[#d4af37]">Today&apos;s Schedule</h2>
-            <p className="mt-2 text-sm text-gray-400">Appointments are grouped by priority so the next action stays easy to spot.</p>
+            <h2 className="mt-2 font-serif text-xl text-[#d4af37] sm:text-2xl">
+              {isLeaveDay ? 'Next Shift Preview' : "Today's Schedule"}
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-400">
+              {isLeaveDay
+                ? 'Your dashboard is softened while you are away from operations.'
+                : 'Appointments are grouped by priority so the next action stays easy to spot.'}
+            </p>
           </div>
-          <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-gray-300">
-            {todayAppointments.length} scheduled
-          </div>
+          {!isLeaveDay && (
+            <div className="w-fit rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-gray-300">
+              {todayAppointments.length} scheduled
+            </div>
+          )}
         </div>
 
         {error && (
@@ -505,19 +665,28 @@ function StaffDashboard() {
               </div>
             ))}
           </div>
+        ) : isLeaveDay ? (
+          <div className="py-10 text-center sm:py-14">
+            <div className="mx-auto max-w-sm rounded-xl border border-zinc-800 bg-zinc-900 p-4 text-center">
+              <p className="text-sm font-semibold text-zinc-400">Your Next Active Duty</p>
+              <p className="mt-2 text-lg font-bold text-[#d4af37] sm:text-xl">{nextActiveDateLabel}</p>
+              <p className="mt-1 text-zinc-100">{nextShiftTime}</p>
+              <p className="mt-3 text-sm text-zinc-400">{nextDutySubtext}</p>
+            </div>
+          </div>
         ) : todayAppointments.length === 0 ? (
-          <div className="py-14 text-center">
+          <div className="py-10 text-center sm:py-14">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-[#d4af37]/20 bg-[#d4af37]/10 text-[#d4af37]">
               <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M7 3v3M17 3v3M4.5 9h15M6 5h12a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
-            <p className="mt-5 text-lg font-semibold text-white">No appointments assigned for today.</p>
+            <p className="mt-5 text-base font-semibold text-white sm:text-lg">No appointments assigned for today.</p>
             <p className="mt-2 text-sm text-gray-400">Your client roster will appear here as soon as bookings are assigned.</p>
           </div>
         ) : (
           <div className="salon-scrollbar overflow-x-auto">
-            <table className="min-w-full text-left">
+            <table className="min-w-[760px] text-left">
               <thead>
                 <tr className="border-b border-white/10 text-xs uppercase tracking-[0.16em] text-[#d4af37]">
                   <th className="px-4 py-4 font-medium">Time</th>
