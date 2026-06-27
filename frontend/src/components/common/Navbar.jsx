@@ -57,19 +57,13 @@ function Navbar() {
     { label: 'Contact', id: 'contact' }
   ];
 
-  const dashboardPath = userRole === 'admin'
-    ? '/admin'
-    : userRole === 'staff'
-      ? '/staff/dashboard'
-      : '/dashboard';
-
   return (
-    <nav className="fixed top-0 left-0 w-full z-50 border-b border-white/5 bg-black/50 px-6 py-4 font-sans shadow-lg backdrop-blur-md lg:px-12">
-      <div className="flex w-full items-center justify-between gap-4 px-4 text-white sm:px-6 lg:px-12">
+    <nav className="fixed top-0 left-0 w-full z-50 border-b border-white/5 bg-black/60 px-3 py-3 font-sans shadow-lg backdrop-blur-md sm:px-6 sm:py-4 lg:px-12">
+      <div className="flex w-full items-center justify-between gap-3 text-white sm:px-6 lg:px-12">
         <motion.button
           type="button"
           onClick={() => scrollToSection('home')}
-          className="group flex shrink-0 items-center gap-2 text-3xl font-serif tracking-widest text-white transition hover:text-[#d4af37]"
+          className="group flex min-w-0 shrink items-center gap-2 text-2xl font-serif tracking-[0.12em] text-white transition hover:text-[#d4af37] sm:text-3xl sm:tracking-widest"
         >
           <motion.div
             className="text-[#d4af37]"
@@ -77,9 +71,9 @@ function Navbar() {
             whileHover={{ rotate: 90 }}
             transition={{ duration: 0.2, ease: 'easeInOut' }}
           >
-            <Scissors className="h-8 w-8" />
+            <Scissors className="h-6 w-6 sm:h-8 sm:w-8" />
           </motion.div>
-          <span className="whitespace-nowrap">
+          <span className="truncate whitespace-nowrap">
             Salon<span className="text-[#d4af37]">DEES</span>
           </span>
         </motion.button>
@@ -114,7 +108,7 @@ function Navbar() {
               </Link>
               <Link
                 to="/login"
-                className="flex-shrink-0 whitespace-nowrap rounded-full bg-primary px-4 py-1.5 text-xs font-medium text-black shadow-[0_0_15px_rgba(212,175,55,0.3)] sm:hidden"
+                className="flex-shrink-0 whitespace-nowrap rounded-full bg-primary px-4 py-2 text-xs font-semibold text-black shadow-[0_0_15px_rgba(212,175,55,0.3)] sm:hidden"
               >
                 Sign In
               </Link>
@@ -122,21 +116,13 @@ function Navbar() {
           )}
 
           {userRole && (
-            <>
-              <Link
-                to={dashboardPath}
-                className="rounded-md bg-[#d4af37] px-4 py-2 text-base font-semibold text-black transition duration-300 hover:bg-yellow-400 hover:shadow-[0_0_20px_rgba(212,175,55,0.25)] sm:px-5 sm:text-lg"
-              >
-                Go to Dashboard
-              </Link>
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="rounded-md border border-white/10 bg-white/5 px-4 py-2 text-base font-medium text-gray-300 transition duration-300 hover:border-red-500/30 hover:bg-red-500/15 hover:text-red-400 sm:px-5 sm:text-lg"
-              >
-                Logout
-              </button>
-            </>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-gray-300 transition duration-300 hover:border-red-500/30 hover:bg-red-500/15 hover:text-red-400 sm:px-5 sm:text-lg"
+            >
+              Logout
+            </button>
           )}
         </div>
       </div>

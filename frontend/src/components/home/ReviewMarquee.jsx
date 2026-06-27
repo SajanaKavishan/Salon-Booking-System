@@ -65,7 +65,7 @@ function StaticStars({ rating }) {
 
 function ReviewCard({ review }) {
   return (
-    <article className="bg-zinc-900/60 backdrop-blur-md border border-zinc-800/80 p-5 rounded-xl w-80 shrink-0 inline-block text-wrap shadow-xl shadow-black/20">
+    <article className="inline-block w-[min(78vw,20rem)] shrink-0 text-wrap rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-4 shadow-xl shadow-black/20 backdrop-blur-md sm:w-80 sm:p-5">
       <div className="min-w-0">
         <h3 className="flex min-w-0 items-center gap-1.5 text-sm font-semibold text-zinc-100">
           <span className="truncate">{getClientName(review)}</span>
@@ -129,21 +129,21 @@ function ReviewMarquee({ reviews: providedReviews }) {
 
   return (
     <section className="relative border-y border-white/5 bg-zinc-950/70">
-      <div className="max-w-7xl mx-auto px-6 py-12 overflow-hidden">
-        <div className="mx-auto mb-10 max-w-6xl text-center">
-          <span className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-300">
+      <div className="mx-auto max-w-7xl overflow-hidden px-4 py-10 sm:px-6 sm:py-12">
+        <div className="mx-auto mb-8 max-w-6xl text-center sm:mb-10">
+          <span className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-300 sm:tracking-[0.22em]">
             Client Stories
           </span>
-          <h2 className="mt-3 font-serif text-3xl text-white md:text-4xl">
+          <h2 className="mt-3 font-serif text-2xl text-white sm:text-3xl md:text-4xl">
             Verified Experiences, Shared Live
           </h2>
         </div>
 
         <div className="relative overflow-hidden">
-          <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-20 bg-gradient-to-r from-zinc-950 to-transparent"></div>
-          <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-20 bg-gradient-to-l from-zinc-950 to-transparent"></div>
+          <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-10 bg-gradient-to-r from-zinc-950 to-transparent sm:w-20"></div>
+          <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-gradient-to-l from-zinc-950 to-transparent sm:w-20"></div>
 
-          <div className="flex w-max animate-marquee gap-6 whitespace-nowrap hover:[animation-play-state:paused]">
+          <div className="flex w-max animate-marquee gap-4 whitespace-nowrap hover:[animation-play-state:paused] sm:gap-6">
             {marqueeReviews.map((review, index) => (
               <ReviewCard key={`${review?._id || review?.id || 'review'}-${index}`} review={review} />
             ))}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { motion } from 'framer-motion';
@@ -249,12 +249,11 @@ function Home() {
       animate="show"
     >
       <div className="salon-page-overlay absolute inset-0 -z-10" />
-      <div className="pointer-events-none absolute left-[-5%] top-[-10%] h-[300px] w-[300px] rounded-full bg-primary/10 blur-[120px]" />
-      <div className="pointer-events-none absolute right-[-10%] top-[20%] h-[300px] w-[300px] rounded-full bg-primary/10 blur-[120px]" />
-      <div className="pointer-events-none absolute bottom-[10%] left-[20%] h-[320px] w-[320px] rounded-full bg-primary/10 blur-[140px]" />
+      <div className="pointer-events-none absolute left-[-5%] top-[-10%] h-[220px] w-[220px] rounded-full bg-primary/10 blur-[100px] sm:h-[300px] sm:w-[300px] sm:blur-[120px]" />
+      <div className="pointer-events-none absolute right-[-10%] top-[20%] h-[220px] w-[220px] rounded-full bg-primary/10 blur-[100px] sm:h-[300px] sm:w-[300px] sm:blur-[120px]" />
+      <div className="pointer-events-none absolute bottom-[10%] left-[20%] h-[240px] w-[240px] rounded-full bg-primary/10 blur-[110px] sm:h-[320px] sm:w-[320px] sm:blur-[140px]" />
 
-      {/* Hero Section: Mobile pb-16 කරලා ඉඩ ඉතුරු කළා */}
-      <section id="home" className="relative min-h-screen flex w-full max-w-full items-center justify-center overflow-hidden px-6 pt-32 pb-16 sm:pt-28 sm:pb-44 md:pb-52">
+      <section id="home" className="relative flex min-h-[100svh] w-full max-w-full items-center justify-center overflow-hidden px-4 pb-14 pt-24 sm:min-h-screen sm:px-6 sm:pb-44 sm:pt-32 md:pb-52">
         <div className="absolute inset-0 z-0">
           <div className="absolute inset-0 bg-[#0a0a0a]/85" />
           <img
@@ -265,18 +264,18 @@ function Home() {
         </div>
 
         <motion.div
-          className="relative z-10 w-full max-w-full overflow-hidden salon-shell mx-auto text-center"
+          className="salon-shell relative z-10 mx-auto w-full max-w-full overflow-hidden text-center"
           variants={containerVariants}
         >
           <motion.span
-            className="tracking-[0.2em] text-xl uppercase text-primary"
+            className="text-xs uppercase tracking-[0.24em] text-primary sm:text-xl sm:tracking-[0.2em]"
             variants={itemVariants}
           >
             Premium Hair Studio
           </motion.span>
 
           <motion.h1
-            className="font-brand text-5xl sm:text-6xl md:text-7xl lg:text-8xl tracking-tight leading-none bg-gradient-to-b from-white to-neutral-400 bg-clip-text text-transparent mt-6"
+            className="mx-auto mt-4 max-w-[19rem] bg-gradient-to-b from-white to-neutral-400 bg-clip-text font-brand text-[2.45rem] leading-[1.02] tracking-normal text-transparent sm:mt-6 sm:max-w-none sm:text-6xl md:text-7xl lg:text-8xl"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 1, ease: 'easeOut' }}
@@ -285,7 +284,7 @@ function Home() {
           </motion.h1>
 
           <motion.p
-            className="mt-6 text-gray-300 text-lg md:text-xl max-w-3xl mx-auto font-light leading-relaxed"
+            className="mx-auto mt-4 max-w-[19rem] text-sm font-light leading-6 text-gray-300 sm:mt-6 sm:max-w-[32rem] sm:text-base md:max-w-3xl md:text-xl md:leading-relaxed"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 1, ease: 'easeOut', delay: 0.1 }}
@@ -294,33 +293,60 @@ function Home() {
           </motion.p>
 
           <motion.div
-            className="mt-10 flex flex-col sm:flex-row justify-center gap-4"
+            className="mx-auto mt-7 flex w-full max-w-[19rem] flex-col justify-center gap-2.5 sm:mt-10 sm:max-w-none sm:flex-row sm:gap-4"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 1, ease: 'easeOut', delay: 0.2 }}
           >
             <motion.button
               onClick={handlePrimaryCTA}
-              className="rounded-full bg-gradient-to-r from-primary to-[#C9A227] px-10 py-4 text-black font-semibold shadow-[0_18px_40px_rgba(255,255,255,0.18)] transition duration-300 ease-out hover:scale-[1.02] hover:bg-gray-200 flex items-center justify-center gap-2 text-lg"
+              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-[#C9A227] px-8 py-3.5 text-base font-semibold text-black shadow-[0_18px_40px_rgba(255,255,255,0.18)] transition duration-300 ease-out hover:scale-[1.02] hover:bg-gray-200 sm:w-auto sm:px-10 sm:py-4 sm:text-lg"
               whileHover={{ y: -4, transition: { duration: 0.2 } }}
             >
               {primaryCTALabel} <ArrowRight className="h-5 w-5" />
             </motion.button>
+
             <motion.button
               onClick={() => scrollToSection('services')}
-              className="rounded-full border border-white/20 px-10 py-4 text-white font-medium shadow-[0_12px_30px_rgba(15,15,15,0.45)] transition duration-300 ease-out hover:scale-[1.02] hover:bg-white/10 text-lg"
+              className="min-h-12 rounded-full border border-white/20 px-8 py-3.5 text-base font-medium text-white shadow-[0_12px_30px_rgba(15,15,15,0.45)] transition duration-300 ease-out hover:scale-[1.02] hover:bg-white/10 sm:px-10 sm:py-4 sm:text-lg"
               whileHover={{ y: -4, transition: { duration: 0.2 } }}
             >
               View Services
             </motion.button>
           </motion.div>
+
+          {/* Mobile Ratings Card - same animation as web info cards */}
+          <motion.div
+            className="mx-auto mt-10 w-full max-w-[18rem] md:hidden"
+            variants={infoCardsContainerVariants}
+          >
+            <motion.div
+              className="group lux-card lux-card-hover relative overflow-hidden rounded-2xl border border-white/[0.04] bg-card/60 p-4 text-left shadow-2xl backdrop-blur-xl"
+              variants={infoCardVariants}
+              whileHover={{ y: -6, transition: { duration: 0.2 } }}
+            >
+              <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100 bg-gradient-to-br from-white/12 via-white/0 to-transparent" />
+
+              <div className="relative flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-primary">
+                  <Star className="h-5 w-5" />
+                </div>
+
+                <div className="min-w-0">
+                  <p className="text-xs uppercase tracking-wider text-neutral-500">Ratings</p>
+                  <p className="mt-2 break-words font-sans text-sm font-semibold leading-snug text-white">
+                    {reviewSummary.label}
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
         </motion.div>
       </section>
 
-      {/* Info Cards Section: -mt-28 දාලා Mobile වලදී තවත් උඩට ගත්තා */}
-      <section className="relative z-20 -mt-28 sm:-mt-28 md:-mt-36 lg:-mt-44 px-6">
+      <section className="relative z-20 hidden px-4 sm:px-6 md:block md:-mt-36 lg:-mt-44">
         <motion.div
-          className="salon-shell max-w-6xl mx-auto grid gap-5 md:grid-cols-3"
+          className="salon-shell mx-auto grid max-w-6xl gap-5 md:grid-cols-3"
           variants={infoCardsContainerVariants}
           initial="hidden"
           whileInView="show"
@@ -347,26 +373,33 @@ function Home() {
             }
           ].map((item) => {
             const Icon = item.icon;
+
             return (
-              <motion.div
+              <div
                 key={item.label}
-                className={`group lux-card lux-card-hover backdrop-blur-xl bg-card/40 border border-white/[0.04] relative overflow-hidden p-6 rounded-2xl shadow-2xl ${
-                  item.hideOnMobile ? 'hidden md:block' : 'block'
-                }`}
-                variants={infoCardVariants}
-                whileHover={{ y: -6, transition: { duration: 0.2 } }}
+                className={item.hideOnMobile ? 'hidden md:block' : 'block'}
               >
-                <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100 bg-gradient-to-br from-white/12 via-white/0 to-transparent" />
-                <div className="relative flex items-start gap-4">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-white/5 text-primary shrink-0">
-                    <Icon className="h-5 w-5" />
+                <motion.div
+                  className="group lux-card lux-card-hover relative overflow-hidden rounded-2xl border border-white/[0.04] bg-card/40 p-4 shadow-2xl backdrop-blur-xl sm:p-6"
+                  variants={infoCardVariants}
+                  whileHover={{ y: -6, transition: { duration: 0.2 } }}
+                >
+                  <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100 bg-gradient-to-br from-white/12 via-white/0 to-transparent" />
+
+                  <div className="relative flex items-start gap-3 sm:gap-4">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-primary sm:h-11 sm:w-11">
+                      <Icon className="h-5 w-5" />
+                    </div>
+
+                    <div className="min-w-0">
+                      <p className="text-neutral-500 text-xs uppercase tracking-wider">{item.label}</p>
+                      <p className="mt-2 break-words font-sans text-sm font-semibold leading-snug text-white sm:text-base">
+                        {item.value}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-neutral-500 text-xs uppercase tracking-wider">{item.label}</p>
-                    <p className="mt-2 text-white font-sans font-semibold text-sm sm:text-base leading-snug">{item.value}</p>
-                  </div>
-                </div>
-              </motion.div>
+                </motion.div>
+              </div>
             );
           })}
         </motion.div>
@@ -381,13 +414,13 @@ function Home() {
       {/* About Section */}
       <motion.section
         id="about"
-        className="py-24 px-6 lg:px-12"
+        className="px-4 py-14 sm:px-6 sm:py-20 lg:px-12 lg:py-24"
         variants={sectionVariants}
         initial="hidden"
         whileInView="show"
         viewport={scrollViewport}
       >
-        <motion.div className="max-w-6xl mx-auto grid gap-12 md:grid-cols-2 items-center">
+        <motion.div className="mx-auto grid max-w-6xl items-center gap-8 sm:gap-12 md:grid-cols-2">
           <motion.div
             className="relative overflow-hidden rounded-2xl border border-white/10 shadow-2xl"
             variants={revealLeftVariants}
@@ -395,17 +428,17 @@ function Home() {
             <img
               src="/salonInterior.jpg"
               alt="Salon Interior"
-              className="h-[380px] w-full object-cover brightness-110 transition duration-500 hover:scale-105"
+              className="h-[260px] w-full object-cover brightness-110 transition duration-500 hover:scale-105 sm:h-[380px]"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
           </motion.div>
 
           <motion.div
-            className="relative z-10 rounded-2xl border border-white/10 bg-black/40 p-6 text-white backdrop-blur-sm"
+            className="relative z-10 rounded-2xl border border-white/10 bg-black/40 p-5 text-white backdrop-blur-sm sm:p-6"
             variants={revealRightVariants}
           >
             <span className="tracking-[0.2em] text-xs uppercase text-white font-medium">The Experience</span>
-            <h2 className="mt-4 text-4xl md:text-5xl font-serif text-white tracking-tight">A Ritual of Refinement</h2>
+            <h2 className="mt-4 font-serif text-3xl tracking-tight text-white sm:text-4xl md:text-5xl">A Ritual of Refinement</h2>
             <p className="mt-4 text-white text-base md:text-lg leading-relaxed">
               Step into a serene environment curated for relaxation. Every service is crafted to deliver a bespoke experience tailored to your style.
             </p>
@@ -436,7 +469,7 @@ function Home() {
       {/* Owner Section */}
       <motion.section
         id="owner"
-        className="relative py-24 px-6 lg:px-12 border-t border-white/5 overflow-hidden"
+        className="relative overflow-hidden border-t border-white/5 px-4 py-14 sm:px-6 sm:py-20 lg:px-12 lg:py-24"
         variants={sectionVariants}
         initial="hidden"
         whileInView="show"
@@ -444,10 +477,10 @@ function Home() {
       >
         <div className="absolute top-1/2 left-0 -translate-y-1/2 bg-primary/5 blur-[120px] rounded-full w-[300px] h-[300px] pointer-events-none" />
 
-        <div className="max-w-6xl mx-auto grid gap-12 md:grid-cols-2 items-center relative z-10">
+        <div className="relative z-10 mx-auto grid max-w-6xl items-center gap-8 sm:gap-12 md:grid-cols-2">
           <motion.div variants={revealLeftVariants}>
             <span className="tracking-[0.2em] text-xs uppercase text-primary font-medium">Meet The Visionary</span>
-            <h2 className="mt-4 text-4xl md:text-5xl font-serif text-white tracking-tight">Dileep Malshan</h2>
+            <h2 className="mt-4 font-serif text-3xl tracking-tight text-white sm:text-4xl md:text-5xl">Dileep Malshan</h2>
             <p className="mt-4 text-white text-base md:text-lg leading-relaxed">
               With over a decade of experience, Dileep leads {settings.salonName} with a focus on precision, artistry, and an unforgettable client experience.
             </p>
@@ -475,7 +508,7 @@ function Home() {
             <img
               src="/Owner.jpg"
               alt="Dileep Malshan"
-              className="rounded-lg shadow-2xl object-cover aspect-[4/5] w-full max-w-md brightness-105 transition-all duration-700 border border-white/10"
+              className="aspect-[4/5] w-full max-w-sm rounded-lg border border-white/10 object-cover shadow-2xl brightness-105 transition-all duration-700 sm:max-w-md"
             />
           </motion.div>
         </div>
@@ -484,7 +517,7 @@ function Home() {
       {/* Gallery Section */}
       <motion.section
         id="gallery"
-        className="py-24 px-6 lg:px-12 border-t border-white/5"
+        className="border-t border-white/5 px-4 py-14 sm:px-6 sm:py-20 lg:px-12 lg:py-24"
         variants={sectionVariants}
         initial="hidden"
         whileInView="show"
@@ -493,14 +526,14 @@ function Home() {
         <div className="max-w-6xl mx-auto">
           <motion.div className="text-center" variants={revealItemVariants}>
             <span className="tracking-[0.2em] text-xs uppercase text-primary">Portfolio</span>
-            <h2 className="mt-4 text-4xl md:text-5xl font-serif text-white">Our Latest Work</h2>
-            <p className="mt-4 text-white text-base md:text-lg max-w-2xl mx-auto">
+            <h2 className="mt-4 font-serif text-3xl text-white sm:text-4xl md:text-5xl">Our Latest Work</h2>
+            <p className="mx-auto mt-4 max-w-2xl text-sm leading-6 text-white sm:text-base md:text-lg">
               A glimpse into the transformations crafted by our expert stylists.
             </p>
           </motion.div>
 
           <motion.div
-            className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-4"
+            className="mt-10 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4"
             variants={containerVariants}
           >
             {[
@@ -518,7 +551,7 @@ function Home() {
                 <img
                   src={src}
                   alt={`Gallery ${index + 1}`}
-                  className="h-48 w-full object-cover transition duration-500 group-hover:scale-105"
+                  className="h-36 w-full object-cover transition duration-500 group-hover:scale-105 sm:h-48"
                 />
               </motion.div>
             ))}
@@ -531,47 +564,58 @@ function Home() {
       {/* Contact Section */}
       <motion.section
         id="contact"
-        className="py-24 px-6 lg:px-12 border-t border-white/5"
+        className="border-t border-white/5 px-4 py-14 sm:px-6 sm:py-20 lg:px-12 lg:py-24"
         variants={sectionVariants}
         initial="hidden"
         whileInView="show"
         viewport={scrollViewport}
       >
-        <div className="max-w-6xl mx-auto grid gap-12 md:grid-cols-2">
+        <div className="mx-auto grid max-w-6xl gap-8 sm:gap-12 md:grid-cols-2">
           <motion.div variants={revealLeftVariants}>
             <span className="tracking-[0.2em] text-xs uppercase text-primary">Get In Touch</span>
-            <h2 className="mt-4 text-4xl md:text-5xl font-serif text-white">Visit Our Salon</h2>
+            <h2 className="mt-4 font-serif text-3xl text-white sm:text-4xl md:text-5xl">Visit Our Salon</h2>
             <p className="mt-4 text-white text-base md:text-lg">
               We would love to welcome you for a personalized consultation.
             </p>
+
             <div className="mt-10 space-y-6 text-white">
               <div>
                 <p className="text-white text-xs uppercase tracking-wider">Location</p>
-                <p className="mt-2 text-white font-sans font-semibold">{settings.address}</p>
+                <p className="mt-2 break-words font-sans font-semibold text-white">{settings.address}</p>
               </div>
+
               <div>
                 <p className="text-white text-xs uppercase tracking-wider">Contact</p>
-                <p className="mt-2 text-white font-sans font-semibold">{settings.contactNumber}</p>
-                <p className="text-white">{settings.supportEmail}</p>
+                <p className="mt-2 break-words font-sans font-semibold text-white">{settings.contactNumber}</p>
+                <p className="break-words text-white">{settings.supportEmail}</p>
               </div>
+
               <div>
-                <p className="text-white text-xs uppercase tracking-wider">Hours</p>
-                <p className="mt-2 text-white font-sans font-semibold">Mon - Sat: 9:00 AM - 10:00 PM</p>
-                <p className="text-white">Sunday: Closed</p>
+                <p className="text-white text-xs uppercase tracking-wider">Open Hours</p>
+                <p className="mt-2 text-white font-sans font-semibold">Mon - Sun: 9:00 AM - 10:00 PM</p>
               </div>
             </div>
           </motion.div>
 
           <motion.div
-            className="group lux-card lux-card-hover backdrop-blur-xl bg-card/40 border border-white/[0.04] relative overflow-hidden p-8 rounded-2xl"
+            className="group lux-card lux-card-hover relative overflow-hidden rounded-2xl border border-white/[0.04] bg-card/40 p-5 backdrop-blur-xl sm:p-8"
             variants={revealRightVariants}
           >
             <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100 bg-gradient-to-br from-white/12 via-white/0 to-transparent" />
+
             <div className="relative">
               <h3 className="text-2xl font-serif text-white">Send a Message</h3>
 
               {submitStatus && (
-                <div className={`mt-5 rounded-lg border p-3 text-sm ${submitStatus.includes('Success') ? 'bg-green-500/20 text-green-400 border-green-500/50' : submitStatus.includes('Sending') ? 'bg-blue-500/20 text-blue-400 border-blue-500/50' : 'bg-red-500/20 text-red-400 border-red-500/50'}`}>
+                <div
+                  className={`mt-5 rounded-lg border p-3 text-sm ${
+                    submitStatus.includes('Success')
+                      ? 'bg-green-500/20 text-green-400 border-green-500/50'
+                      : submitStatus.includes('Sending')
+                        ? 'bg-blue-500/20 text-blue-400 border-blue-500/50'
+                        : 'bg-red-500/20 text-red-400 border-red-500/50'
+                  }`}
+                >
                   {submitStatus}
                 </div>
               )}
@@ -586,6 +630,7 @@ function Home() {
                   placeholder="Your Name"
                   className="bg-[#111111] border border-white/10 p-3 rounded text-white focus:outline-none focus:border-[#d4af37] transition"
                 />
+
                 <input
                   type="email"
                   name="email"
@@ -595,6 +640,7 @@ function Home() {
                   placeholder="Email Address"
                   className="bg-[#111111] border border-white/10 p-3 rounded text-white focus:outline-none focus:border-[#d4af37] transition"
                 />
+
                 <textarea
                   name="message"
                   value={formData.message}
@@ -603,7 +649,8 @@ function Home() {
                   placeholder="How can we help you?"
                   rows="4"
                   className="bg-[#111111] border border-white/10 p-3 rounded text-white focus:outline-none focus:border-[#d4af37] transition resize-none"
-                ></textarea>
+                />
+
                 <motion.button
                   type="submit"
                   disabled={submitStatus === 'Sending...'}
@@ -619,7 +666,7 @@ function Home() {
       </motion.section>
 
       <motion.footer
-        className="py-10 border-t border-white/5 text-center text-gray-500 text-sm font-light"
+        className="border-t border-white/5 px-4 py-8 text-center text-sm font-light text-gray-500 sm:py-10"
         variants={itemVariants}
         initial="hidden"
         whileInView="show"

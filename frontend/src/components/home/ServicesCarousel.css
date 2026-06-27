@@ -1,6 +1,6 @@
 .services-carousel {
   overflow: hidden;
-  padding: 12px 4px 48px;
+  padding: 10px 2px 36px;
   -webkit-mask-image: linear-gradient(to right, #000 80%, transparent 100%);
   mask-image: linear-gradient(to right, #000 80%, transparent 100%);
   scrollbar-width: none;
@@ -16,7 +16,7 @@
 }
 
 .services-carousel-slide {
-  width: min(82vw, 330px);
+  width: min(84vw, 330px);
   height: auto;
 }
 
@@ -24,5 +24,9 @@
   .services-carousel {
     -webkit-mask-image: linear-gradient(to right, #000 90%, transparent 100%);
     mask-image: linear-gradient(to right, #000 90%, transparent 100%);
+  }
+
+  .services-carousel-slide {
+    width: min(86vw, 310px);
   }
 }
