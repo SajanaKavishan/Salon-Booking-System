@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { toast } from "react-toastify";
 import { Calendar, Briefcase, PlusCircle, NotebookText, Loader2, Palmtree, ChevronLeft, ChevronRight, X } from "lucide-react";
@@ -7,6 +7,16 @@ import { format, addDays, startOfWeek, isSameDay, isWithinInterval, startOfMonth
 
 const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const calendarDaysOfWeek = ["M", "T", "W", "T", "F", "S", "S"];
+
+const getTimeValue = (date) => {
+  const value = date instanceof Date ? date.getTime() : new Date(date).getTime();
+  return Number.isNaN(value) ? 0 : value;
+};
+
+const getLeaveYear = (leave) => {
+  const year = new Date(leave.createdAt || leave.startDate).getFullYear();
+  return Number.isNaN(year) ? "" : String(year);
+};
 
 export default function RosterShifts() {
   const [metrics, setMetrics] = useState({
@@ -20,6 +30,7 @@ export default function RosterShifts() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmittingLeave, setIsSubmittingLeave] = useState(false);
   const [currentStaffData, setCurrentStaffData] = useState(null);
+  const [selectedLeaveYear, setSelectedLeaveYear] = useState(String(new Date().getFullYear()));
 
   useEffect(() => {
     const fetchStaffData = async () => {
@@ -103,6 +114,7 @@ export default function RosterShifts() {
             type: l.leaveType,
             startDate: start,
             endDate: end,
+            createdAt: l.createdAt ? new Date(l.createdAt) : start,
             status: l.status,
             reason: l.reason,
             datesDisplay: `${format(start, 'MMM dd')}${l.endDate ? ` - ${format(end, 'MMM dd')}` : ''}`
@@ -205,6 +217,25 @@ export default function RosterShifts() {
     ];
   })();
 
+  const fullLeaveHistory = leaveHistory;
+
+  const leaveHistoryYears = useMemo(() => {
+    const years = fullLeaveHistory
+      .map(getLeaveYear)
+      .filter(Boolean);
+
+    return [...new Set([String(new Date().getFullYear()), ...years])]
+      .sort((first, second) => Number(second) - Number(first));
+  }, [fullLeaveHistory]);
+
+  const filteredLeaveHistory = useMemo(() => (
+    [...fullLeaveHistory]
+      .filter((leave) => selectedLeaveYear === "all" || getLeaveYear(leave) === selectedLeaveYear)
+      .sort((first, second) => (
+        getTimeValue(second.createdAt || second.startDate) - getTimeValue(first.createdAt || first.startDate)
+      ))
+  ), [fullLeaveHistory, selectedLeaveYear]);
+
   const toggleSelectedDate = (date) => {
     if (isStaffOffDay(date)) {
       toast.error("You cannot apply leave on a scheduled off day.");
@@ -288,6 +319,7 @@ export default function RosterShifts() {
           endDate: newLeave.endDate ? new Date(newLeave.endDate) : new Date(newLeave.startDate),
           status: newLeave.status,
           reason: newLeave.reason,
+          createdAt: newLeave.createdAt ? new Date(newLeave.createdAt) : new Date(),
           datesDisplay: `${format(new Date(newLeave.startDate), 'MMM dd')}${newLeave.endDate ? ` - ${format(new Date(newLeave.endDate), 'MMM dd')}` : ''}`
         }));
 
@@ -325,19 +357,19 @@ export default function RosterShifts() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-0">
-      <header className="mb-6 sm:mb-8">
+    <div className="mx-auto w-full max-w-7xl px-3 py-5 sm:px-6 sm:py-8 lg:px-0">
+      <header className="mb-5 sm:mb-8">
         <h1 className="font-serif text-2xl font-bold tracking-tight text-white sm:text-4xl">Your Roster & Leave</h1>
-        <p className="mt-3 text-sm leading-6 text-gray-400 sm:text-base">
+        <p className="mt-2 text-sm leading-6 text-gray-400 sm:mt-3 sm:text-base">
           Manage your weekly schedule and apply for leaves.
         </p>
       </header>
 
-      <div className="mt-6 grid grid-cols-1 items-start gap-5 lg:grid-cols-3 lg:gap-6">
+      <div className="mt-5 grid grid-cols-1 items-start gap-4 sm:mt-6 sm:gap-5 lg:grid-cols-3 lg:gap-6">
         {/* LEFT COLUMN (2/3 width) */}
-        <div className="lg:col-span-2 space-y-6">
+        <div className="contents lg:block lg:col-span-2 lg:space-y-6">
           {/* 1. Leave Balance Card (full width of left column) */}
-          <GlassCard className="flex items-center justify-between p-4 sm:p-6">
+          <GlassCard className="order-1 flex items-center justify-between p-4 sm:p-6">
             <div>
               <p className="text-sm font-medium text-gray-400">Leave Balance</p>
               <p className="text-2xl font-bold text-white sm:text-3xl">{metrics.leaveBalance} Requests</p>
@@ -346,7 +378,7 @@ export default function RosterShifts() {
           </GlassCard>
 
           {/* 2. Weekly Planner (full width of left column) */}
-          <GlassCard className="flex-1 p-4 sm:p-6">
+          <GlassCard className="order-2 flex-1 p-4 sm:p-6">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="flex items-center gap-2 text-lg font-semibold text-white sm:text-xl">
                 <Calendar className="w-5 h-5 text-[#d4af37]" /> Weekly Planner
@@ -384,14 +416,27 @@ export default function RosterShifts() {
             </div>
           </GlassCard>
 
-          {/* 3. Recent Leave Requests (full width of left column) */}
-          <GlassCard className="p-4 sm:p-6">
-            <h2 className="mb-5 flex items-center gap-2 text-lg font-semibold text-white">
-              <NotebookText className="w-5 h-5 text-[#d4af37]" /> Recent Leave Requests
-            </h2>
-            <div className="flex flex-col gap-3">
-              {leaveHistory.length > 0 ? (
-                leaveHistory.map((leave) => (
+          {/* 3. Leave History (full width of left column) */}
+          <GlassCard className="order-4 p-4 sm:p-6">
+            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
+                <NotebookText className="w-5 h-5 text-[#d4af37]" /> Leave History
+              </h2>
+              <select
+                value={selectedLeaveYear}
+                onChange={(e) => setSelectedLeaveYear(e.target.value)}
+                className="w-full rounded-lg border border-slate-800 bg-[#07090d] px-3 py-2 text-sm font-semibold text-slate-200 outline-none transition focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] sm:w-36"
+                aria-label="Filter leave history by year"
+              >
+                <option value="all">All</option>
+                {leaveHistoryYears.map((year) => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex max-h-80 flex-col gap-3 overflow-y-auto pr-1 scrollbar-thin scrollbar-track-[#07090d] scrollbar-thumb-slate-700 hover:scrollbar-thumb-[#d4af37]/70 sm:max-h-96 sm:pr-2 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-track]:bg-[#07090d] [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-700 hover:[&::-webkit-scrollbar-thumb]:bg-[#d4af37]/70">
+              {filteredLeaveHistory.length > 0 ? (
+                filteredLeaveHistory.map((leave) => (
                   <div key={leave.id} className="flex flex-col gap-2 rounded-xl border border-slate-800/80 bg-[#07090d] p-3.5 transition-colors hover:border-slate-700">
                     <div className="flex items-start justify-between gap-3">
                       <span className="text-sm font-medium text-slate-200">{leave.type}</span>
@@ -402,14 +447,14 @@ export default function RosterShifts() {
                   </div>
                 ))
               ) : (
-                <p className="text-sm text-gray-500 text-center py-4">No recent leave requests.</p>
+                <p className="text-sm text-gray-500 text-center py-4">No leave requests found for this year.</p>
               )}
             </div>
           </GlassCard>
         </div>
 
         {/* RIGHT COLUMN (1/3 width) */}
-        <div className="lg:col-span-1">
+        <div className="order-3 lg:order-none lg:col-span-1">
           {/* Apply Leave Form */}
           <GlassCard className="p-4 sm:p-6">
             <h2 className="mb-5 flex items-center gap-2 text-lg font-semibold text-white">
