@@ -1,80 +1,102 @@
 const axios = require('axios');
 const Holiday = require('../models/Holiday');
 
-const SRI_LANKA_COUNTRY_CODE = 'LK';
+const GOOGLE_SRI_LANKA_HOLIDAY_CALENDAR_URL =
+  'https://www.googleapis.com/calendar/v3/calendars/en.lk%23holiday%40group.v.calendar.google.com/events';
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 
 const getCurrentYear = () => new Date().getFullYear();
 
-const fetchSriLankanPublicHolidays = async (year = getCurrentYear()) => {
-  const response = await axios.get(
-    `https://date.nager.at/api/v3/PublicHolidays/${year}/${SRI_LANKA_COUNTRY_CODE}`,
-    { timeout: 15000 }
-  );
+const getYearBounds = (year) => ({
+  timeMin: `${year}-01-01T00:00:00Z`,
+  timeMax: `${year}-12-31T23:59:59Z`,
+});
 
-  return Array.isArray(response.data) ? response.data : [];
+const fetchSriLankanPublicHolidays = async (year = getCurrentYear()) => {
+  const apiKey = process.env.GOOGLE_CALENDAR_API_KEY;
+
+  if (!apiKey) {
+    throw new Error('GOOGLE_CALENDAR_API_KEY is not configured');
+  }
+
+  const { timeMin, timeMax } = getYearBounds(year);
+  const response = await axios.get(GOOGLE_SRI_LANKA_HOLIDAY_CALENDAR_URL, {
+    params: {
+      key: apiKey,
+      timeMin,
+      timeMax,
+      singleEvents: true,
+      orderBy: 'startTime',
+    },
+    timeout: 15000,
+  });
+
+  return Array.isArray(response.data?.items) ? response.data.items : [];
+};
+
+const normalizePublicHoliday = (calendarEvent) => {
+  const date = String(calendarEvent?.start?.date || '').slice(0, 10);
+  const name = String(calendarEvent?.summary || 'Public Holiday').trim();
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !name) return null;
+
+  return {
+    date,
+    name,
+    type: 'public',
+    isSystemGenerated: true,
+    isActive: true,
+    isFullDay: true,
+    hours: { start: '', end: '' },
+  };
 };
 
 const syncSriLankanPublicHolidays = async (year = getCurrentYear()) => {
   const publicHolidays = await fetchSriLankanPublicHolidays(year);
-  let inserted = 0;
-  let updated = 0;
-  let skippedInactive = 0;
+  const normalizedHolidays = publicHolidays
+    .map(normalizePublicHoliday)
+    .filter(Boolean);
 
-  for (const publicHoliday of publicHolidays) {
-    const date = String(publicHoliday.date || '').slice(0, 10);
-    const name = String(publicHoliday.localName || publicHoliday.name || 'Public Holiday').trim();
-    if (!date || !name) continue;
+  const uniqueHolidaysByDate = new Map(
+    normalizedHolidays.map((holiday) => [holiday.date, holiday])
+  );
+  const uniqueHolidays = Array.from(uniqueHolidaysByDate.values());
+  const holidayDates = uniqueHolidays.map((holiday) => holiday.date);
 
-    const existingHoliday = await Holiday.findOne({ date });
+  const existingHolidays =
+    holidayDates.length > 0
+      ? await Holiday.find({ date: { $in: holidayDates } }).select('date').lean()
+      : [];
+  const existingDates = new Set(existingHolidays.map((holiday) => holiday.date));
+  const holidaysToInsert = uniqueHolidays.filter(
+    (holiday) => !existingDates.has(holiday.date)
+  );
 
-    if (existingHoliday?.isActive === false) {
-      skippedInactive += 1;
-      continue;
-    }
-
-    if (existingHoliday && !existingHoliday.isSystemGenerated) {
-      continue;
-    }
-
-    const update = {
-      date,
-      name,
-      type: 'public',
-      isSystemGenerated: true,
-      isActive: true,
-    };
-
-    const result = await Holiday.updateOne(
-      { date },
-      {
-        $set: update,
-        $setOnInsert: {
-          isFullDay: true,
-          hours: { start: '', end: '' },
-        },
-      },
-      { upsert: true }
-    );
-
-    if (result.upsertedCount > 0) inserted += 1;
-    else if (result.modifiedCount > 0) updated += 1;
+  if (holidaysToInsert.length > 0) {
+    await Holiday.insertMany(holidaysToInsert, { ordered: false });
   }
 
-  return {
+  const result = {
+    provider: 'google-calendar',
     year,
     fetched: publicHolidays.length,
-    inserted,
-    updated,
-    skippedInactive,
+    normalized: uniqueHolidays.length,
+    inserted: holidaysToInsert.length,
+    skippedExisting: uniqueHolidays.length - holidaysToInsert.length,
   };
+
+  console.log(
+    `Sri Lankan public holiday sync complete: fetched ${result.fetched}, inserted ${result.inserted}, skipped ${result.skippedExisting} for ${year}.`
+  );
+  console.log('Sri Lankan public holiday sync summary:', result);
+
+  return result;
 };
 
 const startHolidaySyncScheduler = () => {
   const runSync = async () => {
     try {
-      const result = await syncSriLankanPublicHolidays();
-      console.log('Sri Lankan public holiday sync complete:', result);
+      await syncSriLankanPublicHolidays();
     } catch (error) {
       console.warn('Sri Lankan public holiday sync failed:', error.message);
     }

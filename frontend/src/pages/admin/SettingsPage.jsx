@@ -1,11 +1,21 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
-import { CalendarDays, ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Plus, Trash2, X } from 'lucide-react';
+import {
+  addDays,
+  eachDayOfInterval,
+  endOfMonth,
+  format,
+  getDay,
+  isSameDay,
+  isSameMonth,
+  startOfMonth
+} from 'date-fns';
 import { toast } from 'react-toastify';
 import { GlassCard, GoldButton, SectionPanel } from '../../components/admin/SystemUI';
 import { WEEKLY_OPENING_HOURS, defaultOpeningHours, useSalonSettings } from '../../hooks/useSalonSettings';
 
-function SettingsToggle({ label, description, checked, onChange }) {
+function SettingsToggle({ label, description, checked, onChange, disabled = false }) {
   return (
     <div className="flex items-start justify-between gap-4 border-b border-white/10 py-4 last:border-b-0 sm:items-center">
       <div className="min-w-0">
@@ -15,7 +25,8 @@ function SettingsToggle({ label, description, checked, onChange }) {
       <button
         type="button"
         onClick={onChange}
-        className={`relative inline-flex h-7 w-14 shrink-0 items-center rounded-full border transition ${
+        disabled={disabled}
+        className={`relative inline-flex h-7 w-14 shrink-0 items-center rounded-full border transition disabled:cursor-not-allowed disabled:opacity-45 ${
           checked
             ? 'border-[#d4af37]/70 bg-[#d4af37]'
             : 'border-white/10 bg-white/10'
@@ -537,13 +548,166 @@ function DarkCalendarPicker({ value, onChange, holidays = [] }) {
   );
 }
 
+const HOLIDAY_WEEKDAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+function HolidayMultiDateCalendar({ selectedDates = [], onChange, holidays = [], disabled = false }) {
+  const [calendarMonth, setCalendarMonth] = useState(startOfMonth(new Date()));
+  const holidayDateKeys = useMemo(
+    () => new Set(holidays.map((holiday) => holiday.date).filter(Boolean)),
+    [holidays]
+  );
+
+  const calendarDays = useMemo(() => {
+    const monthStart = startOfMonth(calendarMonth);
+    const monthEnd = endOfMonth(calendarMonth);
+    const leadingBlankCount = (getDay(monthStart) + 6) % 7;
+
+    return [
+      ...Array.from({ length: leadingBlankCount }, (_, index) => ({
+        type: 'blank',
+        id: `blank-${index}`
+      })),
+      ...eachDayOfInterval({ start: monthStart, end: monthEnd }).map((date) => ({
+        type: 'date',
+        id: toDateKey(date),
+        date
+      }))
+    ];
+  }, [calendarMonth]);
+
+  const toggleSelectedDate = (date) => {
+    if (disabled) return;
+
+    const dateKey = toDateKey(date);
+    onChange(
+      selectedDates.includes(dateKey)
+        ? selectedDates.filter((selectedDate) => selectedDate !== dateKey)
+        : [...selectedDates, dateKey]
+    );
+  };
+
+  return (
+    <div className="rounded-xl border border-slate-800 bg-[#07090d] p-2.5 sm:p-3">
+      <div className="mb-3 flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => setCalendarMonth((prev) => addDays(startOfMonth(prev), -1))}
+          className="rounded-lg border border-slate-800 p-1.5 text-slate-400 transition hover:border-[#d4af37]/60 hover:text-[#d4af37]"
+          aria-label="Previous month"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <p className="text-sm font-semibold text-slate-100">{format(calendarMonth, 'MMMM yyyy')}</p>
+        <button
+          type="button"
+          onClick={() => setCalendarMonth((prev) => addDays(endOfMonth(prev), 1))}
+          className="rounded-lg border border-slate-800 p-1.5 text-slate-400 transition hover:border-[#d4af37]/60 hover:text-[#d4af37]"
+          aria-label="Next month"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold uppercase tracking-wider text-slate-500">
+        {HOLIDAY_WEEKDAY_LABELS.map((day, index) => (
+          <span key={`${day}-${index}`}>{day}</span>
+        ))}
+      </div>
+
+      <div className="mt-2 grid grid-cols-7 gap-1">
+        {calendarDays.map((calendarDay) => {
+          if (calendarDay.type === 'blank') {
+            return <div key={calendarDay.id} className="aspect-square" />;
+          }
+
+          const dateKey = toDateKey(calendarDay.date);
+          const isSelected = selectedDates.includes(dateKey);
+          const isToday = isSameDay(calendarDay.date, new Date());
+          const isExistingClosure = holidayDateKeys.has(dateKey);
+
+          return (
+            <button
+              type="button"
+              key={calendarDay.id}
+              onClick={() => toggleSelectedDate(calendarDay.date)}
+              disabled={disabled}
+              className={`relative aspect-square min-h-9 rounded-lg text-xs font-semibold transition ${
+                isSelected
+                  ? 'bg-[#c5a880] text-black shadow-[0_0_16px_rgba(197,168,128,0.35)]'
+                  : isToday
+                    ? 'border border-[#d4af37]/70 bg-[#d4af37]/10 text-[#d4af37]'
+                    : isSameMonth(calendarDay.date, calendarMonth)
+                      ? 'text-slate-300 hover:bg-white/10 hover:text-white'
+                      : 'text-slate-700'
+              } ${disabled ? 'cursor-not-allowed opacity-60' : ''} ${
+                isExistingClosure && !isSelected ? 'ring-1 ring-inset ring-red-500/20' : ''
+              }`}
+            >
+              {format(calendarDay.date, 'd')}
+              {isExistingClosure && (
+                <span
+                  className={`absolute bottom-1 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full ${
+                    isSelected ? 'bg-black/70' : 'bg-red-400/80'
+                  }`}
+                />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function HolidaySelectedDateChips({ selectedDates = [], onRemove, disabled = false }) {
+  const sortedSelectedDates = useMemo(
+    () => [...selectedDates].sort((first, second) => first.localeCompare(second)),
+    [selectedDates]
+  );
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-black/20 p-3 sm:p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#d4af37]">Selected Dates</p>
+        <span className="rounded-full border border-[#d4af37]/20 bg-[#d4af37]/10 px-2.5 py-1 text-xs font-semibold text-[#f1d9ad]">
+          {selectedDates.length}
+        </span>
+      </div>
+
+      <div className="flex max-h-32 min-h-11 flex-wrap items-start gap-2 overflow-y-auto pr-1">
+        {sortedSelectedDates.length > 0 ? (
+          sortedSelectedDates.map((dateKey) => (
+            <span
+              key={dateKey}
+              className="inline-flex items-center gap-1 rounded-full border border-[#c5a880]/30 bg-[#c5a880]/10 px-2.5 py-1 text-xs font-semibold text-[#f1d9ad]"
+            >
+              {format(new Date(`${dateKey}T00:00:00`), 'MMM d')}
+              <button
+                type="button"
+                onClick={() => onRemove(dateKey)}
+                disabled={disabled}
+                className="rounded-full p-0.5 text-[#f1d9ad] transition hover:bg-[#c5a880]/20 hover:text-white disabled:cursor-not-allowed"
+                aria-label={`Remove ${format(new Date(`${dateKey}T00:00:00`), 'MMM d')}`}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          ))
+        ) : (
+          <span className="self-center text-xs text-slate-600">No closure dates selected.</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function SettingsPage() {
   const { settings, setSettings, isLoading } = useSalonSettings();
   const [isSaving, setIsSaving] = useState(false);
   const [savedSettingsSignature, setSavedSettingsSignature] = useState('');
   const [holidays, setHolidays] = useState([]);
   const [holidayForm, setHolidayForm] = useState({
-    date: '',
+    dates: [],
     name: '',
     isFullDay: true,
     hours: {
@@ -677,7 +841,7 @@ function SettingsPage() {
 
   const resetHolidayForm = () => {
     setHolidayForm({
-      date: '',
+      dates: [],
       name: '',
       isFullDay: true,
       hours: {
@@ -702,15 +866,17 @@ function SettingsPage() {
   const handleHolidaySubmit = async (event) => {
     event.preventDefault();
 
-    if (!holidayForm.date || !holidayForm.name.trim()) {
-      toast.error('Please add a closure date and description.');
+    if (holidayForm.dates.length === 0 || !holidayForm.name.trim()) {
+      toast.error('Please select closure dates and add a description.');
       return;
     }
 
     if (
+      editingHolidayId
+      &&
       !holidayForm.isFullDay
       && (
-        !holidayForm.date
+        holidayForm.dates.length === 0
         || !holidayForm.hours.start
         || !holidayForm.hours.end
         || holidayForm.hours.start >= holidayForm.hours.end
@@ -726,27 +892,32 @@ function SettingsPage() {
         ? `http://localhost:5000/api/holidays/${editingHolidayId}`
         : 'http://localhost:5000/api/holidays';
       const requestMethod = editingHolidayId ? axios.put : axios.post;
+      const holidayPayload = editingHolidayId
+        ? {
+            date: holidayForm.dates[0],
+            name: holidayForm.name.trim(),
+            type: holidays.find((holiday) => holiday._id === editingHolidayId)?.type || 'custom',
+            isFullDay: holidayForm.isFullDay,
+            hours: holidayForm.isFullDay
+              ? { start: '', end: '' }
+              : {
+                  start: holidayForm.hours.start,
+                  end: holidayForm.hours.end
+                }
+          }
+        : {
+            dates: holidayForm.dates,
+            description: holidayForm.name.trim()
+          };
       const response = await requestMethod(
         requestUrl,
-        {
-          date: holidayForm.date,
-          name: holidayForm.name.trim(),
-          type: editingHolidayId
-            ? holidays.find((holiday) => holiday._id === editingHolidayId)?.type || 'custom'
-            : 'custom',
-          isFullDay: holidayForm.isFullDay,
-          hours: holidayForm.isFullDay
-            ? { start: '', end: '' }
-            : {
-                start: holidayForm.hours.start,
-                end: holidayForm.hours.end
-              }
-        },
+        holidayPayload,
         getAuthConfig()
       );
 
       if (response.data?.success) {
-        toast.success(editingHolidayId ? 'Salon closure updated.' : 'Salon closure saved.');
+        const createdCount = response.data?.createdCount || response.data?.modifiedCount || holidayForm.dates.length;
+        toast.success(editingHolidayId ? 'Salon closure updated.' : `${createdCount} closure date(s) saved.`);
         resetHolidayForm();
         fetchHolidays();
       }
@@ -755,7 +926,7 @@ function SettingsPage() {
 
       if (response?.conflict) {
         setHolidayConflict({
-          date: holidayForm.date,
+          date: holidayForm.dates[0],
           name: holidayForm.name.trim(),
           appointmentCount: response.appointmentCount || 0
         });
@@ -799,7 +970,7 @@ function SettingsPage() {
   const handleEditHoliday = (holiday) => {
     setEditingHolidayId(holiday._id);
     setHolidayForm({
-      date: holiday.date || '',
+      dates: holiday.date ? [holiday.date] : [],
       name: holiday.name || '',
       isFullDay: holiday.isFullDay !== false,
       hours: {
@@ -846,7 +1017,7 @@ function SettingsPage() {
     ? holidays.find((holiday) => holiday._id === editingHolidayId)
     : null;
   const isHolidayFormDirty = !editingHoliday || (
-    holidayForm.date !== (editingHoliday.date || '')
+    holidayForm.dates[0] !== (editingHoliday.date || '')
     || holidayForm.name.trim() !== (editingHoliday.name || '')
     || holidayForm.isFullDay !== (editingHoliday.isFullDay !== false)
     || (
@@ -858,7 +1029,7 @@ function SettingsPage() {
     )
   );
   const isHolidayFormReady = Boolean(
-    holidayForm.date
+    holidayForm.dates.length > 0
     && holidayForm.name.trim()
     && isHolidayFormDirty
     && (
@@ -978,9 +1149,13 @@ function SettingsPage() {
                 />
                 <SettingsToggle
                   label="Partial Day Closure"
-                  description="Turn on to close only a selected time range for the holiday currently being created or edited."
-                  checked={!holidayForm.isFullDay}
-                  onChange={() => setHolidayForm((current) => ({ ...current, isFullDay: !current.isFullDay }))}
+                  description="Edit a single closure to block only a selected time range while keeping the rest of the day open."
+                  checked={Boolean(editingHolidayId && !holidayForm.isFullDay)}
+                  disabled={!editingHolidayId}
+                  onChange={() => {
+                    if (!editingHolidayId) return;
+                    setHolidayForm((current) => ({ ...current, isFullDay: !current.isFullDay }));
+                  }}
                 />
               </div>
             </div>
@@ -1024,67 +1199,91 @@ function SettingsPage() {
               </div>
             </div>
 
-            <form onSubmit={handleHolidaySubmit} className="mt-5 grid items-end gap-4 sm:mt-7 sm:gap-5 lg:grid-cols-[minmax(180px,0.6fr)_minmax(220px,1fr)_auto]">
-              <label className="block">
-                <span className="mb-2 block text-sm font-medium text-gray-300">Closure Date</span>
-                <DarkCalendarPicker
-                  value={holidayForm.date}
-                  onChange={(date) => setHolidayForm((current) => ({ ...current, date }))}
+            <form onSubmit={handleHolidaySubmit} className="mt-5 flex flex-col gap-5 sm:mt-7 md:flex-row md:items-start lg:gap-7">
+              <div className="w-full md:w-[42%] md:min-w-[20rem] xl:w-[38%]">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <span className="block text-sm font-medium text-gray-300">
+                    {editingHolidayId ? 'Closure Date' : 'Closure Dates'}
+                  </span>
+                  {!editingHolidayId && (
+                    <span className="text-xs font-semibold text-[#d4af37]">
+                      Total: {holidayForm.dates.length} Day{holidayForm.dates.length === 1 ? '' : 's'}
+                    </span>
+                  )}
+                </div>
+                <HolidayMultiDateCalendar
+                  selectedDates={holidayForm.dates}
+                  onChange={(dates) => setHolidayForm((current) => ({
+                    ...current,
+                    dates: editingHolidayId ? dates.slice(-1) : dates
+                  }))}
                   holidays={holidays}
                 />
-              </label>
+              </div>
 
-              <label className="block">
-                <span className="mb-2 block text-sm font-medium text-gray-300">Description</span>
-                <input
-                  type="text"
-                  name="name"
-                  value={holidayForm.name}
-                  onChange={handleHolidayChange}
-                  placeholder="Poya Day, Christmas, emergency closure..."
-                  className="salon-field"
+              <div className="flex min-w-0 flex-1 flex-col gap-4 md:self-stretch">
+                <HolidaySelectedDateChips
+                  selectedDates={holidayForm.dates}
+                  disabled={isHolidaySaving}
+                  onRemove={(dateKey) => setHolidayForm((current) => ({
+                    ...current,
+                    dates: current.dates.filter((selectedDate) => selectedDate !== dateKey)
+                  }))}
                 />
-              </label>
 
-              <button
-                type="submit"
-                disabled={isHolidaySaving || !isHolidayFormReady}
-                className="inline-flex h-12 w-full items-center justify-center rounded-full border border-[#d4af37]/40 px-5 text-sm font-semibold text-[#d4af37] transition hover:bg-[#d4af37]/10 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-zinc-600 sm:h-[52px] sm:w-auto lg:self-end"
-              >
-                {isHolidaySaving ? 'Saving...' : editingHolidayId ? 'Update Closure' : 'Add Closure'}
-              </button>
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+                  <label className="block min-w-0">
+                    <span className="mb-2 block text-sm font-medium text-gray-300">Description</span>
+                    <input
+                      type="text"
+                      name="name"
+                      value={holidayForm.name}
+                      onChange={handleHolidayChange}
+                      placeholder="Poya Day, Christmas, emergency closure..."
+                      className="salon-field"
+                    />
+                  </label>
 
-              {!holidayForm.isFullDay && (
-                <div className="overflow-hidden rounded-xl border border-sky-400/15 bg-sky-400/[0.03] p-3 transition-all duration-300 sm:p-4 lg:col-span-2">
-                  <p className="text-sm font-semibold text-white">Partial Closure Hours</p>
-                  <p className="mt-1 text-xs leading-5 text-gray-400">
-                    These hours will be blocked while time slots outside this range stay available.
-                  </p>
-                  <div className="mt-4 grid gap-4 sm:mt-5 sm:grid-cols-2">
-                    <label className="block">
-                      <span className="mb-2 block text-sm font-medium text-gray-300">Start Time</span>
-                      <input
-                        type="time"
-                        name="start"
-                        value={holidayForm.hours.start}
-                        onChange={handleHolidayTimeChange}
-                        className="salon-field [color-scheme:dark]"
-                      />
-                    </label>
-                    <label className="block">
-                      <span className="mb-2 block text-sm font-medium text-gray-300">End Time</span>
-                      <input
-                        type="time"
-                        name="end"
-                        value={holidayForm.hours.end}
-                        onChange={handleHolidayTimeChange}
-                        className="salon-field [color-scheme:dark]"
-                      />
-                    </label>
-                  </div>
+                  <button
+                    type="submit"
+                    disabled={isHolidaySaving || !isHolidayFormReady}
+                    className="inline-flex h-12 w-full items-center justify-center rounded-full border border-[#d4af37]/40 px-5 text-sm font-semibold text-[#d4af37] transition hover:bg-[#d4af37]/10 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-zinc-600 sm:h-[52px] lg:w-auto lg:min-w-[9.5rem]"
+                  >
+                    {isHolidaySaving ? 'Saving...' : editingHolidayId ? 'Update Closure' : 'Add Closure'}
+                  </button>
                 </div>
-              )}
 
+                {editingHolidayId && !holidayForm.isFullDay && (
+                  <div className="overflow-hidden rounded-xl border border-sky-400/15 bg-sky-400/[0.03] p-3 transition-all duration-300 sm:p-4">
+                    <p className="text-sm font-semibold text-white">Partial Closure Hours</p>
+                    <p className="mt-1 text-xs leading-5 text-gray-400">
+                      These hours will be blocked while time slots outside this range stay available.
+                    </p>
+                    <div className="mt-4 grid gap-4 sm:mt-5 sm:grid-cols-2">
+                      <label className="block">
+                        <span className="mb-2 block text-sm font-medium text-gray-300">Start Time</span>
+                        <input
+                          type="time"
+                          name="start"
+                          value={holidayForm.hours.start}
+                          onChange={handleHolidayTimeChange}
+                          className="salon-field [color-scheme:dark]"
+                        />
+                      </label>
+                      <label className="block">
+                        <span className="mb-2 block text-sm font-medium text-gray-300">End Time</span>
+                        <input
+                          type="time"
+                          name="end"
+                          value={holidayForm.hours.end}
+                          onChange={handleHolidayTimeChange}
+                          className="salon-field [color-scheme:dark]"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                )}
+              </div>
             </form>
 
             {editingHolidayId && (

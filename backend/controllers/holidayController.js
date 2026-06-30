@@ -4,6 +4,23 @@ const Notification = require('../models/Notification');
 const { syncSriLankanPublicHolidays } = require('../services/holidaySyncService');
 
 const ACTIVE_STATUSES = ['pending', 'confirmed'];
+const SALON_TIMEZONE = 'Asia/Colombo';
+
+const getTodayDateKey = () => {
+  const dateParts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: SALON_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const partLookup = Object.fromEntries(
+    dateParts
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value])
+  );
+
+  return `${partLookup.year}-${partLookup.month}-${partLookup.day}`;
+};
 
 const isValidDateKey = (date) => {
   if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
@@ -47,6 +64,33 @@ const validateHolidayPayload = (payload) => {
     if (payload.hours.end <= payload.hours.start) {
       return 'Partial closure end time must be after start time.';
     }
+  }
+
+  return '';
+};
+
+const toBulkHolidayPayload = (body = {}) => {
+  const dates = Array.isArray(body.dates)
+    ? [...new Set(body.dates.map((date) => String(date || '').slice(0, 10)))]
+    : [];
+
+  return {
+    dates,
+    name: String(body.description || body.name || '').trim(),
+  };
+};
+
+const validateBulkHolidayPayload = (payload) => {
+  if (!Array.isArray(payload.dates) || payload.dates.length === 0) {
+    return 'Please select at least one closure date.';
+  }
+
+  if (!payload.name) {
+    return 'A closure description is required.';
+  }
+
+  if (payload.dates.some((date) => !isValidDateKey(date))) {
+    return 'All closure dates must use the YYYY-MM-DD format.';
   }
 
   return '';
@@ -144,7 +188,14 @@ const upsertHoliday = ({ date, name, type }) => (
 
 const getHolidays = async (_req, res) => {
   try {
-    const holidays = await Holiday.find({ isActive: { $ne: false } }).sort({ date: 1 }).lean();
+    const today = getTodayDateKey();
+    const holidays = await Holiday.find({
+      isActive: { $ne: false },
+      date: { $gte: today },
+    })
+      .sort({ date: 1 })
+      .lean();
+
     res.status(200).json({ success: true, holidays });
   } catch (error) {
     console.error('Get Holidays Error:', error);
@@ -154,6 +205,50 @@ const getHolidays = async (_req, res) => {
 
 const createHoliday = async (req, res) => {
   try {
+    if (Array.isArray(req.body?.dates)) {
+      const payload = toBulkHolidayPayload(req.body);
+      const validationMessage = validateBulkHolidayPayload(payload);
+
+      if (validationMessage) {
+        return res.status(400).json({
+          success: false,
+          message: validationMessage,
+        });
+      }
+
+      const bulkOperations = payload.dates.map((date) => ({
+        updateOne: {
+          filter: { date },
+          update: {
+            $set: {
+              date,
+              name: payload.name,
+              type: 'custom',
+              isSystemGenerated: false,
+              isActive: true,
+              isFullDay: true,
+              hours: { start: '', end: '' },
+            },
+          },
+          upsert: true,
+        },
+      }));
+
+      const result = await Holiday.bulkWrite(bulkOperations, { ordered: false });
+      const holidays = await Holiday.find({ date: { $in: payload.dates } })
+        .sort({ date: 1 })
+        .lean();
+
+      return res.status(201).json({
+        success: true,
+        holidays,
+        requestedCount: payload.dates.length,
+        createdCount: result.upsertedCount || 0,
+        modifiedCount: result.modifiedCount || 0,
+        matchedCount: result.matchedCount || 0,
+      });
+    }
+
     const payload = toHolidayPayload(req.body);
     const validationMessage = validateHolidayPayload(payload);
 
