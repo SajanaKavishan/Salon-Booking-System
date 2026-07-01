@@ -7,7 +7,7 @@ import { WEEKLY_OPENING_HOURS, defaultOpeningHours, useSalonSettings } from '../
 import ServicesCarousel from '../../components/home/ServicesCarousel';
 import ReviewMarquee from '../../components/home/ReviewMarquee';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
 const formatTime = (timeValue) => {
   if (!timeValue) return '';
@@ -66,6 +66,8 @@ function Home() {
   const navigate = useNavigate();
   const [services, setServices] = useState([]);
   const [publicReviews, setPublicReviews] = useState([]);
+  const [galleryImages, setGalleryImages] = useState([]);
+  const [galleryLoading, setGalleryLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const userRole = localStorage.getItem('userRole');
   const { settings } = useSalonSettings();
@@ -108,6 +110,36 @@ function Home() {
     };
 
     fetchServices();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchGalleryImages = async () => {
+      try {
+        const response = await axios.get(`${API_BASE_URL}/api/gallery`);
+        const fetchedImages = Array.isArray(response.data) ? response.data : [];
+
+        if (isMounted) {
+          setGalleryImages(fetchedImages);
+        }
+      } catch (error) {
+        console.error('Error fetching gallery images:', error);
+        if (isMounted) {
+          setGalleryImages([]);
+        }
+      } finally {
+        if (isMounted) {
+          setGalleryLoading(false);
+        }
+      }
+    };
+
+    fetchGalleryImages();
 
     return () => {
       isMounted = false;
@@ -311,7 +343,6 @@ function Home() {
   };
 
   const scrollViewport = { once: true, amount: 0.2 };
-
   return (
     <motion.div
       className="salon-page min-h-screen bg-[#0a0a0a] text-white selection:bg-[#d4af37] selection:text-black"
@@ -499,7 +530,7 @@ function Home() {
             variants={revealLeftVariants}
           >
             <img
-              src="/salonInterior.jpg"
+              src={settings.salonInteriorImage || '/salonInterior.jpg'}
               alt="Salon Interior"
               className="h-[260px] w-full object-cover brightness-110 transition duration-500 hover:scale-105 sm:h-[380px]"
             />
@@ -579,7 +610,7 @@ function Home() {
 
           <motion.div className="flex justify-center" variants={revealRightVariants}>
             <img
-              src="/Owner.jpg"
+              src={settings.ownerImage || '/Owner.jpg'}
               alt="Dileep Malshan"
               className="aspect-[4/5] w-full max-w-sm rounded-lg border border-white/10 object-cover shadow-2xl brightness-105 transition-all duration-700 sm:max-w-md"
             />
@@ -606,29 +637,43 @@ function Home() {
           </motion.div>
 
           <motion.div
-            className="mt-10 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4"
+            className="salon-scrollbar mt-10 flex snap-x gap-3 overflow-x-auto pb-3 sm:gap-4"
             variants={containerVariants}
           >
-            {[
-              'https://images.unsplash.com/photo-1580618672591-eb180b1a973f?q=80&w=2069&auto=format&fit=crop',
-              'https://images.unsplash.com/photo-1600948836101-f9ffda59d250?q=80&w=2036&auto=format&fit=crop',
-              'https://images.unsplash.com/photo-1560869713-7d0a29430803?q=80&w=2012&auto=format&fit=crop',
-              '/Gallery4.jpg'
-            ].map((src, index) => (
-              <motion.div
-                key={src}
-                className="group overflow-hidden rounded-xl border border-white/10"
-                variants={revealItemVariants}
-                whileHover={{ y: -6, transition: { duration: 0.2 } }}
-              >
-                <img
-                  src={src}
-                  alt={`Gallery ${index + 1}`}
-                  className="h-36 w-full object-cover transition duration-500 group-hover:scale-105 sm:h-48"
+            {galleryLoading
+              ? Array.from({ length: 4 }).map((_, index) => (
+                <div
+                  key={`gallery-skeleton-${index}`}
+                  className="h-36 w-[calc(50%-0.375rem)] shrink-0 animate-pulse snap-start rounded-xl border border-white/10 bg-white/10 sm:h-48 sm:w-[calc(50%-0.5rem)] md:w-[calc(25%-0.75rem)]"
                 />
-              </motion.div>
-            ))}
+              ))
+              : galleryImages.map((image, index) => (
+                <motion.div
+                  key={image._id || image.imageUrl}
+                  className="group w-[calc(50%-0.375rem)] shrink-0 snap-start overflow-hidden rounded-xl border border-white/10 sm:w-[calc(50%-0.5rem)] md:w-[calc(25%-0.75rem)]"
+                  variants={revealItemVariants}
+                  whileHover={{ y: -6, transition: { duration: 0.2 } }}
+                >
+                  <img
+                    src={image.imageUrl}
+                    alt={image.altText || image.title || `Gallery ${index + 1}`}
+                    className="h-36 w-full object-cover transition duration-500 group-hover:scale-105 sm:h-48"
+                  />
+                </motion.div>
+              ))}
           </motion.div>
+
+          {!galleryLoading && galleryImages.length === 0 && (
+            <motion.div
+              className="mt-10 rounded-xl border border-dashed border-white/10 bg-white/[0.03] px-5 py-10 text-center"
+              variants={revealItemVariants}
+            >
+              <p className="font-serif text-2xl text-white">No gallery images yet</p>
+              <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-gray-400">
+                New portfolio work will appear here once images are uploaded from the admin dashboard.
+              </p>
+            </motion.div>
+          )}
         </div>
       </motion.section>
 

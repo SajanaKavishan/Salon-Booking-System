@@ -26,6 +26,7 @@ import ServicesPage from "./pages/admin/ServicesPage";
 import SettingsPage from "./pages/admin/SettingsPage";
 import Analytics from "./pages/admin/Analytics";
 import ReviewManagement from "./pages/admin/ReviewManagement";
+import AdminGallery from "./pages/admin/AdminGallery";
 import { AppointmentsProvider } from "./context/AppointmentsContext";
 
 function App() {
@@ -99,6 +100,7 @@ function App() {
               <Route path="services" element={<ServicesPage />} />
               <Route path="analytics" element={<Analytics />} />
               <Route path="reviews" element={<ReviewManagement />} />
+              <Route path="gallery" element={<AdminGallery />} />
               <Route path="settings" element={<SettingsPage />} />
             </Route>
 
