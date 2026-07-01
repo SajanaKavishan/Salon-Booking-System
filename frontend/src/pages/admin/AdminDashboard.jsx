@@ -131,6 +131,40 @@ const isOpenAppointmentStatus = (status) => (
   ["pending", "approved", "confirmed"].includes(String(status || "").trim().toLowerCase())
 );
 
+const WEEKDAY_KEYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+
+const addDays = (date, days) => {
+  const nextDate = new Date(date);
+  nextDate.setDate(nextDate.getDate() + days);
+  return nextDate;
+};
+
+const getCurrentMinutes = (timestamp) => {
+  const currentDate = new Date(timestamp);
+  return currentDate.getHours() * 60 + currentDate.getMinutes();
+};
+
+const getOpeningHoursForDate = (settings, dateValue) => {
+  const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+  const dayKey = WEEKDAY_KEYS[date.getDay()];
+
+  return settings?.openingHours?.[dayKey] || {
+    isOpen: true,
+    start: "09:00",
+    end: "22:00",
+  };
+};
+
+const normalizeClosureReason = (reason) => (
+  String(reason || "Salon closure").trim().replace(/[.\s]+$/g, "")
+);
+
+const getHolidayByDate = (holidays, dateKey) => (
+  holidays.find((holiday) => holiday.date === dateKey) || null
+);
+
+const isFullDayClosure = (holiday) => Boolean(holiday && holiday.isFullDay !== false);
+
 
 
 function AdminDashboard() {
@@ -148,6 +182,9 @@ function AdminDashboard() {
   const [allAppointments, setAllAppointments] = useState([]);
 
   const [recentLeaveRequests, setRecentLeaveRequests] = useState([]);
+  const [holidays, setHolidays] = useState([]);
+  const [salonSettings, setSalonSettings] = useState(null);
+  const [currentTime, setCurrentTime] = useState(Date.now());
 
   const [conflictingAppointments, setConflictingAppointments] = useState([]);
 
@@ -200,7 +237,7 @@ function AdminDashboard() {
 
 
 
-        const [summaryResponse, analyticsResponse, appointmentsRes, leaveRes] = await Promise.all([
+        const [summaryResponse, analyticsResponse, appointmentsRes, leaveRes, holidaysRes, settingsRes] = await Promise.all([
 
           axios.get("http://localhost:5000/api/dashboard/summary", authHeaders),
 
@@ -209,6 +246,16 @@ function AdminDashboard() {
           axios.get("http://localhost:5000/api/appointments/all", authHeaders),
 
           axios.get("http://localhost:5000/api/leaves", authHeaders), 
+
+          axios.get("http://localhost:5000/api/holidays").catch((holidayError) => {
+            console.error("Error loading salon closures:", holidayError);
+            return { data: { holidays: [] } };
+          }),
+
+          axios.get("http://localhost:5000/api/settings").catch((settingsError) => {
+            console.error("Error loading salon settings:", settingsError);
+            return { data: null };
+          }),
 
         ]);
 
@@ -230,6 +277,9 @@ function AdminDashboard() {
 
         setRecentLeaveRequests(getThisWeekLeaveRequests(leaveRes.data));
 
+        setHolidays(Array.isArray(holidaysRes.data?.holidays) ? holidaysRes.data.holidays : []);
+        setSalonSettings(settingsRes.data || null);
+
       } catch (error) {
 
         console.error("Dashboard data fetch error:", error);
@@ -250,6 +300,14 @@ function AdminDashboard() {
     fetchDashboardData();
 
   }, [fetchDashboardData]);
+
+  useEffect(() => {
+    const timerId = window.setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 60000);
+
+    return () => window.clearInterval(timerId);
+  }, []);
 
 
 
@@ -303,7 +361,69 @@ function AdminDashboard() {
 
   }
 
-  const todayDateKey = useMemo(() => getLocalDateKey(), []);
+  const todayDateKey = useMemo(() => getLocalDateKey(currentTime), [currentTime]);
+  const tomorrowDateKey = useMemo(() => getLocalDateKey(addDays(new Date(currentTime), 1)), [currentTime]);
+  const todayHoliday = useMemo(
+    () => getHolidayByDate(holidays, todayDateKey),
+    [holidays, todayDateKey]
+  );
+  const tomorrowHoliday = useMemo(
+    () => getHolidayByDate(holidays, tomorrowDateKey),
+    [holidays, tomorrowDateKey]
+  );
+  const todayOpeningHours = useMemo(
+    () => getOpeningHoursForDate(salonSettings, currentTime),
+    [currentTime, salonSettings]
+  );
+  const todayCloseMinutes = timeToMinutes(todayOpeningHours.end || "22:00");
+  const hasSalonClosedForToday = getCurrentMinutes(currentTime) >= todayCloseMinutes;
+  const isTodayFullDayClosure = isFullDayClosure(todayHoliday);
+  const isTodayPartialClosure = Boolean(todayHoliday && todayHoliday.isFullDay === false);
+  const isTomorrowFullDayClosure = isFullDayClosure(tomorrowHoliday);
+  const shouldShowTomorrowClosureNotice = hasSalonClosedForToday && isTomorrowFullDayClosure;
+  const shouldShowTomorrowOpenNotice = hasSalonClosedForToday && isTodayFullDayClosure && !isTomorrowFullDayClosure;
+  const closureNotice = useMemo(() => {
+    if (shouldShowTomorrowClosureNotice) {
+      return {
+        tone: "red",
+        label: "Tomorrow Closure Notice",
+        message: `Notice: The Salon is closed tomorrow. Reason: ${normalizeClosureReason(tomorrowHoliday?.name)}. No online appointments will be accepted for that date.`,
+      };
+    }
+
+    if (shouldShowTomorrowOpenNotice) {
+      return {
+        tone: "green",
+        label: "Reopening Notice",
+        message: "Notice: Today's salon closure has ended for operations. The salon is open tomorrow, and online appointments can continue for the next working day.",
+      };
+    }
+
+    if (isTodayFullDayClosure) {
+      return {
+        tone: "red",
+        label: "Salon Closure Notice",
+        message: `Notice: The Salon is closed today. Reason: ${normalizeClosureReason(todayHoliday?.name)}. No online appointments will be accepted.`,
+      };
+    }
+
+    if (isTodayPartialClosure) {
+      return {
+        tone: "amber",
+        label: "Partial Closure Notice",
+        message: `Notice: Partial Salon Closure today from ${todayHoliday.hours?.start || "the selected start time"} to ${todayHoliday.hours?.end || "the selected end time"}. Reason: ${normalizeClosureReason(todayHoliday.name)}.`,
+      };
+    }
+
+    return null;
+  }, [
+    isTodayFullDayClosure,
+    isTodayPartialClosure,
+    shouldShowTomorrowClosureNotice,
+    shouldShowTomorrowOpenNotice,
+    todayHoliday,
+    tomorrowHoliday,
+  ]);
 
   const todaysRosterGroups = useMemo(() => {
     const groups = new Map();
@@ -578,6 +698,43 @@ function AdminDashboard() {
         </p>
 
       </header>
+
+
+      {closureNotice && (
+        <section className={`overflow-hidden rounded-2xl border p-4 shadow-2xl backdrop-blur-xl sm:p-5 ${
+          closureNotice.tone === "red"
+            ? "border-red-500/30 bg-red-950/45"
+            : closureNotice.tone === "amber"
+              ? "border-amber-400/30 bg-amber-950/35"
+              : "border-emerald-400/25 bg-emerald-950/30"
+        }`}>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${
+              closureNotice.tone === "red"
+                ? "border-red-400/30 bg-red-500/10 text-red-300"
+                : closureNotice.tone === "amber"
+                  ? "border-amber-300/30 bg-amber-400/10 text-amber-300"
+                  : "border-emerald-300/25 bg-emerald-400/10 text-emerald-300"
+            }`}>
+              <AlertTriangle className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className={`break-words text-[0.65rem] font-bold uppercase tracking-[0.16em] sm:text-xs sm:tracking-[0.22em] ${
+                closureNotice.tone === "red"
+                  ? "text-red-200"
+                  : closureNotice.tone === "amber"
+                    ? "text-amber-200"
+                    : "text-emerald-200"
+              }`}>
+                {closureNotice.label}
+              </p>
+              <p className="mt-2 break-words text-sm leading-6 text-zinc-100 sm:text-base">
+                {closureNotice.message}
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
 
 
 
