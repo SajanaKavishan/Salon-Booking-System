@@ -153,6 +153,16 @@ const isTomorrowDateKey = (dateKey) => {
   return getLocalDateKey(tomorrow) === dateKey;
 };
 
+const addDays = (date, days) => {
+  const nextDate = new Date(date);
+  nextDate.setDate(nextDate.getDate() + days);
+  return nextDate;
+};
+
+const normalizeClosureReason = (reason) => (
+  String(reason || 'Salon closure').trim().replace(/[.\s]+$/g, '')
+);
+
 const getCurrentWeekRange = () => {
   const now = new Date();
   const dayIndex = now.getDay();
@@ -203,6 +213,7 @@ function StaffDashboard() {
   const [leaveRequests, setLeaveRequests] = useState([]);
   const [staffMetrics, setStaffMetrics] = useState(null);
   const [appointments, setAppointments] = useState([]);
+  const [holidays, setHolidays] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [actionKey, setActionKey] = useState('');
@@ -226,11 +237,15 @@ function StaffDashboard() {
           Authorization: `Bearer ${token}`
         }
       };
-      const [appointmentsResponse, profileResponse, leavesResponse, metricsResponse] = await Promise.all([
+      const [appointmentsResponse, profileResponse, leavesResponse, metricsResponse, holidaysResponse] = await Promise.all([
         axios.get('http://localhost:5000/api/appointments/staff', config),
         axios.get('http://localhost:5000/api/users/me', config),
         axios.get('http://localhost:5000/api/leaves', config),
         axios.get('http://localhost:5000/api/roster/metrics', config),
+        axios.get('http://localhost:5000/api/holidays').catch((holidayError) => {
+          console.error('Error loading salon closures:', holidayError);
+          return { data: { holidays: [] } };
+        }),
       ]);
 
       console.log("Get data from backend:", appointmentsResponse.data);
@@ -238,6 +253,7 @@ function StaffDashboard() {
       setStaffProfile(profileResponse.data || null);
       setLeaveRequests(Array.isArray(leavesResponse.data) ? leavesResponse.data : []);
       setStaffMetrics(metricsResponse.data || null);
+      setHolidays(Array.isArray(holidaysResponse.data?.holidays) ? holidaysResponse.data.holidays : []);
       setCurrentTime(Date.now());
     } catch (error) {
       console.error('Error fetching staff appointments:', {
@@ -312,10 +328,64 @@ function StaffDashboard() {
   }, [staffProfile, leaveRequests]);
 
   const isLeaveDay = Boolean(staffMetrics?.isLeaveDay ?? localIsLeaveDay);
+  const todayHoliday = useMemo(
+    () => holidays.find((holiday) => holiday.date === getTodayDateKey()) || null,
+    [holidays]
+  );
+  const isTodayFullDayClosure = Boolean(todayHoliday && todayHoliday.isFullDay !== false);
+  const isTodayPartialClosure = Boolean(todayHoliday && todayHoliday.isFullDay === false);
+  const isAwayDay = isLeaveDay || isTodayFullDayClosure;
+  const todayKey = getTodayDateKey();
+  const todayClosureReason = normalizeClosureReason(todayHoliday?.name);
   const nextActiveDate = staffMetrics?.nextActiveDate || null;
   const nextShiftTime = staffMetrics?.nextShiftTime || 'your usual start time';
-  const nextActiveDateLabel = formatDisplayDate(nextActiveDate);
-  const nextActiveDayLabel = formatDisplayDay(nextActiveDate);
+  const fullDayHolidayKeys = useMemo(
+    () => new Set(
+      holidays
+        .filter((holiday) => holiday.date && holiday.isFullDay !== false)
+        .map((holiday) => holiday.date)
+    ),
+    [holidays]
+  );
+  const adjustedNextActiveDate = useMemo(() => {
+    if (!isAwayDay) return nextActiveDate;
+
+    const metricDateIsUsable = nextActiveDate
+      && nextActiveDate > todayKey
+      && !fullDayHolidayKeys.has(nextActiveDate);
+
+    if (metricDateIsUsable) return nextActiveDate;
+
+    const offDays = Array.isArray(staffProfile?.offDays)
+      ? staffProfile.offDays
+      : staffProfile?.offDays
+        ? [staffProfile.offDays]
+        : [];
+
+    for (let offset = 1; offset <= 90; offset += 1) {
+      const candidateDate = addDays(new Date(), offset);
+      const candidateKey = getLocalDateKey(candidateDate);
+      const dayName = new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(candidateDate);
+      const isRegisteredOffDay = offDays.some((day) => (
+        String(day).trim().toLowerCase() === dayName.toLowerCase()
+      ));
+      const isApprovedLeaveDay = leaveRequests.some((leave) => {
+        if (String(leave?.status || '').trim().toLowerCase() !== 'approved') return false;
+
+        const startKey = getDateKeyFromValue(leave.startDate);
+        const endKey = getDateKeyFromValue(leave.endDate || leave.startDate);
+        return startKey <= candidateKey && candidateKey <= endKey;
+      });
+
+      if (!fullDayHolidayKeys.has(candidateKey) && !isRegisteredOffDay && !isApprovedLeaveDay) {
+        return candidateKey;
+      }
+    }
+
+    return nextActiveDate;
+  }, [fullDayHolidayKeys, isAwayDay, leaveRequests, nextActiveDate, staffProfile, todayKey]);
+  const nextActiveDateLabel = formatDisplayDate(adjustedNextActiveDate);
+  const nextActiveDayLabel = formatDisplayDay(adjustedNextActiveDate);
   const totalConsecutiveDaysOff = Number(staffMetrics?.totalConsecutiveDaysOff || 1);
   const leaveDayBanner = totalConsecutiveDaysOff > 1
     ? {
@@ -334,6 +404,13 @@ function StaffDashboard() {
           highlight: staffName,
           suffix: '!',
         };
+  const greetingBanner = isTodayFullDayClosure
+    ? {
+        prefix: 'Enjoy your break,',
+        highlight: staffName,
+        suffix: '. The salon is closed today.',
+      }
+    : leaveDayBanner;
   const nextDutySubtext = totalConsecutiveDaysOff > 1
     ? `See you on ${nextActiveDayLabel}. Enjoy the full break until then.`
     : `See you on ${nextActiveDayLabel}.`;
@@ -541,22 +618,28 @@ function StaffDashboard() {
   return (
     <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-0">
       <header className={`mb-6 rounded-2xl border border-white/10 p-4 shadow-xl backdrop-blur-md sm:mb-8 sm:p-6 ${
-        isLeaveDay ? 'bg-zinc-900/50' : 'bg-[#111111]/70'
+        isAwayDay ? 'bg-zinc-900/50' : 'bg-[#111111]/70'
       }`}>
         <h1 className="break-words font-serif text-2xl font-bold leading-tight tracking-tight text-white sm:text-4xl">
-          {isLeaveDay ? (
+          {isAwayDay ? (
             <>
-              {leaveDayBanner.prefix}{' '}
-              <span className="text-[#d4af37]">{leaveDayBanner.highlight}</span>
-              <span className="text-white">{leaveDayBanner.suffix}</span>
+              {greetingBanner.prefix}{' '}
+              <span className={isTodayFullDayClosure ? 'text-amber-300' : 'text-[#d4af37]'}>
+                {greetingBanner.highlight}
+              </span>
+              <span className="text-white">{greetingBanner.suffix}</span>
             </>
           ) : (
             <>Welcome back, <span className="text-[#d4af37]">{staffName}</span></>
           )}
         </h1>
         <p className="mt-3 text-sm leading-6 text-gray-400 sm:text-base">
-          {isLeaveDay
-            ? 'Your schedule is clear for today. Rest up and recharge.'
+          {isTodayFullDayClosure
+            ? `Closure reason: ${todayClosureReason}. No client queue needs your attention.`
+            : isTodayPartialClosure
+              ? `Heads up: the salon has a partial closure today from ${todayHoliday.hours?.start || 'the selected start time'} to ${todayHoliday.hours?.end || 'the selected end time'}. Reason: ${todayClosureReason}.`
+              : isLeaveDay
+                ? 'Your schedule is clear for today. Rest up and recharge.'
             : 'Here is your schedule for today.'}
         </p>
       </header>
@@ -566,25 +649,25 @@ function StaffDashboard() {
           <div
             key={card.label}
             className={`relative min-h-[132px] rounded-2xl border border-white/10 bg-[#111111]/70 p-4 shadow-xl backdrop-blur-md sm:min-h-[150px] sm:p-6 ${
-              isLeaveDay && card.mutedOnLeaveDay ? 'hidden sm:block' : ''
-            } ${isLeaveDay && !card.mutedOnLeaveDay ? 'sm:col-span-2 xl:col-span-1' : ''}`}
+              isAwayDay && card.mutedOnLeaveDay ? 'hidden sm:block' : ''
+            } ${isAwayDay && !card.mutedOnLeaveDay ? 'sm:col-span-2 xl:col-span-1' : ''}`}
           >
             <div className="flex min-h-[96px] flex-col justify-between sm:min-h-[102px]">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className={`text-sm ${
-                    isLeaveDay && card.mutedOnLeaveDay ? 'text-zinc-500' : 'text-gray-400'
+                    isAwayDay && card.mutedOnLeaveDay ? 'text-zinc-500' : 'text-gray-400'
                   }`}>
                     {card.label}
                   </p>
                   <p className={`mt-2 font-serif text-3xl sm:text-4xl ${
-                    isLeaveDay && card.mutedOnLeaveDay ? 'text-white' : 'text-[#d4af37]'
+                    isAwayDay && card.mutedOnLeaveDay ? 'text-white' : 'text-[#d4af37]'
                   }`}>
                     {card.value}
                   </p>
                 </div>
                 <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full border sm:h-11 sm:w-11 ${
-                  isLeaveDay && card.mutedOnLeaveDay
+                  isAwayDay && card.mutedOnLeaveDay
                     ? 'border-zinc-800 bg-zinc-900/70 text-zinc-500'
                     : 'border-[#d4af37]/20 bg-[#d4af37]/10 text-[#d4af37]'
                 }`}>
@@ -592,7 +675,7 @@ function StaffDashboard() {
                 </div>
               </div>
               <p className={`mt-5 text-xs uppercase tracking-[0.16em] ${
-                isLeaveDay && card.mutedOnLeaveDay ? 'text-zinc-600' : 'text-gray-500'
+                isAwayDay && card.mutedOnLeaveDay ? 'text-zinc-600' : 'text-gray-500'
               }`}>
                 {card.subtitle}
               </p>
@@ -601,7 +684,7 @@ function StaffDashboard() {
         ))}
       </section>
 
-      {!isLoading && !isLeaveDay && todayAppointments.length > 0 && (
+      {!isLoading && !isAwayDay && todayAppointments.length > 0 && (
         <section className="mb-8 grid grid-cols-1 gap-6 xl:grid-cols-2">
           {renderFocusAppointment(
             'In Progress',
@@ -625,15 +708,17 @@ function StaffDashboard() {
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-gray-500">Actionable Tasks</p>
             <h2 className="mt-2 font-serif text-xl text-[#d4af37] sm:text-2xl">
-              {isLeaveDay ? 'Next Shift Preview' : "Today's Schedule"}
+              {isAwayDay ? 'Next Shift Preview' : "Today's Schedule"}
             </h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-400">
-              {isLeaveDay
-                ? 'Your dashboard is softened while you are away from operations.'
+              {isTodayFullDayClosure
+                ? `Salon operations are paused today. Reason: ${todayClosureReason}.`
+                : isLeaveDay
+                  ? 'Your dashboard is softened while you are away from operations.'
                 : 'Appointments are grouped by priority so the next action stays easy to spot.'}
             </p>
           </div>
-          {!isLeaveDay && (
+          {!isAwayDay && (
             <div className="w-fit rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-gray-300">
               {todayAppointments.length} scheduled
             </div>
@@ -665,7 +750,7 @@ function StaffDashboard() {
               </div>
             ))}
           </div>
-        ) : isLeaveDay ? (
+        ) : isAwayDay ? (
           <div className="py-10 text-center sm:py-14">
             <div className="mx-auto max-w-sm rounded-xl border border-zinc-800 bg-zinc-900 p-4 text-center">
               <p className="text-sm font-semibold text-zinc-400">Your Next Active Duty</p>

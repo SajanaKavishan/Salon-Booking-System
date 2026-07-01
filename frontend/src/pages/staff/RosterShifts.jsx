@@ -23,6 +23,7 @@ export default function RosterShifts() {
     leaveBalance: 12,
   });
   const [shifts, setShifts] = useState([]);
+  const [holidays, setHolidays] = useState([]);
   const [leaveHistory, setLeaveHistory] = useState([]);
   const [currentWeek, setCurrentWeek] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
   const [calendarMonth, setCalendarMonth] = useState(startOfMonth(new Date()));
@@ -86,15 +87,21 @@ export default function RosterShifts() {
           }
           return { data: null }; // Return null on error
         });
+        const holidaysPromise = axios.get("http://localhost:5000/api/holidays").catch(error => {
+          console.error("Error fetching salon closures:", error);
+          return { data: { holidays: [] } };
+        });
 
-        const [shiftsRes, leavesRes, staffRes, metricsRes] = await Promise.all([
+        const [shiftsRes, leavesRes, staffRes, metricsRes, holidaysRes] = await Promise.all([
           shiftsPromise,
           leavesPromise,
           staffProfilePromise,
           metricsPromise,
+          holidaysPromise,
         ]);
 
         setShifts(shiftsRes.data);
+        setHolidays(Array.isArray(holidaysRes.data?.holidays) ? holidaysRes.data.holidays : []);
         setMetrics({
           leaveBalance: Number.isFinite(Number(metricsRes.data?.leaveBalance))
             ? Number(metricsRes.data.leaveBalance)
@@ -146,7 +153,17 @@ export default function RosterShifts() {
      return getStaffOffDays().some(day => day.toLowerCase() === dayName.toLowerCase());
    };
 
+   const getHolidayForDate = (date) => {
+     const dateKey = format(date, 'yyyy-MM-dd');
+     return holidays.find((holiday) => holiday.date === dateKey) || null;
+   };
+
    const getDayStatus = (date) => {
+     const holiday = getHolidayForDate(date);
+     if (holiday && holiday.isFullDay !== false) {
+       return "SALON CLOSED";
+     }
+
      const isOffDay = isStaffOffDay(date);
      const formattedDate = format(date, 'yyyy-MM-dd');
      const shift = shifts.find(s => s.date.startsWith(formattedDate));
@@ -178,6 +195,8 @@ export default function RosterShifts() {
          return "bg-rose-400/10 text-rose-300 border-rose-400/30";
        case "OFF DAY":
          return "bg-amber-400/10 text-amber-300 border-amber-400/30";
+       case "SALON CLOSED":
+         return "bg-red-500/10 text-red-300 border-red-400/30";
        default:
          return "bg-gray-700/50 text-gray-400 border-gray-600/50";
      }
@@ -393,25 +412,34 @@ export default function RosterShifts() {
                 {daysOfWeek.map(day => <div key={day}>{day}</div>)}
               </div>
               <div className="grid grid-cols-7 gap-2 min-w-[650px] lg:min-w-0">
-                {getWeekDays().map((date, index) => (
-                  <div key={index} className={`flex flex-col items-center justify-center rounded-lg border p-3 ${isSameDay(date, new Date())
+                {getWeekDays().map((date, index) => {
+                  const dayStatus = getDayStatus(date);
+                  const dayClass = dayStatus === "SALON CLOSED"
+                    ? getDayStatusClass(dayStatus)
+                    : isSameDay(date, new Date())
                       ? "border-[#d4af37] bg-[#d4af37]/10"
-                      : getDayStatusClass(getDayStatus(date))
-                    }`}>
-                    <span className="text-xs text-gray-400">{format(date, 'MMM')}</span>
-                    <span className="text-lg font-bold text-white">{format(date, 'dd')}</span>
-                    <span className={`text-[9px] font-bold tracking-tight uppercase mt-1 ${isSameDay(date, new Date())
-                        ? "text-white"
-                        : getDayStatus(date) === 'ON LEAVE'
-                          ? 'text-rose-300'
-                          : getDayStatus(date) === 'OFF DAY'
-                            ? 'text-amber-300'
-                            : 'text-emerald-300'
-                      }`}>
-                      {getDayStatus(date)}
-                    </span>
-                  </div>
-                ))}
+                      : getDayStatusClass(dayStatus);
+
+                  const statusTextClass = dayStatus === "SALON CLOSED"
+                    ? "text-red-300"
+                    : isSameDay(date, new Date())
+                      ? "text-white"
+                      : dayStatus === "ON LEAVE"
+                        ? "text-rose-300"
+                        : dayStatus === "OFF DAY"
+                          ? "text-amber-300"
+                          : "text-emerald-300";
+
+                  return (
+                    <div key={index} className={`flex flex-col items-center justify-center rounded-lg border p-3 ${dayClass}`}>
+                      <span className="text-xs text-gray-400">{format(date, 'MMM')}</span>
+                      <span className="text-lg font-bold text-white">{format(date, 'dd')}</span>
+                      <span className={`mt-1 text-[9px] font-bold uppercase tracking-tight ${statusTextClass}`}>
+                        {dayStatus}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </GlassCard>
