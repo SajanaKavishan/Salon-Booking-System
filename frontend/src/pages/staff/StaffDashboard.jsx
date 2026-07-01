@@ -7,8 +7,7 @@ import { GoldButton, StatusBadge } from '../../components/admin/SystemUI';
 const timeToMinutes = (timeStr) => {
   if (!timeStr || typeof timeStr !== 'string') return 0;
 
-  const parts = timeStr.trim().split(' ');
-  if (parts.length < 2) return 0;
+  const parts = timeStr.trim().split(/\s+/);
 
   const [time, modifier] = parts;
   const [rawHours, rawMinutes] = time.split(':').map(Number);
@@ -16,8 +15,12 @@ const timeToMinutes = (timeStr) => {
   if (Number.isNaN(rawHours) || Number.isNaN(rawMinutes)) return 0;
 
   let hours = rawHours;
-  if (hours === 12) hours = 0;
-  if (modifier === 'PM') hours += 12;
+  const normalizedModifier = String(modifier || '').toUpperCase();
+
+  if (normalizedModifier) {
+    if (hours === 12) hours = 0;
+    if (normalizedModifier === 'PM') hours += 12;
+  }
 
   return hours * 60 + rawMinutes;
 };
@@ -161,6 +164,30 @@ const addDays = (date, days) => {
 
 const normalizeClosureReason = (reason) => (
   String(reason || 'Salon closure').trim().replace(/[.\s]+$/g, '')
+);
+
+const getWorkingHoursEndValue = (workingHours) => {
+  if (!workingHours) return '17:00';
+
+  if (typeof workingHours === 'object' && !Array.isArray(workingHours)) {
+    return workingHours.end || '17:00';
+  }
+
+  if (typeof workingHours === 'string') {
+    const rangeParts = workingHours.split(/\s+-\s+/);
+    return rangeParts[1] || workingHours;
+  }
+
+  return '17:00';
+};
+
+const getCurrentMinutes = (timestamp) => {
+  const currentDate = new Date(timestamp);
+  return currentDate.getHours() * 60 + currentDate.getMinutes();
+};
+
+const getStaffWorkingHours = (profile) => (
+  profile?.workingHours || profile?.staffDetails?.workingHours || null
 );
 
 const getCurrentWeekRange = () => {
@@ -328,14 +355,13 @@ function StaffDashboard() {
   }, [staffProfile, leaveRequests]);
 
   const isLeaveDay = Boolean(staffMetrics?.isLeaveDay ?? localIsLeaveDay);
+  const todayKey = getLocalDateKey(currentTime);
   const todayHoliday = useMemo(
-    () => holidays.find((holiday) => holiday.date === getTodayDateKey()) || null,
-    [holidays]
+    () => holidays.find((holiday) => holiday.date === todayKey) || null,
+    [holidays, todayKey]
   );
   const isTodayFullDayClosure = Boolean(todayHoliday && todayHoliday.isFullDay !== false);
   const isTodayPartialClosure = Boolean(todayHoliday && todayHoliday.isFullDay === false);
-  const isAwayDay = isLeaveDay || isTodayFullDayClosure;
-  const todayKey = getTodayDateKey();
   const todayClosureReason = normalizeClosureReason(todayHoliday?.name);
   const nextActiveDate = staffMetrics?.nextActiveDate || null;
   const nextShiftTime = staffMetrics?.nextShiftTime || 'your usual start time';
@@ -347,6 +373,17 @@ function StaffDashboard() {
     ),
     [holidays]
   );
+  const tomorrowKey = getLocalDateKey(addDays(new Date(currentTime), 1));
+  const tomorrowHoliday = useMemo(
+    () => holidays.find((holiday) => holiday.date === tomorrowKey && holiday.isFullDay !== false) || null,
+    [holidays, tomorrowKey]
+  );
+  const workEndMinutes = timeToMinutes(getWorkingHoursEndValue(getStaffWorkingHours(staffProfile)));
+  const hasWorkdayEnded = getCurrentMinutes(currentTime) >= workEndMinutes;
+  const isTomorrowFullDayClosure = Boolean(tomorrowHoliday);
+  const isPostShiftClosureNotice = hasWorkdayEnded && isTomorrowFullDayClosure;
+  const isPostShiftNextDutyNotice = !isTodayFullDayClosure && hasWorkdayEnded && !isTomorrowFullDayClosure && !isLeaveDay;
+  const isAwayDay = isLeaveDay || isTodayFullDayClosure || isPostShiftClosureNotice || isPostShiftNextDutyNotice;
   const adjustedNextActiveDate = useMemo(() => {
     if (!isAwayDay) return nextActiveDate;
 
@@ -363,7 +400,7 @@ function StaffDashboard() {
         : [];
 
     for (let offset = 1; offset <= 90; offset += 1) {
-      const candidateDate = addDays(new Date(), offset);
+      const candidateDate = addDays(new Date(currentTime), offset);
       const candidateKey = getLocalDateKey(candidateDate);
       const dayName = new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(candidateDate);
       const isRegisteredOffDay = offDays.some((day) => (
@@ -383,7 +420,7 @@ function StaffDashboard() {
     }
 
     return nextActiveDate;
-  }, [fullDayHolidayKeys, isAwayDay, leaveRequests, nextActiveDate, staffProfile, todayKey]);
+  }, [currentTime, fullDayHolidayKeys, isAwayDay, leaveRequests, nextActiveDate, staffProfile, todayKey]);
   const nextActiveDateLabel = formatDisplayDate(adjustedNextActiveDate);
   const nextActiveDayLabel = formatDisplayDay(adjustedNextActiveDate);
   const totalConsecutiveDaysOff = Number(staffMetrics?.totalConsecutiveDaysOff || 1);
@@ -404,16 +441,34 @@ function StaffDashboard() {
           highlight: staffName,
           suffix: '!',
         };
-  const greetingBanner = isTodayFullDayClosure
+  const greetingBanner = isPostShiftClosureNotice
+    ? {
+        prefix: 'Great work today,',
+        highlight: staffName,
+        suffix: '. The salon is closed tomorrow.',
+      }
+    : isTodayFullDayClosure
     ? {
         prefix: 'Enjoy your break,',
         highlight: staffName,
         suffix: '. The salon is closed today.',
       }
+      : isPostShiftNextDutyNotice && adjustedNextActiveDate && isTomorrowDateKey(adjustedNextActiveDate)
+        ? {
+            prefix: 'Great work today,',
+            highlight: staffName,
+            suffix: '. See you tomorrow.',
+          }
+        : isPostShiftNextDutyNotice && adjustedNextActiveDate
+          ? {
+              prefix: 'Great work today,',
+              highlight: staffName,
+              suffix: `. See you on ${nextActiveDayLabel}.`,
+            }
     : leaveDayBanner;
   const nextDutySubtext = totalConsecutiveDaysOff > 1
-    ? `See you on ${nextActiveDayLabel}. Enjoy the full break until then.`
-    : `See you on ${nextActiveDayLabel}.`;
+      ? `See you on ${nextActiveDayLabel}. Enjoy the full break until then.`
+      : `See you on ${nextActiveDayLabel}.`;
 
   const inProgressAppointment = useMemo(
     () => todayAppointments.find((appointment) => getAppointmentSortGroup(appointment, currentTime) === 0),
@@ -634,8 +689,12 @@ function StaffDashboard() {
           )}
         </h1>
         <p className="mt-3 text-sm leading-6 text-gray-400 sm:text-base">
-          {isTodayFullDayClosure
-            ? `Closure reason: ${todayClosureReason}. No client queue needs your attention.`
+          {isPostShiftClosureNotice
+            ? `Tomorrow's closure reason: ${normalizeClosureReason(tomorrowHoliday?.name)}. Your next active duty is already updated below.`
+            : isTodayFullDayClosure
+              ? `Closure reason: ${todayClosureReason}. No client queue needs your attention.`
+              : isPostShiftNextDutyNotice
+                ? 'Your working hours are finished for today. Your next active duty is shown below.'
             : isTodayPartialClosure
               ? `Heads up: the salon has a partial closure today from ${todayHoliday.hours?.start || 'the selected start time'} to ${todayHoliday.hours?.end || 'the selected end time'}. Reason: ${todayClosureReason}.`
               : isLeaveDay
@@ -711,8 +770,12 @@ function StaffDashboard() {
               {isAwayDay ? 'Next Shift Preview' : "Today's Schedule"}
             </h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-400">
-              {isTodayFullDayClosure
-                ? `Salon operations are paused today. Reason: ${todayClosureReason}.`
+              {isPostShiftClosureNotice
+                ? `Tomorrow is blocked as a full-day salon closure. Reason: ${normalizeClosureReason(tomorrowHoliday?.name)}.`
+                : isTodayFullDayClosure
+                  ? `Salon operations are paused today. Reason: ${todayClosureReason}.`
+                  : isPostShiftNextDutyNotice
+                    ? 'Your workday has ended. The next active duty preview is ready.'
                 : isLeaveDay
                   ? 'Your dashboard is softened while you are away from operations.'
                 : 'Appointments are grouped by priority so the next action stays easy to spot.'}
