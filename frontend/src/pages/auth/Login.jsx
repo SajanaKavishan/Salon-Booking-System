@@ -275,7 +275,12 @@ function Login() {
                 <div>
                   <div className="mb-2 flex items-center justify-between gap-4">
                     <label className="text-sm font-medium text-gray-400">Password</label>
-                    <span className="text-xs font-medium text-gray-500">Secure account access</span>
+                    <Link
+                      to="/forgot-password"
+                      className="text-xs font-medium text-[#d4af37] transition hover:text-yellow-400 hover:underline"
+                    >
+                      Forgot Password?
+                    </Link>
                   </div>
                   <div className="relative">
                     <input
