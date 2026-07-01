@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { motion } from 'framer-motion';
@@ -64,10 +64,12 @@ const formatOpeningHours = (openingHours = {}) => {
 
 function Home() {
   const navigate = useNavigate();
+  const galleryScrollerRef = useRef(null);
   const [services, setServices] = useState([]);
   const [publicReviews, setPublicReviews] = useState([]);
   const [galleryImages, setGalleryImages] = useState([]);
   const [galleryLoading, setGalleryLoading] = useState(true);
+  const [galleryFade, setGalleryFade] = useState({ left: false, right: false });
   const [loading, setLoading] = useState(true);
   const userRole = localStorage.getItem('userRole');
   const { settings } = useSalonSettings();
@@ -115,6 +117,32 @@ function Home() {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    const scroller = galleryScrollerRef.current;
+    if (!scroller || galleryLoading) return undefined;
+
+    const updateFadeState = () => {
+      const scrollBuffer = 8;
+      const canScrollLeft = scroller.scrollLeft > scrollBuffer;
+      const canScrollRight = scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - scrollBuffer;
+
+      setGalleryFade({
+        left: canScrollLeft,
+        right: canScrollRight,
+      });
+    };
+
+    updateFadeState();
+
+    scroller.addEventListener('scroll', updateFadeState, { passive: true });
+    window.addEventListener('resize', updateFadeState);
+
+    return () => {
+      scroller.removeEventListener('scroll', updateFadeState);
+      window.removeEventListener('resize', updateFadeState);
+    };
+  }, [galleryImages.length, galleryLoading]);
 
   useEffect(() => {
     let isMounted = true;
@@ -636,32 +664,52 @@ function Home() {
             </p>
           </motion.div>
 
-          <motion.div
-            className="salon-scrollbar mt-10 flex snap-x gap-3 overflow-x-auto pb-3 sm:gap-4"
-            variants={containerVariants}
-          >
-            {galleryLoading
-              ? Array.from({ length: 4 }).map((_, index) => (
-                <div
-                  key={`gallery-skeleton-${index}`}
-                  className="h-36 w-[calc(50%-0.375rem)] shrink-0 animate-pulse snap-start rounded-xl border border-white/10 bg-white/10 sm:h-48 sm:w-[calc(50%-0.5rem)] md:w-[calc(25%-0.75rem)]"
-                />
-              ))
-              : galleryImages.map((image, index) => (
-                <motion.div
-                  key={image._id || image.imageUrl}
-                  className="group w-[calc(50%-0.375rem)] shrink-0 snap-start overflow-hidden rounded-xl border border-white/10 sm:w-[calc(50%-0.5rem)] md:w-[calc(25%-0.75rem)]"
-                  variants={revealItemVariants}
-                  whileHover={{ y: -6, transition: { duration: 0.2 } }}
-                >
-                  <img
-                    src={image.imageUrl}
-                    alt={image.altText || image.title || `Gallery ${index + 1}`}
-                    className="h-36 w-full object-cover transition duration-500 group-hover:scale-105 sm:h-48"
+          <div className="relative mt-10">
+            {!galleryLoading && (
+              <div
+                className={`pointer-events-none absolute inset-y-0 left-0 z-10 w-10 bg-gradient-to-r from-[#0a0a0a] via-[#0a0a0a]/70 to-transparent transition-opacity duration-300 sm:w-14 md:w-16 ${
+                  galleryFade.left ? 'opacity-100' : 'opacity-0'
+                }`}
+              />
+            )}
+
+            {!galleryLoading && (
+              <div
+                className={`pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-gradient-to-l from-[#0a0a0a] via-[#0a0a0a]/70 to-transparent transition-opacity duration-300 sm:w-14 md:w-16 ${
+                  galleryFade.right ? 'opacity-100' : 'opacity-0'
+                }`}
+              />
+            )}
+
+            <motion.div
+              ref={galleryScrollerRef}
+              className="no-scrollbar flex touch-pan-x snap-x gap-3 overflow-x-auto scroll-smooth pb-1 sm:gap-4"
+              variants={containerVariants}
+            >
+              {galleryLoading
+                ? Array.from({ length: 4 }).map((_, index) => (
+                  <div
+                    key={`gallery-skeleton-${index}`}
+                    className="h-36 w-[calc(50%-0.375rem)] shrink-0 animate-pulse snap-start rounded-xl border border-white/10 bg-white/10 sm:h-48 sm:w-[calc(50%-0.5rem)] md:w-[calc(25%-0.75rem)]"
                   />
-                </motion.div>
-              ))}
-          </motion.div>
+                ))
+                : galleryImages.map((image, index) => (
+                  <motion.div
+                    key={image._id || image.imageUrl}
+                    className="group w-[calc(50%-0.375rem)] shrink-0 snap-start overflow-hidden rounded-xl border border-white/10 sm:w-[calc(50%-0.5rem)] md:w-[calc(25%-0.75rem)]"
+                    variants={revealItemVariants}
+                    whileHover={{ y: -6, transition: { duration: 0.2 } }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <img
+                      src={image.imageUrl}
+                      alt={image.altText || image.title || `Gallery ${index + 1}`}
+                      className="h-36 w-full object-cover transition duration-500 group-hover:scale-105 sm:h-48"
+                    />
+                  </motion.div>
+                ))}
+            </motion.div>
+          </div>
 
           {!galleryLoading && galleryImages.length === 0 && (
             <motion.div
