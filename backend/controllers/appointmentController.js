@@ -350,6 +350,22 @@ const getAllAppointments = async (req, res) => {
     }
 };
 
+// @desc    Get pending appointments count
+// @route   GET /api/appointments/pending/count
+// @access  Private/Admin/Staff
+const getPendingAppointmentsCount = async (req, res) => {
+    try {
+        const count = await Appointment.countDocuments({
+            status: Appointment.normalizeStatus('Pending')
+        });
+
+        res.status(200).json({ count });
+    } catch (error) {
+        console.error('Get Pending Appointments Count Error:', error);
+        res.status(500).json({ message: 'Server Error: Could not fetch pending appointments count.' });
+    }
+};
+
 const getStaffAppointmentQuery = async (user) => {
     if (user.role !== 'staff') return {};
 
@@ -1155,6 +1171,7 @@ module.exports = {
     createAppointment,
     getMyAppointments,
     getAllAppointments,
+    getPendingAppointmentsCount,
     getStaffAppointments,
     getStaffEarningsSummary,
     submitAppointmentReview,
