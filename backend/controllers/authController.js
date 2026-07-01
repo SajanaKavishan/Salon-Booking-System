@@ -1,7 +1,9 @@
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Staff = require('../models/Staff');
+const sendEmail = require('../utils/sendEmail');
 const {
   normalizeOffDays,
   normalizeWorkingHours,
@@ -127,7 +129,112 @@ const login = async (req, res) => {
   }
 };
 
+const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required.' });
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
+    if (!user) {
+      return res.status(404).json({ message: 'No account found with that email address.' });
+    }
+
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    user.resetPasswordToken = crypto
+      .createHash('sha256')
+      .update(resetToken)
+      .digest('hex');
+    user.resetPasswordExpire = Date.now() + 10 * 60 * 1000;
+
+    await user.save();
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const resetUrl = `${frontendUrl.replace(/\/$/, '')}/reset-password/${resetToken}`;
+
+    const message = `
+      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111827;">
+        <h2 style="color:#111827;">Reset your Salon DEES password</h2>
+        <p>You requested a password reset. This secure link will expire in 10 minutes.</p>
+        <p>
+          <a href="${resetUrl}" style="display:inline-block;background:#d4af37;color:#111827;padding:12px 18px;text-decoration:none;border-radius:6px;font-weight:700;">
+            Reset Password
+          </a>
+        </p>
+        <p>If the button does not work, copy and paste this URL into your browser:</p>
+        <p style="word-break:break-all;">${resetUrl}</p>
+        <p>If you did not request this, you can safely ignore this email.</p>
+      </div>
+    `;
+
+    try {
+      await sendEmail({
+        email: user.email,
+        subject: 'Salon DEES password reset',
+        message,
+        text: `Reset your Salon DEES password using this link: ${resetUrl}. This link expires in 10 minutes.`,
+      });
+
+      return res.status(200).json({ message: 'Password reset link sent to your email.' });
+    } catch (emailError) {
+      user.resetPasswordToken = undefined;
+      user.resetPasswordExpire = undefined;
+      await user.save();
+
+      return res.status(500).json({
+        message: 'Email could not be sent. Please try again later.',
+      });
+    }
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+const resetPassword = async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { password } = req.body;
+
+    if (!password) {
+      return res.status(400).json({ message: 'New password is required.' });
+    }
+
+    if (String(password).length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters long.' });
+    }
+
+    const resetPasswordToken = crypto
+      .createHash('sha256')
+      .update(token)
+      .digest('hex');
+
+    const user = await User.findOne({
+      resetPasswordToken,
+      resetPasswordExpire: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid or expired password reset token.' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(password, salt);
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
+
+    await user.save();
+
+    return res.status(200).json({ message: 'Password reset successful. You can now sign in.' });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   registerStaff,
-  login
+  login,
+  forgotPassword,
+  resetPassword
 };

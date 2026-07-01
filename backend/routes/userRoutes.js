@@ -1,12 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const { registerUser, googleLogin, getMe, updateUserProfile, completeOnboarding, getDashboardBanner } = require('../controllers/userController');
-const { registerStaff, login } = require('../controllers/authController');
+const { registerStaff, login, forgotPassword, resetPassword } = require('../controllers/authController');
 const { protect, admin } = require('../middleware/authMiddleware'); // Import the protect middleware to secure the /me route   
 
 // Routes
 router.post('/register', registerUser); // Route for user registration, handled by the registerUser controller function
 router.post('/login', login); // Route for user login, handled by the login controller function
+router.post('/forgot-password', forgotPassword);
+router.put('/reset-password/:token', resetPassword);
 router.post('/register-staff', protect, admin, registerStaff); // Admin-only route for staff account creation
 router.post('/google-login', googleLogin); // New route for handling Google login requests
 
