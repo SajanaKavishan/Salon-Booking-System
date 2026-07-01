@@ -1,4 +1,5 @@
 const SalonSettings = require('../models/SalonSettings');
+const cloudinary = require('../config/cloudinary');
 
 const weeklyOpeningHours = [
   'monday',
@@ -24,6 +25,10 @@ const defaultSettings = {
   supportEmail: 'support@salondees.com',
   contactNumber: '+94 77 123 4567',
   address: 'Colombo, Sri Lanka',
+  salonInteriorImage: '/salonInterior.jpg',
+  salonInteriorPublicId: '',
+  ownerImage: '/Owner.jpg',
+  ownerPublicId: '',
   openingHours: defaultOpeningHours,
   bookingAlerts: true,
   customerEmails: true,
@@ -87,6 +92,8 @@ const updateSettings = async (req, res) => {
       supportEmail: req.body.supportEmail ?? settings.supportEmail,
       contactNumber: req.body.contactNumber ?? settings.contactNumber,
       address: req.body.address ?? settings.address,
+      salonInteriorImage: req.body.salonInteriorImage ?? settings.salonInteriorImage,
+      ownerImage: req.body.ownerImage ?? settings.ownerImage,
       openingHours: normalizeOpeningHours(req.body.openingHours, settings.openingHours),
       bookingAlerts: req.body.bookingAlerts ?? settings.bookingAlerts,
       customerEmails: req.body.customerEmails ?? settings.customerEmails,
@@ -104,9 +111,52 @@ const updateSettings = async (req, res) => {
   }
 };
 
+const updateHomePageImage = async (req, res) => {
+  try {
+    const imageKey = req.params.imageKey;
+    const imageFieldMap = {
+      salonInterior: {
+        urlField: 'salonInteriorImage',
+        publicIdField: 'salonInteriorPublicId',
+      },
+      owner: {
+        urlField: 'ownerImage',
+        publicIdField: 'ownerPublicId',
+      },
+    };
+
+    const fields = imageFieldMap[imageKey];
+
+    if (!fields) {
+      return res.status(400).json({ message: 'Invalid home page image type.' });
+    }
+
+    if (!req.file?.path || !req.file?.filename) {
+      return res.status(400).json({ message: 'Please upload an image file.' });
+    }
+
+    const settings = await ensureSettingsDocument();
+    const previousPublicId = settings[fields.publicIdField];
+
+    if (previousPublicId) {
+      await cloudinary.uploader.destroy(previousPublicId);
+    }
+
+    settings[fields.urlField] = req.file.path;
+    settings[fields.publicIdField] = req.file.filename;
+
+    const updatedSettings = await settings.save();
+    res.status(200).json(updatedSettings);
+  } catch (error) {
+    console.error('Update Home Page Image Error:', error);
+    res.status(500).json({ message: 'Could not update home page image.' });
+  }
+};
+
 module.exports = {
   defaultSettings,
   ensureSettingsDocument,
   getSettings,
+  updateHomePageImage,
   updateSettings,
 };

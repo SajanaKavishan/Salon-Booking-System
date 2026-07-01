@@ -27,6 +27,8 @@ const defaultSettings = {
   supportEmail: 'support@salondees.com',
   contactNumber: '+94 77 123 4567',
   address: 'Colombo, Sri Lanka',
+  salonInteriorImage: '/salonInterior.jpg',
+  ownerImage: '/Owner.jpg',
   openingHours: defaultOpeningHours,
   bookingAlerts: true,
   customerEmails: true,

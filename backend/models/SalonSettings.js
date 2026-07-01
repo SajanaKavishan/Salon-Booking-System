@@ -43,6 +43,26 @@ const salonSettingsSchema = new mongoose.Schema(
       default: 'Colombo, Sri Lanka',
       trim: true,
     },
+    salonInteriorImage: {
+      type: String,
+      default: '/salonInterior.jpg',
+      trim: true,
+    },
+    salonInteriorPublicId: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    ownerImage: {
+      type: String,
+      default: '/Owner.jpg',
+      trim: true,
+    },
+    ownerPublicId: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     openingHours: {
       monday: {
         type: dayHoursSchema,
