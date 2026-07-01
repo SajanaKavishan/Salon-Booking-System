@@ -1,8 +1,12 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import axios from 'axios';
 import { motion } from 'framer-motion';
 import { Scissors } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { clearAuthStorage } from '../../utils/auth';
+
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
+const PENDING_APPOINTMENTS_REFRESH_EVENT = 'appointments:pending-count-refresh';
 
 const adminSidebarItems = [
   {
@@ -93,6 +97,7 @@ const customerSidebarItems = [
 
 function Sidebar({ isOpen = false, onClose = () => { } }) {
   const navigate = useNavigate();
+  const [pendingCount, setPendingCount] = useState(0);
   let storedUser = null;
   try {
     storedUser = JSON.parse(localStorage.getItem('user'));
@@ -116,6 +121,38 @@ function Sidebar({ isOpen = false, onClose = () => { } }) {
     : userRole === 'staff'
       ? 'Staff navigation'
       : 'Customer navigation';
+
+  useEffect(() => {
+    if (userRole !== 'admin' && userRole !== 'staff') return;
+
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    const controller = new AbortController();
+
+    const fetchPendingCount = async () => {
+      try {
+        const response = await axios.get(`${API_BASE_URL}/api/appointments/pending/count`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal
+        });
+
+        setPendingCount(Number(response.data?.count || 0));
+      } catch (error) {
+        if (error.name !== 'CanceledError') {
+          console.warn('Could not fetch pending appointments count:', error);
+        }
+      }
+    };
+
+    fetchPendingCount();
+    window.addEventListener(PENDING_APPOINTMENTS_REFRESH_EVENT, fetchPendingCount);
+
+    return () => {
+      controller.abort();
+      window.removeEventListener(PENDING_APPOINTMENTS_REFRESH_EVENT, fetchPendingCount);
+    };
+  }, [userRole]);
 
   const handleLogout = () => {
     clearAuthStorage();
@@ -191,7 +228,14 @@ function Sidebar({ isOpen = false, onClose = () => { } }) {
                       >
                         <path d={item.icon} stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
                       </motion.svg>
-                      <span className="relative z-10 min-w-0 truncate">{item.label}</span>
+                      <span className="relative z-10 flex min-w-0 items-center gap-2">
+                        <span className="min-w-0 truncate">{item.label}</span>
+                        {item.label === 'Appointments' && pendingCount > 0 && (
+                          <span className="flex h-5 w-5 shrink-0 animate-pulse items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold leading-none text-neutral-950">
+                            {pendingCount > 99 ? '99+' : pendingCount}
+                          </span>
+                        )}
+                      </span>
                     </>
                   )}
                 </NavLink>

@@ -6,6 +6,7 @@ import AddAppointmentModal from '../../components/admin/AddAppointmentModal';
 import { DarkSelect, GoldButton, StatusBadge } from '../../components/admin/SystemUI';
 
 const finalStatuses = ['Completed', 'Rejected', 'Cancelled', 'No-Show'];
+const PENDING_APPOINTMENTS_REFRESH_EVENT = 'appointments:pending-count-refresh';
 
 const getStatusSortGroup = (status) => {
   const normalizedStatus = String(status || '').trim().toLowerCase();
@@ -214,6 +215,7 @@ function AppointmentsPage() {
       setAppointments((current) =>
         current.map((appt) => (appt._id === id ? { ...appt, status: newStatus } : appt))
       );
+      window.dispatchEvent(new Event(PENDING_APPOINTMENTS_REFRESH_EVENT));
 
       toast.success(`Status changed to "${newStatus}" successfully!`);
     } catch (error) {
