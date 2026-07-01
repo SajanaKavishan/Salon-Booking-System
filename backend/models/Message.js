@@ -13,6 +13,10 @@ const messageSchema = new mongoose.Schema({ // Define the schema for the Message
     type: String,
     required: true
   },
+  isRead: {
+    type: Boolean,
+    default: false
+  },
   createdAt: {
     type: Date,
     default: Date.now
