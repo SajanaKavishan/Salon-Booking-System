@@ -442,11 +442,17 @@ function StaffDashboard() {
           suffix: '!',
         };
   const greetingBanner = isPostShiftClosureNotice
-    ? {
-        prefix: 'Great work today,',
-        highlight: staffName,
-        suffix: '. The salon is closed tomorrow.',
-      }
+    ? isTodayFullDayClosure
+      ? {
+          prefix: 'Enjoy your break,',
+          highlight: staffName,
+          suffix: '. The salon is closed tomorrow as well.',
+        }
+      : {
+          prefix: 'Great work today,',
+          highlight: staffName,
+          suffix: '. The salon is closed tomorrow.',
+        }
     : isTodayFullDayClosure
     ? {
         prefix: 'Enjoy your break,',
@@ -670,38 +676,47 @@ function StaffDashboard() {
     }
   ];
 
+  const renderGreetingSkeleton = () => (
+    <header className="mb-6 overflow-hidden rounded-2xl border border-white/10 bg-[#111111]/70 p-4 shadow-xl backdrop-blur-md sm:mb-8 sm:p-6">
+      <div className="h-8 w-11/12 max-w-3xl animate-pulse rounded bg-white/10 sm:h-11" />
+      <div className="mt-4 h-4 w-10/12 max-w-2xl animate-pulse rounded bg-white/10 sm:h-5" />
+    </header>
+  );
+
   return (
-    <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-0">
-      <header className={`mb-6 rounded-2xl border border-white/10 p-4 shadow-xl backdrop-blur-md sm:mb-8 sm:p-6 ${
-        isAwayDay ? 'bg-zinc-900/50' : 'bg-[#111111]/70'
-      }`}>
-        <h1 className="break-words font-serif text-2xl font-bold leading-tight tracking-tight text-white sm:text-4xl">
-          {isAwayDay ? (
-            <>
-              {greetingBanner.prefix}{' '}
-              <span className={isTodayFullDayClosure ? 'text-amber-300' : 'text-[#d4af37]'}>
-                {greetingBanner.highlight}
-              </span>
-              <span className="text-white">{greetingBanner.suffix}</span>
-            </>
-          ) : (
-            <>Welcome back, <span className="text-[#d4af37]">{staffName}</span></>
-          )}
-        </h1>
-        <p className="mt-3 text-sm leading-6 text-gray-400 sm:text-base">
-          {isPostShiftClosureNotice
-            ? `Tomorrow's closure reason: ${normalizeClosureReason(tomorrowHoliday?.name)}. Your next active duty is already updated below.`
-            : isTodayFullDayClosure
-              ? `Closure reason: ${todayClosureReason}. No client queue needs your attention.`
-              : isPostShiftNextDutyNotice
-                ? 'Your working hours are finished for today. Your next active duty is shown below.'
-            : isTodayPartialClosure
-              ? `Heads up: the salon has a partial closure today from ${todayHoliday.hours?.start || 'the selected start time'} to ${todayHoliday.hours?.end || 'the selected end time'}. Reason: ${todayClosureReason}.`
-              : isLeaveDay
-                ? 'Your schedule is clear for today. Rest up and recharge.'
-            : 'Here is your schedule for today.'}
-        </p>
-      </header>
+    <div className="mx-auto w-full max-w-7xl px-3 sm:px-6 lg:px-0">
+      {isLoading ? renderGreetingSkeleton() : (
+        <header className={`mb-6 min-w-0 overflow-hidden rounded-2xl border border-white/10 p-4 shadow-xl backdrop-blur-md sm:mb-8 sm:p-6 ${
+          isAwayDay ? 'bg-zinc-900/50' : 'bg-[#111111]/70'
+        }`}>
+          <h1 className="break-words font-serif text-2xl font-bold leading-tight tracking-tight text-white sm:text-4xl">
+            {isAwayDay ? (
+              <>
+                {greetingBanner.prefix}{' '}
+                <span className={isTodayFullDayClosure ? 'text-amber-300' : 'text-[#d4af37]'}>
+                  {greetingBanner.highlight}
+                </span>
+                <span className="text-white">{greetingBanner.suffix}</span>
+              </>
+            ) : (
+              <>Welcome back, <span className="text-[#d4af37]">{staffName}</span></>
+            )}
+          </h1>
+          <p className="mt-3 break-words text-sm leading-6 text-gray-400 sm:text-base">
+            {isPostShiftClosureNotice
+              ? `Tomorrow's closure reason: ${normalizeClosureReason(tomorrowHoliday?.name)}. Your next active duty is already updated below.`
+              : isTodayFullDayClosure
+                ? `Closure reason: ${todayClosureReason}. No client queue needs your attention.`
+                : isPostShiftNextDutyNotice
+                  ? 'Your working hours are finished for today. Your next active duty is shown below.'
+              : isTodayPartialClosure
+                ? `Heads up: the salon has a partial closure today from ${todayHoliday.hours?.start || 'the selected start time'} to ${todayHoliday.hours?.end || 'the selected end time'}. Reason: ${todayClosureReason}.`
+                : isLeaveDay
+                  ? 'Your schedule is clear for today. Rest up and recharge.'
+              : 'Here is your schedule for today.'}
+          </p>
+        </header>
+      )}
 
       <section className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-6 xl:grid-cols-4">
         {statCards.map((card) => (
@@ -815,11 +830,11 @@ function StaffDashboard() {
           </div>
         ) : isAwayDay ? (
           <div className="py-10 text-center sm:py-14">
-            <div className="mx-auto max-w-sm rounded-xl border border-zinc-800 bg-zinc-900 p-4 text-center">
+            <div className="mx-auto w-full max-w-sm rounded-xl border border-zinc-800 bg-zinc-900 p-4 text-center">
               <p className="text-sm font-semibold text-zinc-400">Your Next Active Duty</p>
-              <p className="mt-2 text-lg font-bold text-[#d4af37] sm:text-xl">{nextActiveDateLabel}</p>
-              <p className="mt-1 text-zinc-100">{nextShiftTime}</p>
-              <p className="mt-3 text-sm text-zinc-400">{nextDutySubtext}</p>
+              <p className="mt-2 break-words text-lg font-bold text-[#d4af37] sm:text-xl">{nextActiveDateLabel}</p>
+              <p className="mt-1 break-words text-zinc-100">{nextShiftTime}</p>
+              <p className="mt-3 break-words text-sm text-zinc-400">{nextDutySubtext}</p>
             </div>
           </div>
         ) : todayAppointments.length === 0 ? (
