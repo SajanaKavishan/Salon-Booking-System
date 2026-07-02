@@ -69,6 +69,7 @@ app.use("/api/holidays", ensureMongoConnection, require("./routes/holidayRoutes"
 app.use("/api/roster", ensureMongoConnection, require("./routes/rosterRoutes")); // Roster and Shifts routes
 app.use("/api/leaves", ensureMongoConnection, require("./routes/leaveRoutes")); // Leave management routes
 app.use("/api/dashboard", ensureMongoConnection, require("./routes/dashboardRoutes")); // Admin dashboard summary routes
+app.use("/api/chatbot", ensureMongoConnection, require("./routes/chatRoutes")); // Public AI chatbot route
 app.post("/api/login", async (req, res) => { // Basic login route for testing purposes, should be replaced by the more robust authentication routes in authRoutes.js
     try {
         const { email, password } = req.body; 
