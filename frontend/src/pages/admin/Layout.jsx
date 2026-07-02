@@ -226,7 +226,7 @@ function Layout() {
       if (path.startsWith('/admin/reviews')) return 'Review Management';
       if (path.startsWith('/admin/gallery')) return 'Portfolio';
       if (path.startsWith('/admin/settings')) return 'Settings';
-      if (path.startsWith('/admin/messages')) return 'Messages';
+      if (path.startsWith('/admin/messages')) return 'Client Inbox';
       return 'Admin Portal';
     }
 

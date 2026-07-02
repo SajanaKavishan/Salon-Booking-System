@@ -105,6 +105,7 @@ function App() {
               <Route path="analytics" element={<Analytics />} />
               <Route path="reviews" element={<ReviewManagement />} />
               <Route path="gallery" element={<AdminGallery />} />
+              <Route path="messages" element={<AdminMessages />} />
               <Route path="settings" element={<SettingsPage />} />
             </Route>
 
@@ -122,14 +123,6 @@ function App() {
               <Route path="roster-shifts" element={<RosterShifts />} />
               <Route path="earnings" element={<StaffEarnings />} />
             </Route>
-            <Route 
-              path="/admin/messages" 
-              element={
-                <ProtectedRoute allowedRoles={["admin"]}>
-                  <AdminMessages />
-                </ProtectedRoute>
-              } 
-            />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
 
