@@ -6,6 +6,7 @@ import { ArrowRight, Clock, MapPin, Star } from 'lucide-react';
 import { WEEKLY_OPENING_HOURS, defaultOpeningHours, useSalonSettings } from '../../hooks/useSalonSettings';
 import ServicesCarousel from '../../components/home/ServicesCarousel';
 import ReviewMarquee from '../../components/home/ReviewMarquee';
+import ChatWidget from '../../components/public/ChatWidget';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
@@ -844,6 +845,8 @@ function Home() {
       >
         <p>&copy; {new Date().getFullYear()} {settings.salonName}. All rights reserved.</p>
       </motion.footer>
+
+      <ChatWidget />
     </motion.div>
   );
 }
