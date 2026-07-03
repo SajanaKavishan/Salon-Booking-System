@@ -12,6 +12,7 @@ import DashboardHeader from '../../components/customer/DashboardHeader';
 const HISTORY_STATUSES = ['completed', 'rejected', 'cancelled', 'canceled', 'no-show'];
 const UPCOMING_STATUSES = ['pending', 'approved', 'confirmed'];
 const REVIEW_PROMPT_STORAGE_PREFIX = 'salonDismissedReviewPrompts';
+const MotionDiv = motion.div;
 
 const formatServices = (services, fallback = 'Service not available') => {
   if (!Array.isArray(services) || services.length === 0) return fallback;
@@ -82,10 +83,12 @@ const getStylistDisplayName = (appointment) => {
 };
 
 const canCancelAppointment = (appointment) => {
-  if (!appointment?.date || !appointment?.startTime) return false;
+  const appointmentDate = appointment?.date || appointment?.bookingDate;
+
+  if (!appointmentDate || !appointment?.startTime) return false;
 
   // ISO string එකේ date එක විතරක් වෙන් කරලා ගන්නවා
-  const cleanDate = appointment.date.split('T')[0];
+  const cleanDate = appointmentDate.split('T')[0];
   const [year, month, day] = cleanDate.split('-').map(Number);
 
   const startMinutes = timeToMinutes(appointment.startTime);
@@ -201,7 +204,7 @@ function Dashboard() {
 
   // Only count COMPLETED appointments for Total Visits metric
   const completedAppointments = useMemo(
-    () => appointments.filter((appt) => appt?.status === 'Completed'),
+    () => appointments.filter((appt) => String(appt?.status || '').trim().toLowerCase() === 'completed'),
     [appointments]
   );
 
@@ -224,7 +227,6 @@ function Dashboard() {
   );
 
   const nextAppointment = upcomingAppointments[0];
-  const historyAppointments = pastAppointments;
   const totalAppointments = appointments.length;
   const displayName = user?.name || 'there';
   const firstName = displayName.split(' ')[0];
@@ -406,7 +408,7 @@ function Dashboard() {
 
       <AnimatePresence>
         {appointmentToCancel && (
-          <motion.div
+          <MotionDiv
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 backdrop-blur-md"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -415,7 +417,7 @@ function Dashboard() {
               if (!isCancelling) setAppointmentToCancel(null);
             }}
           >
-            <motion.div
+            <MotionDiv
               role="dialog"
               aria-modal="true"
               aria-labelledby="cancel-session-title"
@@ -459,8 +461,8 @@ function Dashboard() {
                   {isCancelling ? 'Cancelling...' : 'Yes, Cancel Session'}
                 </button>
               </div>
-            </motion.div>
-          </motion.div>
+            </MotionDiv>
+          </MotionDiv>
         )}
       </AnimatePresence>
 
