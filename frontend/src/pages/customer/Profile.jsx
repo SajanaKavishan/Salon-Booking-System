@@ -323,8 +323,8 @@ function Profile({ onClose }) {
           Close
         </button>
       )}
-      <div className="relative overflow-hidden">
-        <div className="absolute -top-20 left-10 h-72 w-72 rounded-full bg-[#D4AF37]/10 blur-3xl" />
+      <div className="relative">
+        <div className="pointer-events-none absolute -top-24 left-4 h-96 w-96 rounded-full bg-[#D4AF37]/10 blur-3xl md:left-10" />
 
         <div className="relative px-6 pt-14 md:px-10 md:pt-10 lg:px-12">
           <div className="mx-auto max-w-6xl">
@@ -335,7 +335,7 @@ function Profile({ onClose }) {
 
       <div className="relative px-6 pb-16 md:px-10 md:pb-10 lg:px-12">
         <div className="mx-auto mt-10 flex max-w-6xl flex-col gap-10 font-sans md:mt-8 md:grid md:grid-cols-2 md:gap-x-20 md:gap-y-14">
-          <aside className="flex flex-col items-center px-2 text-center md:col-span-2 md:flex-row md:items-center md:px-0 md:text-left">
+          <aside className="flex flex-col gap-6 px-2 md:col-span-2 md:flex-row md:items-center md:gap-0 md:px-0 md:text-left">
             <div className="relative flex flex-col items-center md:w-40 md:shrink-0">
               <div className="relative z-10 flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border border-[#D4AF37]/40 bg-gradient-to-br from-[#0a0a0a] via-[#121212] to-[#1a1a1a] shadow-[0_0_40px_rgba(212,175,55,0.12)] md:h-36 md:w-36">
                 {profileImage ? (
@@ -361,7 +361,7 @@ function Profile({ onClose }) {
                 onChange={handlePhotoChange}
               />
             </div>
-            <div className="mt-6 max-w-xl md:mt-0 md:pl-10">
+            <div className="max-w-xl md:pl-10">
               <h2 className="break-words font-serif text-4xl font-semibold leading-tight tracking-normal text-white md:text-5xl">
                 {displayName}
               </h2>
