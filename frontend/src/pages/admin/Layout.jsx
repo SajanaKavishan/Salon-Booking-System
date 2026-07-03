@@ -441,7 +441,7 @@ function Layout() {
           aria-modal="true"
         >
           <div
-            className="relative h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-white/10 bg-[#070707] shadow-2xl"
+            className="no-scrollbar relative h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-white/10 bg-[#070707] shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
             <RoleProfile onClose={closeProfile} />

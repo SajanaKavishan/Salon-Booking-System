@@ -4,6 +4,9 @@ import axios from 'axios';
 const DEFAULT_STYLISTS = [];
 
 const BACKEND_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
+const formLabelClassName = 'text-xs font-bold uppercase leading-5 tracking-[0.12em] text-gray-400';
+const formValueClassName = 'mt-2 text-base leading-6 text-white';
+const formInputClassName = 'mt-2 w-full bg-transparent pb-2 text-base font-medium leading-6 text-white outline-none border-b border-[#D4AF37]/40 transition focus:border-[#D4AF37]';
 
 function Profile({ onClose }) {
   const photoInputRef = useRef(null);
@@ -18,6 +21,7 @@ function Profile({ onClose }) {
   });
 
   const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [stylists, setStylists] = useState(DEFAULT_STYLISTS);
   const [profileImage, setProfileImage] = useState(user?.profileImage || '');
 
@@ -49,8 +53,11 @@ function Profile({ onClose }) {
         const data = await response.json();
         const availableStylists = Array.isArray(data)
           ? data
-              .filter((staff) => staff?.name && staff?.userId)
-              .map((staff) => ({ name: staff.name, userId: staff.userId }))
+              .map((staff) => ({
+                name: staff?.name || '',
+                userId: staff?.userId || staff?._id || staff?.id || ''
+              }))
+              .filter((staff) => staff.name && staff.userId)
           : [];
         if (isMounted && availableStylists.length > 0) {
           setStylists(availableStylists);
@@ -85,7 +92,12 @@ function Profile({ onClose }) {
     const handleProfileUpdated = (event) => syncUserState(event?.detail);
     const handleStorage = (event) => {
       if (event.key !== 'user' || !event.newValue) return;
-      syncUserState(JSON.parse(event.newValue));
+      try {
+        syncUserState(JSON.parse(event.newValue));
+      } catch (error) {
+        console.error('Failed to parse updated user profile from localStorage:', error);
+        syncUserState({});
+      }
     };
 
     window.addEventListener('profileUpdated', handleProfileUpdated);
@@ -150,6 +162,20 @@ function Profile({ onClose }) {
     return stylists.filter((stylist) => stylist.name.toLowerCase().includes(query));
   }, [stylistQuery, stylists]);
 
+  const isDirty = useMemo(() => {
+    if (!isEditing) return false;
+
+    const normalize = (value) => String(value || '').trim();
+
+    return (
+      normalize(formValues.name) !== normalize(user?.name)
+      || normalize(formValues.email) !== normalize(user?.email)
+      || normalize(formValues.phone) !== normalize(user?.phone)
+      || normalize(formValues.preferredStylist) !== normalize(user?.preferredStylist)
+      || normalize(profileImage) !== normalize(user?.profileImage)
+    );
+  }, [formValues, isEditing, profileImage, user]);
+
   const updateField = (field, value) => {
     setFormValues((current) => ({
       ...current,
@@ -165,13 +191,17 @@ function Profile({ onClose }) {
       phone: user?.phone || '',
       preferredStylist
     });
+    setProfileImage(user?.profileImage || '');
     setStylistQuery(preferredStylist);
     setIsStylistOpen(false);
     setIsEditing(false);
   };
 
   const saveDetails = async () => {
+    if (!isDirty || isSaving) return;
+
     try {
+      setIsSaving(true);
       const token = localStorage.getItem('token');
 
       if (!token) {
@@ -204,6 +234,7 @@ function Profile({ onClose }) {
 
         setUser(mergedUser);
         localStorage.setItem('user', JSON.stringify(mergedUser));
+        setProfileImage(mergedUser.profileImage || '');
         
         setFormValues({
           name: mergedUser.name || '',
@@ -221,6 +252,8 @@ function Profile({ onClose }) {
     } catch (error) {
       console.error('Profile update error:', error.response?.data?.message || error.message);
       alert('Failed to update profile: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -293,13 +326,17 @@ function Profile({ onClose }) {
       <div className="relative overflow-hidden">
         <div className="absolute -top-20 left-10 h-72 w-72 rounded-full bg-[#D4AF37]/10 blur-3xl" />
 
-        <div className="relative px-6 pb-10 pt-14 md:px-12 lg:px-16">
-          <div className="max-w-4xl">
-            <h1 className="font-serif text-4xl font-semibold tracking-wide">MY PROFILE</h1>
+        <div className="relative px-6 pt-14 md:px-10 md:pt-10 lg:px-12">
+          <div className="mx-auto max-w-6xl">
+            <h1 className="font-serif text-2xl font-semibold tracking-wide text-white/90">MY PROFILE</h1>
           </div>
+        </div>
+      </div>
 
-          <div className="mt-10 flex flex-col gap-6 md:flex-row md:items-end">
-            <div className="relative flex flex-col items-center">
+      <div className="relative px-6 pb-16 md:px-10 md:pb-10 lg:px-12">
+        <div className="mx-auto mt-10 flex max-w-6xl flex-col gap-10 font-sans md:mt-8 md:grid md:grid-cols-2 md:gap-x-20 md:gap-y-14">
+          <aside className="flex flex-col items-center px-2 text-center md:col-span-2 md:flex-row md:items-center md:px-0 md:text-left">
+            <div className="relative flex flex-col items-center md:w-40 md:shrink-0">
               <div className="relative z-10 flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border border-[#D4AF37]/40 bg-gradient-to-br from-[#0a0a0a] via-[#121212] to-[#1a1a1a] shadow-[0_0_40px_rgba(212,175,55,0.12)] md:h-36 md:w-36">
                 {profileImage ? (
                   <img src={profileImage} alt="Customer profile" className="h-full w-full object-cover" />
@@ -313,7 +350,8 @@ function Profile({ onClose }) {
                 onClick={handlePhotoClick}
                 className="relative z-10 mt-4 text-[15px] tracking-widest text-[#D4AF37] transition hover:text-[#f3d77a]"
               >
-                Add Photo
+                <span className="md:hidden">Change Photo</span>
+                <span className="hidden md:inline">{profileImage ? 'Change Photo' : 'Add Photo'}</span>
               </button>
               <input
                 ref={photoInputRef}
@@ -323,108 +361,180 @@ function Profile({ onClose }) {
                 onChange={handlePhotoChange}
               />
             </div>
-            <div className="md:ml-6">
-              <div className="flex flex-wrap items-center gap-3">
-                <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">
-                  {displayName}
-                </h2>
-              </div>
-              <p className="mt-2 text-sm text-gray-400">
+            <div className="mt-6 max-w-xl md:mt-0 md:pl-10">
+              <h2 className="break-words font-serif text-4xl font-semibold leading-tight tracking-normal text-white md:text-5xl">
+                {displayName}
+              </h2>
+              <p className="mt-3 text-sm leading-6 text-gray-400">
                 Personal dossier curated for an exclusive salon journey.
               </p>
             </div>
-          </div>
-        </div>
-      </div>
+          </aside>
 
-      <div className="relative px-6 pb-16 md:px-12 lg:px-16">
-        <div className="mx-auto grid max-w-5xl grid-cols-1 gap-12 md:grid-cols-2 md:gap-x-20">
-          <div className="font-sans md:order-2 md:pt-8">
-            <div className="flex items-center justify-between">
-              <p className="text-[10px] uppercase tracking-widest text-[#D4AF37]/70">Personal Information</p>
-              {isEditing ? (
-                <div className="flex items-center gap-4 text-[10px] uppercase tracking-widest">
-                  <button
-                    type="button"
-                    onClick={resetForm}
-                    className="text-neutral-400 transition hover:text-white"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={saveDetails}
-                    className="text-[#D4AF37] transition hover:text-[#f3d77a]"
-                  >
-                    Save Changes
-                  </button>
+          <section className="hidden md:col-span-1 md:block">
+            <div className="flex items-start gap-4">
+              <div className="mt-1 hidden h-11 w-11 shrink-0 items-center justify-center rounded-full border border-[#D4AF37]/40 text-[#D4AF37] md:flex">
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                  <path d="M12 21s-7-4.35-7-11a4 4 0 017-2.65A4 4 0 0119 10c0 6.65-7 11-7 11z" />
+                </svg>
+              </div>
+              <div className="w-full">
+                <p className={formLabelClassName}>Preferred Stylist</p>
+                <p className="mt-1 text-sm font-medium text-white">Select your signature artist</p>
+                <div className="relative mt-5">
+                  <input
+                    type="text"
+                    value={isEditing ? stylistQuery : displayStylist}
+                    onFocus={() => {
+                      if (!isEditing) startEditing();
+                      setIsStylistOpen(true);
+                    }}
+                    onChange={(event) => {
+                      if (!isEditing) return;
+                      setStylistQuery(event.target.value);
+                      updateField('preferredStylist', event.target.value);
+                      setIsStylistOpen(true);
+                    }}
+                    onBlur={() => {
+                      window.setTimeout(() => setIsStylistOpen(false), 140);
+                    }}
+                    placeholder="Search stylists"
+                    readOnly={!isEditing}
+                    className="w-full rounded-2xl border border-[#D4AF37]/60 bg-transparent px-4 py-3 text-base font-medium text-white outline-none transition focus:border-[#D4AF37]"
+                  />
+                  {isEditing && isStylistOpen && (
+                    <div className="absolute z-10 mt-2 w-full rounded-2xl border border-[#D4AF37]/30 bg-[#0b0b0b] shadow-[0_0_30px_rgba(212,175,55,0.12)]">
+                      {filteredStylists.length > 0 ? (
+                        filteredStylists.map((stylist) => (
+                          <button
+                            type="button"
+                            key={stylist.userId}
+                            onMouseDown={() => handleStylistSelect(stylist)}
+                            className="w-full px-4 py-2 text-left text-sm text-neutral-200 transition hover:text-white"
+                          >
+                            {stylist.name}
+                          </button>
+                        ))
+                      ) : (
+                        <div className="px-4 py-3 text-sm text-neutral-500">No stylists found</div>
+                      )}
+                    </div>
+                  )}
                 </div>
-              ) : (
+              </div>
+            </div>
+          </section>
+
+          <section className="md:col-span-1">
+            <div className="flex items-center gap-3">
+              <p className="text-sm font-bold uppercase leading-6 tracking-[0.12em] text-[#D4AF37]">Personal Information</p>
+              {!isEditing && (
                 <button
                   type="button"
                   onClick={startEditing}
-                  className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-[#D4AF37] transition hover:text-[#f3d77a]"
+                  className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[#D4AF37] transition hover:bg-[#D4AF37]/10 hover:text-[#f3d77a] focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/30"
+                  aria-label="Edit profile details"
                 >
-                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-[#D4AF37]/40">
-                    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6">
-                      <path d="M12 20h9" />
-                      <path d="M16.5 3.5l4 4L7 21H3v-4L16.5 3.5z" />
-                    </svg>
-                  </span>
-                  Edit Details
+                  <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5l4 4L7 21H3v-4L16.5 3.5z" />
+                  </svg>
                 </button>
               )}
             </div>
 
-            <div className="mt-6 space-y-5">
+            <div className="mt-8 grid grid-cols-1 gap-6 md:mt-6 md:gap-5">
               <div>
-                <p className="text-[10px] uppercase tracking-widest text-gray-500">Full Name</p>
+                <p className={formLabelClassName}>Full Name</p>
                 {isEditing ? (
                   <input
                     type="text"
                     value={formValues.name}
                     onChange={(event) => updateField('name', event.target.value)}
-                    className="mt-2 w-full bg-transparent text-sm text-white outline-none border-b border-[#D4AF37]/40 focus:border-[#D4AF37]"
+                    className={formInputClassName}
                   />
                 ) : (
-                  <p className="mt-2 text-sm text-white">{displayName}</p>
+                  <p className={formValueClassName}>{displayName}</p>
                 )}
               </div>
               <div>
-                <p className="text-[10px] uppercase tracking-widest text-gray-500">Email Address</p>
+                <p className={formLabelClassName}>Email Address</p>
                 {isEditing ? (
                   <input
                     type="email"
                     value={formValues.email}
                     onChange={(event) => updateField('email', event.target.value)}
-                    className="mt-2 w-full bg-transparent text-sm text-white outline-none border-b border-[#D4AF37]/40 focus:border-[#D4AF37]"
+                    className={formInputClassName}
                   />
                 ) : (
-                  <p className="mt-2 text-sm text-white">{displayEmail}</p>
+                  <p className={formValueClassName}>{displayEmail}</p>
                 )}
               </div>
               <div>
-                <p className="text-[10px] uppercase tracking-widest text-gray-500">Phone Number</p>
+                <p className={formLabelClassName}>Phone Number</p>
                 {isEditing ? (
                   <input
                     type="text"
                     value={formValues.phone}
                     onChange={(event) => updateField('phone', event.target.value)}
-                    className="mt-2 w-full bg-transparent text-sm text-white outline-none border-b border-[#D4AF37]/40 focus:border-[#D4AF37]"
+                    className={formInputClassName}
                   />
                 ) : (
-                  <p className="mt-2 text-sm text-white">{displayPhone}</p>
+                  <p className={formValueClassName}>{displayPhone}</p>
                 )}
+              </div>
+              <div className="md:hidden">
+                <p className={formLabelClassName}>Preferred Stylist</p>
+                <div className="relative mt-2">
+                  <input
+                    type="text"
+                    value={isEditing ? stylistQuery : displayStylist}
+                    onFocus={() => {
+                      if (!isEditing) startEditing();
+                      setIsStylistOpen(true);
+                    }}
+                    onChange={(event) => {
+                      if (!isEditing) return;
+                      setStylistQuery(event.target.value);
+                      updateField('preferredStylist', event.target.value);
+                      setIsStylistOpen(true);
+                    }}
+                    onBlur={() => {
+                      window.setTimeout(() => setIsStylistOpen(false), 140);
+                    }}
+                    placeholder="Search stylists"
+                    readOnly={!isEditing}
+                    className="w-full rounded-2xl border border-[#D4AF37]/60 bg-transparent px-4 py-3 text-base font-medium text-white outline-none transition focus:border-[#D4AF37]"
+                  />
+                  {isEditing && isStylistOpen && (
+                    <div className="absolute z-10 mt-2 w-full rounded-2xl border border-[#D4AF37]/30 bg-[#0b0b0b] shadow-[0_0_30px_rgba(212,175,55,0.12)]">
+                      {filteredStylists.length > 0 ? (
+                        filteredStylists.map((stylist) => (
+                          <button
+                            type="button"
+                            key={stylist.userId}
+                            onMouseDown={() => handleStylistSelect(stylist)}
+                            className="w-full px-4 py-2 text-left text-sm text-neutral-200 transition hover:text-white"
+                          >
+                            {stylist.name}
+                          </button>
+                        ))
+                      ) : (
+                        <div className="px-4 py-3 text-sm text-neutral-500">No stylists found</div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
-            <div className="pt-6 mt-6 border-t border-[#D4AF37]/10">
+            <div className="pt-7 mt-8 border-t border-[#D4AF37]/10 md:mt-6 md:pt-5">
               <button
                 type="button"
                 onClick={() => setIsPasswordModalOpen(true)}
-                className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-neutral-400 transition hover:text-[#D4AF37]"
+                className="flex items-center gap-2 text-sm font-bold uppercase tracking-[0.08em] text-white transition hover:text-[#D4AF37]"
               >
-                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.6">
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6">
                   <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                   <path d="M7 11V7a5 5 0 0110 0v4" />
                 </svg>
@@ -432,63 +542,27 @@ function Profile({ onClose }) {
               </button>
             </div>
 
-          </div>
-
-          <div className="font-sans md:order-1 md:pt-16">
-            <div className="flex items-center gap-3 text-[#D4AF37]">
-              <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#D4AF37]/40">
-                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.6">
-                  <path d="M12 21s-7-4.35-7-10a4 4 0 018-1 4 4 0 018 1c0 5.65-7 10-7 10z" />
-                  <path d="M12 10a2 2 0 100-4 2 2 0 000 4z" />
-                </svg>
-              </span>
-              <div>
-                <p className="text-[10px] uppercase tracking-widest text-[#D4AF37]/70">Preferred Stylist</p>
-                <p className="text-sm text-white">Select your signature artist</p>
+            {isEditing && (
+              <div className="mt-12 flex flex-col gap-4 border-t border-[#D4AF37]/10 pt-7 min-[520px]:flex-row md:mt-7 md:gap-3 md:pt-5">
+                <button
+                  type="button"
+                  onClick={saveDetails}
+                  disabled={!isDirty || isSaving}
+                  className="inline-flex min-h-14 w-full flex-1 items-center justify-center rounded-full bg-[#D4AF37] px-7 py-4 text-sm font-bold uppercase tracking-[0.08em] text-black shadow-[0_18px_36px_rgba(212,175,55,0.28)] transition hover:bg-[#f3d77a] disabled:cursor-not-allowed disabled:bg-[#D4AF37]/30 disabled:text-black/40 disabled:shadow-none md:min-h-12 md:py-3"
+                >
+                  {isSaving ? 'Saving...' : 'Save Changes'}
+                </button>
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  disabled={isSaving}
+                  className="inline-flex min-h-14 w-full flex-1 items-center justify-center rounded-full border border-[#D4AF37]/70 bg-transparent px-7 py-4 text-sm font-bold uppercase tracking-[0.08em] text-[#D4AF37] transition hover:bg-[#D4AF37]/10 disabled:cursor-not-allowed disabled:opacity-50 md:min-h-12 md:py-3"
+                >
+                  Cancel
+                </button>
               </div>
-            </div>
-
-            <div className="relative mt-4">
-              <input
-                type="text"
-                value={isEditing ? stylistQuery : displayStylist}
-                onFocus={() => {
-                  if (!isEditing) startEditing();
-                  setIsStylistOpen(true);
-                }}
-                onChange={(event) => {
-                  if (!isEditing) return;
-                  setStylistQuery(event.target.value);
-                  updateField('preferredStylist', event.target.value);
-                  setIsStylistOpen(true);
-                }}
-                onBlur={() => {
-                  window.setTimeout(() => setIsStylistOpen(false), 140);
-                }}
-                placeholder="Search stylists"
-                readOnly={!isEditing}
-                className="w-full rounded-2xl border border-[#D4AF37]/40 bg-transparent px-4 py-3 text-sm text-white outline-none transition focus:border-[#D4AF37]"
-              />
-              {isEditing && isStylistOpen && (
-                <div className="absolute z-10 mt-2 w-full rounded-2xl border border-[#D4AF37]/30 bg-[#0b0b0b] shadow-[0_0_30px_rgba(212,175,55,0.12)]">
-                  {filteredStylists.length > 0 ? (
-                    filteredStylists.map((stylist) => (
-                      <button
-                        type="button"
-                        key={stylist.userId}
-                        onMouseDown={() => handleStylistSelect(stylist)}
-                        className="w-full px-4 py-2 text-left text-sm text-neutral-200 transition hover:text-white"
-                      >
-                        {stylist.name}
-                      </button>
-                    ))
-                  ) : (
-                    <div className="px-4 py-3 text-sm text-neutral-500">No stylists found</div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
+            )}
+          </section>
         </div>
       </div>
 
