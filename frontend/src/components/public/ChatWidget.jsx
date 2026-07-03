@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
-import { Bot, Loader2, Send, X } from 'lucide-react';
+import { Bot, ChevronDown, Loader2, Send, X } from 'lucide-react';
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
 
@@ -65,6 +65,33 @@ function ChatWidget() {
 
   return (
     <div className="fixed bottom-5 right-4 z-50 flex flex-col items-end gap-4 sm:bottom-8 sm:right-8">
+      <style>
+        {`
+          @keyframes salonBotPulse {
+            0%, 12%, 100% {
+              transform: scale(1) rotate(0deg);
+              opacity: 1;
+            }
+            24% {
+              transform: scale(1.08) rotate(0deg);
+              opacity: 0.94;
+            }
+            38% {
+              transform: scale(1.05) rotate(9deg);
+              opacity: 1;
+            }
+            50% {
+              transform: scale(1.05) rotate(-7deg);
+            }
+            62% {
+              transform: scale(1.04) rotate(5deg);
+            }
+            76% {
+              transform: scale(1) rotate(0deg);
+            }
+          }
+        `}
+      </style>
       {isOpen && (
         <div className="flex h-[min(610px,calc(100vh-110px))] w-[calc(100vw-32px)] max-w-[410px] flex-col overflow-hidden rounded-3xl border border-white/10 bg-[#111827]/95 shadow-2xl shadow-black/60 backdrop-blur-md">
           <div className="relative overflow-hidden border-b border-white/10 bg-gradient-to-br from-emerald-950 via-slate-950 to-neutral-950 px-5 py-4">
@@ -148,7 +175,7 @@ function ChatWidget() {
             <button
               type="submit"
               disabled={!input.trim() || isSending}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#d4af37] text-neutral-950 shadow-lg shadow-[#d4af37]/25 transition hover:scale-105 hover:bg-[#e6c552] disabled:cursor-not-allowed disabled:opacity-45"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#d4af37] text-neutral-950 shadow-lg shadow-[#d4af37]/25 transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-45"
               aria-label="Send message"
             >
               {isSending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
@@ -160,12 +187,18 @@ function ChatWidget() {
       <button
         type="button"
         onClick={() => setIsOpen((current) => !current)}
-        className="group relative overflow-hidden rounded-full bg-[#d4af37] p-4 text-neutral-950 shadow-2xl shadow-black/35 transition-all hover:scale-110 hover:bg-[#e6c552] focus:outline-none focus:ring-4 focus:ring-[#d4af37]/30"
+        className={`group relative overflow-hidden rounded-full p-4 shadow-2xl shadow-black/35 transition-all duration-500 ease-in-out hover:scale-110 hover:shadow-xl focus:outline-none focus:ring-4 ${
+          isOpen
+            ? 'bg-[#d4af37] text-neutral-950 focus:ring-[#d4af37]/30'
+            : 'bg-[#d4af37] text-neutral-950 focus:ring-[#d4af37]/30'
+        }`}
         aria-label={isOpen ? 'Close SalonDEES AI Assistant' : 'Open SalonDEES AI Assistant'}
       >
-        <span className="pointer-events-none absolute inset-0 bg-white/20 opacity-0 transition group-hover:opacity-100" />
-        <span className="relative flex">
-          {isOpen ? <X size={28} strokeWidth={2.5} /> : <Bot size={28} strokeWidth={2.5} />}
+        <span className="pointer-events-none absolute inset-0 rounded-full bg-white/20 opacity-0 transition group-hover:opacity-100" />
+        <span
+          className={`relative flex origin-center ${!isOpen ? 'animate-[salonBotPulse_3.2s_ease-in-out_infinite]' : ''}`}
+        >
+          {isOpen ? <ChevronDown size={30} strokeWidth={2.8} /> : <Bot size={30} strokeWidth={2.5} />}
         </span>
       </button>
     </div>
