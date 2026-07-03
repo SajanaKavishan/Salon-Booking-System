@@ -1,12 +1,30 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
-import { CalendarPlus } from 'lucide-react';
+import { CalendarCheck, CalendarPlus, ChevronDown } from 'lucide-react';
 import { toast } from 'react-toastify';
 import AddAppointmentModal from '../../components/admin/AddAppointmentModal';
 import { DarkSelect, GoldButton, StatusBadge } from '../../components/admin/SystemUI';
 
 const finalStatuses = ['Completed', 'Rejected', 'Cancelled', 'No-Show'];
 const PENDING_APPOINTMENTS_REFRESH_EVENT = 'appointments:pending-count-refresh';
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
+const CURRENT_DATE = new Date();
+const CURRENT_YEAR = String(CURRENT_DATE.getFullYear());
+const CURRENT_MONTH = String(CURRENT_DATE.getMonth());
+const MONTH_OPTIONS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December'
+].map((label, index) => ({ value: String(index), label }));
 
 const getStatusSortGroup = (status) => {
   const normalizedStatus = String(status || '').trim().toLowerCase();
@@ -19,44 +37,98 @@ const getStatusSortGroup = (status) => {
   return 4;
 };
 
+const timeTo24Hour = (timeStr) => {
+  if (!timeStr || typeof timeStr !== 'string') return { hours: 0, minutes: 0 };
+
+  const parts = timeStr.trim().split(' ');
+  if (parts.length < 2) return { hours: 0, minutes: 0 };
+
+  const [time, modifier] = parts;
+  const [rawHours, rawMinutes] = time.split(':').map(Number);
+
+  if (Number.isNaN(rawHours) || Number.isNaN(rawMinutes)) return { hours: 0, minutes: 0 };
+
+  let hours = rawHours;
+  if (hours === 12) hours = 0;
+  if (modifier === 'PM') hours += 12;
+
+  return { hours, minutes: rawMinutes };
+};
+
+const getAppointmentDateTime = (appointmentDate, appointmentTime) => {
+  if (!appointmentDate || !appointmentTime) return null;
+
+  const [year, month, day] = String(appointmentDate).split('-').map(Number);
+  if ([year, month, day].some(Number.isNaN)) return null;
+
+  const { hours, minutes } = timeTo24Hour(appointmentTime);
+  return new Date(year, month - 1, day, hours, minutes, 0, 0);
+};
+
+const getAppointmentDateValue = (appointment) => appointment?.date || appointment?.bookingDate;
+
+const getAppointmentDateParts = (appointment) => {
+  const parsedDate = new Date(getAppointmentDateValue(appointment));
+  if (Number.isNaN(parsedDate.getTime())) return { year: '', month: '' };
+
+  return {
+    year: String(parsedDate.getFullYear()),
+    month: String(parsedDate.getMonth())
+  };
+};
+
+const getAppointmentTimeStamp = (appointment) => {
+  if (!appointment?.date) return 0;
+
+  const dateKey = String(appointment.date).slice(0, 10);
+  const [year, month, day] = dateKey.split('-').map(Number);
+  if ([year, month, day].some(Number.isNaN)) return 0;
+
+  const { hours, minutes } = timeTo24Hour(appointment.startTime || appointment.time);
+  return new Date(year, month - 1, day, hours, minutes, 0, 0).getTime();
+};
+
+const getAppointmentSortGroup = (appointment) => {
+  const status = String(appointment?.status || '').trim().toLowerCase();
+  const startTimeStamp = getAppointmentTimeStamp(appointment);
+  const endTimeStamp = appointment?.endTime
+    ? getAppointmentTimeStamp({ ...appointment, startTime: appointment.endTime })
+    : 0;
+  const hasStarted = startTimeStamp > 0 && startTimeStamp <= Date.now();
+  const hasEnded = endTimeStamp > 0 && endTimeStamp <= Date.now();
+
+  if (['approved', 'confirmed'].includes(status) && hasStarted && !hasEnded) {
+    return 0;
+  }
+
+  return getStatusSortGroup(status);
+};
+
+const sortAppointmentsByPriority = (a, b) => {
+  const priorityDifference = getAppointmentSortGroup(a) - getAppointmentSortGroup(b);
+  if (priorityDifference !== 0) return priorityDifference;
+
+  return getAppointmentTimeStamp(b) - getAppointmentTimeStamp(a);
+};
+
 function AppointmentsPage() {
   const [appointments, setAppointments] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('Pending');
-  const [dateFilter, setDateFilter] = useState('All');
+  const [activeYear, setActiveYear] = useState(CURRENT_YEAR);
+  const [activeMonth, setActiveMonth] = useState(CURRENT_MONTH);
+  const [isYearMenuOpen, setIsYearMenuOpen] = useState(false);
+  const [isMonthMenuOpen, setIsMonthMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [updatingAppointmentId, setUpdatingAppointmentId] = useState('');
   const [currentTime, setCurrentTime] = useState(() => new Date());
+  const yearMenuRef = useRef(null);
+  const monthMenuRef = useRef(null);
+  const mobileYearMenuRef = useRef(null);
+  const mobileMonthMenuRef = useRef(null);
   const userRole = localStorage.getItem('userRole') || 'customer';
   const isAdmin = userRole === 'admin';
-
-  const timeTo24Hour = (timeStr) => {
-    if (!timeStr || typeof timeStr !== 'string') return { hours: 0, minutes: 0 };
-
-    const parts = timeStr.trim().split(' ');
-    if (parts.length < 2) return { hours: 0, minutes: 0 };
-
-    const [time, modifier] = parts;
-    const [rawHours, rawMinutes] = time.split(':').map(Number);
-
-    if (Number.isNaN(rawHours) || Number.isNaN(rawMinutes)) return { hours: 0, minutes: 0 };
-
-    let hours = rawHours;
-    if (hours === 12) hours = 0;
-    if (modifier === 'PM') hours += 12;
-
-    return { hours, minutes: rawMinutes };
-  };
-
-  const getAppointmentDateTime = (appointmentDate, appointmentTime) => {
-    if (!appointmentDate || !appointmentTime) return null;
-
-    const [year, month, day] = String(appointmentDate).split('-').map(Number);
-    if ([year, month, day].some(Number.isNaN)) return null;
-
-    const { hours, minutes } = timeTo24Hour(appointmentTime);
-    return new Date(year, month - 1, day, hours, minutes, 0, 0);
-  };
 
   const isWithinNoShowWindow = (appointment) => {
     const scheduledStart = getAppointmentDateTime(appointment.date, appointment.startTime);
@@ -74,40 +146,6 @@ function AppointmentsPage() {
     if (!scheduledEnd) return false;
 
     return currentTime.getTime() >= scheduledEnd.getTime() - 10 * 60 * 1000;
-  };
-
-  const getAppointmentTimeStamp = (appointment) => {
-    if (!appointment?.date) return 0;
-
-    const dateKey = String(appointment.date).slice(0, 10);
-    const [year, month, day] = dateKey.split('-').map(Number);
-    if ([year, month, day].some(Number.isNaN)) return 0;
-
-    const { hours, minutes } = timeTo24Hour(appointment.startTime || appointment.time);
-    return new Date(year, month - 1, day, hours, minutes, 0, 0).getTime();
-  };
-
-  const getAppointmentSortGroup = (appointment) => {
-    const status = String(appointment?.status || '').trim().toLowerCase();
-    const startTimeStamp = getAppointmentTimeStamp(appointment);
-    const endTimeStamp = appointment?.endTime
-      ? getAppointmentTimeStamp({ ...appointment, startTime: appointment.endTime })
-      : 0;
-    const hasStarted = startTimeStamp > 0 && startTimeStamp <= Date.now();
-    const hasEnded = endTimeStamp > 0 && endTimeStamp <= Date.now();
-
-    if (['approved', 'confirmed'].includes(status) && hasStarted && !hasEnded) {
-      return 0;
-    }
-
-    return getStatusSortGroup(status);
-  };
-
-  const sortAppointmentsByPriority = (a, b) => {
-    const priorityDifference = getAppointmentSortGroup(a) - getAppointmentSortGroup(b);
-    if (priorityDifference !== 0) return priorityDifference;
-
-    return getAppointmentTimeStamp(b) - getAppointmentTimeStamp(a);
   };
 
   const getAllowedStatuses = (appointment) => {
@@ -147,8 +185,8 @@ function AppointmentsPage() {
       }
 
       const endpoint = isAdmin
-        ? 'http://localhost:5000/api/appointments/all'
-        : 'http://localhost:5000/api/appointments/staff-schedule';
+        ? `${API_BASE_URL}/api/appointments/all`
+        : `${API_BASE_URL}/api/appointments/staff-schedule`;
 
       const response = await axios.get(endpoint, {
         headers: { Authorization: `Bearer ${token}` }
@@ -177,6 +215,41 @@ function AppointmentsPage() {
     return () => window.clearInterval(intervalId);
   }, []);
 
+  useEffect(() => {
+    if (!isYearMenuOpen && !isMonthMenuOpen) return undefined;
+
+    const handlePointerDown = (event) => {
+      const isInsideYearMenu = [yearMenuRef, mobileYearMenuRef].some((ref) => (
+        ref.current && ref.current.contains(event.target)
+      ));
+      const isInsideMonthMenu = [monthMenuRef, mobileMonthMenuRef].some((ref) => (
+        ref.current && ref.current.contains(event.target)
+      ));
+
+      if (!isInsideYearMenu) {
+        setIsYearMenuOpen(false);
+      }
+      if (!isInsideMonthMenu) {
+        setIsMonthMenuOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setIsYearMenuOpen(false);
+        setIsMonthMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isMonthMenuOpen, isYearMenuOpen]);
+
   const handleAppointmentCreated = (appointment) => {
     if (appointment) {
       setAppointments((current) => [appointment, ...current]);
@@ -186,6 +259,8 @@ function AppointmentsPage() {
   };
 
   const handleStatusChange = async (id, newStatus) => {
+    if (updatingAppointmentId) return;
+
     try {
       const selectedAppointment = appointments.find((appt) => appt._id === id);
       if (!selectedAppointment) return;
@@ -202,9 +277,11 @@ function AppointmentsPage() {
         return;
       }
 
+      setUpdatingAppointmentId(id);
+
       const statusEndpoint = isAdmin
-        ? `http://localhost:5000/api/appointments/${id}/status`
-        : `http://localhost:5000/api/appointments/${id}/staff-status`;
+        ? `${API_BASE_URL}/api/appointments/${id}/status`
+        : `${API_BASE_URL}/api/appointments/${id}/staff-status`;
 
       await axios.put(
         statusEndpoint,
@@ -221,40 +298,41 @@ function AppointmentsPage() {
     } catch (error) {
       console.error('Status Update Error:', error);
       toast.error('Oops! Failed to update the appointment status.');
+    } finally {
+      setUpdatingAppointmentId('');
     }
   };
+
+  const availableYears = useMemo(() => (
+    Array.from(new Set(appointments.map((appt) => getAppointmentDateParts(appt).year).filter(Boolean)))
+      .sort((firstYear, secondYear) => Number(secondYear) - Number(firstYear))
+  ), [appointments]);
+
+  const yearOptions = useMemo(() => [
+    { value: 'all', label: 'All years' },
+    { value: CURRENT_YEAR, label: CURRENT_YEAR },
+    ...availableYears
+      .filter((year) => year !== CURRENT_YEAR)
+      .map((year) => ({ value: year, label: year }))
+  ], [availableYears]);
+
+  const monthOptions = useMemo(() => [
+    { value: 'all', label: 'All months' },
+    ...MONTH_OPTIONS
+  ], []);
+
+  const activeYearLabel = yearOptions.find((option) => option.value === activeYear)?.label || CURRENT_YEAR;
+  const activeMonthLabel = monthOptions.find((option) => option.value === activeMonth)?.label || MONTH_OPTIONS[Number(CURRENT_MONTH)].label;
 
   const filteredAppointments = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
 
     return appointments
       .filter((appt) => {
-        const appointmentDate = new Date(appt.date);
-        const now = new Date();
+        const appointmentDateParts = getAppointmentDateParts(appt);
         const statusMatches = activeTab === 'All' ? true : appt.status === activeTab;
-        let dateMatches = true;
-
-        if (dateFilter === 'Today') {
-          dateMatches =
-            appointmentDate.getFullYear() === now.getFullYear() &&
-            appointmentDate.getMonth() === now.getMonth() &&
-            appointmentDate.getDate() === now.getDate();
-        } else if (dateFilter === 'This Week') {
-          const startOfWeek = new Date(now);
-          const dayOfWeek = startOfWeek.getDay();
-          startOfWeek.setHours(0, 0, 0, 0);
-          startOfWeek.setDate(startOfWeek.getDate() - dayOfWeek);
-
-          const endOfWeek = new Date(startOfWeek);
-          endOfWeek.setDate(endOfWeek.getDate() + 6);
-          endOfWeek.setHours(23, 59, 59, 999);
-
-          dateMatches = appointmentDate >= startOfWeek && appointmentDate <= endOfWeek;
-        } else if (dateFilter === 'This Month') {
-          dateMatches =
-            appointmentDate.getFullYear() === now.getFullYear() &&
-            appointmentDate.getMonth() === now.getMonth();
-        }
+        const yearMatches = activeYear === 'all' || appointmentDateParts.year === activeYear;
+        const monthMatches = activeMonth === 'all' || appointmentDateParts.month === activeMonth;
 
         const customerName = appt.user?.name || '';
         const customerPhone = appt.user?.phone || appt.user?.phoneNumber || '';
@@ -264,10 +342,10 @@ function AppointmentsPage() {
           .toLowerCase()
           .includes(query);
 
-        return statusMatches && dateMatches && searchMatches;
+        return statusMatches && yearMatches && monthMatches && searchMatches;
       })
       .sort(sortAppointmentsByPriority);
-  }, [appointments, activeTab, dateFilter, searchQuery, currentTime]);
+  }, [appointments, activeTab, activeMonth, activeYear, searchQuery]);
 
   const tabs = isAdmin
     ? ['Pending', 'Approved', 'Completed', 'Rejected', 'No-Show', 'All']
@@ -287,6 +365,7 @@ function AppointmentsPage() {
 
   const renderMobileActions = (appointment) => {
     const allowedStatuses = getAllowedStatuses(appointment).filter((status) => status !== appointment.status);
+    const isUpdating = updatingAppointmentId === appointment._id;
 
     if (allowedStatuses.length === 0) {
       return (
@@ -302,9 +381,10 @@ function AppointmentsPage() {
           <GoldButton
             type="button"
             onClick={() => handleStatusChange(appointment._id, 'Approved')}
+            disabled={isUpdating}
             className="w-full rounded-lg px-4 py-2 text-sm sm:w-auto"
           >
-            Accept
+            {isUpdating ? 'Updating...' : 'Accept'}
           </GoldButton>
         )}
         {allowedStatuses.includes('Rejected') && (
@@ -312,18 +392,20 @@ function AppointmentsPage() {
             type="button"
             variant="ghost"
             onClick={() => handleStatusChange(appointment._id, 'Rejected')}
+            disabled={isUpdating}
             className="w-full rounded-lg border border-red-900/50 bg-[#1a1a1a] px-4 py-2 text-sm text-red-400 hover:border-transparent hover:bg-red-900/80 hover:text-white sm:w-auto"
           >
-            Reject
+            {isUpdating ? 'Updating...' : 'Reject'}
           </GoldButton>
         )}
         {allowedStatuses.includes('Completed') && (
           <GoldButton
             type="button"
             onClick={() => handleStatusChange(appointment._id, 'Completed')}
+            disabled={isUpdating}
             className="w-full rounded-lg px-4 py-2 text-sm sm:w-auto"
           >
-            Complete
+            {isUpdating ? 'Updating...' : 'Complete'}
           </GoldButton>
         )}
         {allowedStatuses.includes('No-Show') && (
@@ -331,9 +413,10 @@ function AppointmentsPage() {
             type="button"
             variant="ghost"
             onClick={() => handleStatusChange(appointment._id, 'No-Show')}
+            disabled={isUpdating}
             className="w-full rounded-lg border border-white/10 bg-black/20 px-4 py-2 text-sm text-gray-300 hover:border-[#d4af37]/40 hover:text-[#d4af37] sm:w-auto"
           >
-            No-Show
+            {isUpdating ? 'Updating...' : 'No-Show'}
           </GoldButton>
         )}
         {allowedStatuses.includes('Pending') && (
@@ -341,9 +424,10 @@ function AppointmentsPage() {
             type="button"
             variant="ghost"
             onClick={() => handleStatusChange(appointment._id, 'Pending')}
+            disabled={isUpdating}
             className="w-full rounded-lg border border-white/10 bg-black/20 px-4 py-2 text-sm text-gray-300 hover:border-[#d4af37]/40 hover:text-[#d4af37] sm:w-auto"
           >
-            Mark Pending
+            {isUpdating ? 'Updating...' : 'Mark Pending'}
           </GoldButton>
         )}
       </div>
@@ -381,6 +465,108 @@ function AppointmentsPage() {
 
       <section className="rounded-2xl border border-white/10 bg-[#111111]/70 p-3 shadow-xl backdrop-blur-md sm:p-6">
         <div className="flex flex-col gap-5 border-b border-white/10 pb-5 sm:gap-6 sm:pb-6 xl:flex-row xl:items-start xl:justify-between">
+          <div className="grid grid-cols-2 gap-2 sm:hidden">
+            <div ref={mobileYearMenuRef} className="relative min-w-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsYearMenuOpen((current) => !current);
+                  setIsMonthMenuOpen(false);
+                }}
+                className="relative flex h-11 w-full items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 pr-8 text-sm font-semibold text-neutral-300 transition hover:border-[#d4af37]/30 hover:bg-white/[0.07] hover:text-white focus:border-[#d4af37]/30 focus:outline-none focus:ring-2 focus:ring-[#d4af37]/15"
+                aria-haspopup="listbox"
+                aria-expanded={isYearMenuOpen}
+                aria-label="Filter appointments by year"
+              >
+                <CalendarCheck size={15} className="shrink-0 text-[#d4af37]" />
+                <span className="truncate">{activeYearLabel}</span>
+                <ChevronDown size={15} className={`absolute right-3 transition-transform ${isYearMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {isYearMenuOpen && (
+                <div
+                  className="absolute left-0 top-full z-30 mt-2 max-h-52 w-full overflow-y-auto rounded-xl border border-white/10 bg-[#111]/95 p-1.5 shadow-2xl backdrop-blur-xl"
+                  role="listbox"
+                  aria-label="Filter appointments by year"
+                >
+                  {yearOptions.map((option) => {
+                    const isSelected = option.value === activeYear;
+
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => {
+                          setActiveYear(option.value);
+                          setIsYearMenuOpen(false);
+                        }}
+                        className={`w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium transition ${
+                          isSelected
+                            ? 'bg-[#d4af37]/12 text-[#f3d878]'
+                            : 'text-neutral-400 hover:bg-white/[0.07] hover:text-white'
+                        }`}
+                        role="option"
+                        aria-selected={isSelected}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div ref={mobileMonthMenuRef} className="relative min-w-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMonthMenuOpen((current) => !current);
+                  setIsYearMenuOpen(false);
+                }}
+                className="relative flex h-11 w-full items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 pr-8 text-sm font-semibold text-neutral-300 transition hover:border-[#d4af37]/30 hover:bg-white/[0.07] hover:text-white focus:border-[#d4af37]/30 focus:outline-none focus:ring-2 focus:ring-[#d4af37]/15"
+                aria-haspopup="listbox"
+                aria-expanded={isMonthMenuOpen}
+                aria-label="Filter appointments by month"
+              >
+                <CalendarCheck size={15} className="shrink-0 text-[#d4af37]" />
+                <span className="truncate">{activeMonthLabel}</span>
+                <ChevronDown size={15} className={`absolute right-3 transition-transform ${isMonthMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {isMonthMenuOpen && (
+                <div
+                  className="absolute left-0 top-full z-30 mt-2 max-h-60 w-full overflow-y-auto rounded-xl border border-white/10 bg-[#111]/95 p-1.5 shadow-2xl backdrop-blur-xl"
+                  role="listbox"
+                  aria-label="Filter appointments by month"
+                >
+                  {monthOptions.map((option) => {
+                    const isSelected = option.value === activeMonth;
+
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => {
+                          setActiveMonth(option.value);
+                          setIsMonthMenuOpen(false);
+                        }}
+                        className={`w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium transition ${
+                          isSelected
+                            ? 'bg-[#d4af37]/12 text-[#f3d878]'
+                            : 'text-neutral-400 hover:bg-white/[0.07] hover:text-white'
+                        }`}
+                        role="option"
+                        aria-selected={isSelected}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="salon-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:flex-wrap sm:gap-3 sm:overflow-visible sm:px-0 sm:pb-0">
             {tabs.map((tab) => (
               <button
@@ -403,7 +589,7 @@ function AppointmentsPage() {
             ))}
           </div>
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center xl:shrink-0">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center xl:shrink-0 xl:justify-end">
             <div className="relative w-full sm:w-auto">
               <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">
                 <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -412,6 +598,7 @@ function AppointmentsPage() {
               </span>
               <input
                 type="text"
+                aria-label="Search appointments by customer, phone, service, status, or time"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search appointments"
@@ -419,16 +606,105 @@ function AppointmentsPage() {
               />
             </div>
 
-            <DarkSelect
-              value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value)}
-              className="h-11 w-full rounded-full px-4 text-sm font-medium focus:ring-2 focus:ring-[#d4af37]/20 sm:w-auto"
-            >
-              <option value="All">All Dates</option>
-              <option value="Today">Today</option>
-              <option value="This Week">This Week</option>
-              <option value="This Month">This Month</option>
-            </DarkSelect>
+            <div ref={yearMenuRef} className="relative hidden w-full sm:block sm:w-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsYearMenuOpen((current) => !current);
+                  setIsMonthMenuOpen(false);
+                }}
+                className="relative flex h-11 w-full items-center justify-center gap-2.5 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 pr-10 text-sm font-semibold text-neutral-300 transition hover:border-[#d4af37]/30 hover:bg-white/[0.07] hover:text-white focus:border-[#d4af37]/30 focus:outline-none focus:ring-2 focus:ring-[#d4af37]/15 sm:w-40"
+                aria-haspopup="listbox"
+                aria-expanded={isYearMenuOpen}
+                aria-label="Filter appointments by year"
+              >
+                <CalendarCheck size={16} className="shrink-0 text-[#d4af37]" />
+                <span className="truncate">{activeYearLabel}</span>
+                <ChevronDown size={16} className={`absolute right-4 transition-transform ${isYearMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {isYearMenuOpen && (
+                <div
+                  className="absolute left-0 top-full z-30 mt-2 max-h-52 w-full overflow-y-auto rounded-xl border border-white/10 bg-[#111]/95 p-1.5 shadow-2xl backdrop-blur-xl sm:w-40"
+                  role="listbox"
+                  aria-label="Filter appointments by year"
+                >
+                  {yearOptions.map((option) => {
+                    const isSelected = option.value === activeYear;
+
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => {
+                          setActiveYear(option.value);
+                          setIsYearMenuOpen(false);
+                        }}
+                        className={`w-full rounded-lg px-3.5 py-2.5 text-left text-sm font-medium transition ${
+                          isSelected
+                            ? 'bg-[#d4af37]/12 text-[#f3d878]'
+                            : 'text-neutral-400 hover:bg-white/[0.07] hover:text-white'
+                        }`}
+                        role="option"
+                        aria-selected={isSelected}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div ref={monthMenuRef} className="relative hidden w-full sm:block sm:w-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMonthMenuOpen((current) => !current);
+                  setIsYearMenuOpen(false);
+                }}
+                className="relative flex h-11 w-full items-center justify-center gap-2.5 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 pr-10 text-sm font-semibold text-neutral-300 transition hover:border-[#d4af37]/30 hover:bg-white/[0.07] hover:text-white focus:border-[#d4af37]/30 focus:outline-none focus:ring-2 focus:ring-[#d4af37]/15 sm:w-44"
+                aria-haspopup="listbox"
+                aria-expanded={isMonthMenuOpen}
+                aria-label="Filter appointments by month"
+              >
+                <CalendarCheck size={16} className="shrink-0 text-[#d4af37]" />
+                <span className="truncate">{activeMonthLabel}</span>
+                <ChevronDown size={16} className={`absolute right-4 transition-transform ${isMonthMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {isMonthMenuOpen && (
+                <div
+                  className="absolute left-0 top-full z-30 mt-2 max-h-60 w-full overflow-y-auto rounded-xl border border-white/10 bg-[#111]/95 p-1.5 shadow-2xl backdrop-blur-xl sm:w-44"
+                  role="listbox"
+                  aria-label="Filter appointments by month"
+                >
+                  {monthOptions.map((option) => {
+                    const isSelected = option.value === activeMonth;
+
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => {
+                          setActiveMonth(option.value);
+                          setIsMonthMenuOpen(false);
+                        }}
+                        className={`w-full rounded-lg px-3.5 py-2.5 text-left text-sm font-medium transition ${
+                          isSelected
+                            ? 'bg-[#d4af37]/12 text-[#f3d878]'
+                            : 'text-neutral-400 hover:bg-white/[0.07] hover:text-white'
+                        }`}
+                        role="option"
+                        aria-selected={isSelected}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -478,10 +754,6 @@ function AppointmentsPage() {
 
                     <div className="grid gap-2 rounded-xl border border-white/5 bg-black/15 p-3">
                       <p className="text-sm">
-                        <span className="text-gray-400">Client:</span>{' '}
-                        <span className="break-words text-white">{customerName}</span>
-                      </p>
-                      <p className="text-sm">
                         <span className="text-gray-400">Phone:</span>{' '}
                         <span className="break-words text-white">{customerPhone || 'No phone provided'}</span>
                       </p>
@@ -523,6 +795,7 @@ function AppointmentsPage() {
                   {filteredAppointments.map((appt) => {
                     const customerPhone = appt.user?.phone || appt.user?.phoneNumber;
                     const isStatusLocked = finalStatuses.includes(appt.status);
+                    const isUpdating = updatingAppointmentId === appt._id;
                     const allowedStatuses = getAllowedStatuses(appt);
                     const customerName = appt.user ? appt.user.name : 'Unknown User';
 
@@ -552,11 +825,12 @@ function AppointmentsPage() {
                         </td>
                         <td className="salon-table-td">
                           <DarkSelect
+                            aria-label={`Update appointment status for ${customerName}`}
                             value={appt.status}
-                            disabled={isStatusLocked}
+                            disabled={isStatusLocked || isUpdating}
                             onChange={(e) => handleStatusChange(appt._id, e.target.value)}
                             className={`w-full min-w-[170px] rounded-lg px-3 py-2 text-sm font-medium ${
-                              isStatusLocked
+                              isStatusLocked || isUpdating
                                 ? 'cursor-not-allowed border-white/10 bg-gray-800 text-gray-500'
                                 : 'border-white/20 bg-[#0a0a0a]/80 text-gray-200 hover:border-[#d4af37]/50 focus:border-[#d4af37] focus:ring-2 focus:ring-[#d4af37]/20'
                             }`}

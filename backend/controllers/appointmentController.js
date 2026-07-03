@@ -355,11 +355,42 @@ const getAllAppointments = async (req, res) => {
 // @desc    Get pending appointments count
 // @route   GET /api/appointments/pending/count
 // @access  Private/Admin/Staff
+const getStaffAssignmentIdsForUser = async (user) => {
+    if (!user || user.role !== 'staff') return [];
+
+    const userId = user._id || user.id;
+    const linkedStaffMembers = userId
+        ? await Staff.find({ userId }).select('_id')
+        : [];
+    const staffMembers = linkedStaffMembers.length > 0
+        ? linkedStaffMembers
+        : await Staff.find({ name: user.name }).select('_id');
+
+    return [
+        ...(userId ? [userId] : []),
+        ...staffMembers.map((staffMember) => staffMember._id)
+    ];
+};
+
+const buildStaffAssignmentQuery = (staffIds) => ({
+    $or: [
+        { stylist: { $in: staffIds } },
+        { staffId: { $in: staffIds } },
+    ],
+});
+
 const getPendingAppointmentsCount = async (req, res) => {
     try {
-        const count = await Appointment.countDocuments({
+        const query = {
             status: Appointment.normalizeStatus('Pending')
-        });
+        };
+
+        if (req.user.role === 'staff') {
+            const staffIds = await getStaffAssignmentIdsForUser(req.user);
+            Object.assign(query, buildStaffAssignmentQuery(staffIds));
+        }
+
+        const count = await Appointment.countDocuments(query);
 
         res.status(200).json({ count });
     } catch (error) {
@@ -371,15 +402,9 @@ const getPendingAppointmentsCount = async (req, res) => {
 const getStaffAppointmentQuery = async (user) => {
     if (user.role !== 'staff') return {};
 
-    const staffMembers = await Staff.find({ name: user.name }).select('_id');
-    const staffIds = staffMembers.map((staffMember) => staffMember._id);
+    const staffIds = await getStaffAssignmentIdsForUser(user);
 
-    return {
-        $or: [
-            { stylist: { $in: staffIds } },
-            { staffId: { $in: staffIds } },
-        ],
-    };
+    return buildStaffAssignmentQuery(staffIds);
 };
 
 const formatDateKey = (date) => {
@@ -850,20 +875,12 @@ const updateAppointmentStatus = async (req, res) => {
         }
 
         if (req.user.role === 'staff') {
-            const userId = (req.user.id || req.user._id)?.toString();
             const assignedStaffIds = [appointment.stylist, appointment.staffId]
                 .filter(Boolean)
                 .map((staffId) => staffId.toString());
-            const staffProfiles = await Staff.find({
-                $or: [
-                    { userId: req.user._id },
-                    { name: req.user.name }
-                ]
-            }).select('_id');
-            const allowedStaffIds = new Set([
-                userId,
-                ...staffProfiles.map((staffProfile) => staffProfile._id.toString())
-            ]);
+            const allowedStaffIds = new Set(
+                (await getStaffAssignmentIdsForUser(req.user)).map((staffId) => staffId.toString())
+            );
             const isAssignedStaff = assignedStaffIds.some((staffId) => allowedStaffIds.has(staffId));
 
             if (!isAssignedStaff) {
@@ -988,8 +1005,7 @@ const updateAppointmentStatusByStaff = async (req, res) => {
         }
 
         if (req.user.role === 'staff') {
-            const staffMembers = await Staff.find({ name: req.user.name });
-            const staffIds = staffMembers.map(s => s._id.toString());
+            const staffIds = (await getStaffAssignmentIdsForUser(req.user)).map((staffId) => staffId.toString());
             const assignedStaffId = appointment.stylist || appointment.staffId;
             if (!assignedStaffId || !staffIds.includes(assignedStaffId.toString())) {
                 return res.status(401).json({ message: 'You are not assigned to this appointment.' });
