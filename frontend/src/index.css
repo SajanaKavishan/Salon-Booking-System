@@ -292,3 +292,12 @@ body {
         transform: translateY(0);
     }
 }
+
+@keyframes dashboardButtonSheen {
+    0%, 42% {
+        transform: translateX(0) rotate(12deg);
+    }
+    70%, 100% {
+        transform: translateX(360%) rotate(12deg);
+    }
+}

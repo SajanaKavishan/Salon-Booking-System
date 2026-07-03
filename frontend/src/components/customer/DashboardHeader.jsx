@@ -128,9 +128,10 @@ function DashboardHeader({ firstName, nextAppointment, formatDate, onBook }) {
         <button
           type="button"
           onClick={onBook}
-          className="w-full rounded-lg bg-[#D4AF37] px-5 py-3 text-sm font-bold text-black shadow-lg shadow-[#D4AF37]/15 transition hover:bg-[#b8952e] sm:w-fit sm:px-6"
+          className="relative w-full overflow-hidden rounded-lg bg-[#D4AF37] px-5 py-3 text-sm font-bold text-black shadow-lg shadow-[#D4AF37]/15 transition hover:bg-[#b8952e] sm:w-fit sm:px-6"
         >
-          + Book New Appointment
+          <span className="pointer-events-none absolute inset-y-[-45%] left-[-65%] w-1/2 rotate-12 bg-gradient-to-r from-transparent via-white/55 to-transparent opacity-80 animate-[dashboardButtonSheen_3.4s_ease-in-out_infinite]"></span>
+          <span className="relative z-10">+ Book New Appointment</span>
         </button>
       </div>
     </motion.header>
