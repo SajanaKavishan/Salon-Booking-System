@@ -398,30 +398,32 @@ function Home() {
           className="salon-shell relative z-10 mx-auto w-full max-w-full overflow-hidden text-center"
           variants={containerVariants}
         >
-          <motion.span
-            className="text-xs uppercase tracking-[0.24em] text-primary sm:text-xl sm:tracking-[0.2em]"
-            variants={itemVariants}
-          >
-            Premium Hair Studio
-          </motion.span>
+          <div className="relative mx-auto max-w-full px-1 sm:px-6">
+            <motion.span
+              className="text-xs uppercase tracking-[0.24em] text-primary [text-shadow:0_3px_16px_rgba(0,0,0,0.95),0_0_28px_rgba(0,0,0,0.7)] sm:text-xl sm:tracking-[0.2em]"
+              variants={itemVariants}
+            >
+              Premium Hair Studio
+            </motion.span>
 
-          <motion.h1
-            className="mx-auto mt-4 max-w-[19rem] bg-gradient-to-b from-white to-neutral-400 bg-clip-text font-brand text-[2.45rem] leading-[1.02] tracking-normal text-transparent sm:mt-6 sm:max-w-none sm:text-6xl md:text-7xl lg:text-8xl"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 1, ease: 'easeOut' }}
-          >
-            Where Style Meets <br /> Sophistication
-          </motion.h1>
+            <motion.h1
+              className="mx-auto mt-4 max-w-[19rem] bg-gradient-to-b from-white to-neutral-300 bg-clip-text font-brand text-[2.45rem] leading-[1.02] tracking-normal text-transparent drop-shadow-[0_8px_24px_rgba(0,0,0,0.95)] [filter:drop-shadow(0_0_18px_rgba(0,0,0,0.82))] sm:mt-6 sm:max-w-none sm:text-6xl md:text-7xl lg:text-8xl"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 1, ease: 'easeOut' }}
+            >
+              Where Style Meets <br /> Sophistication
+            </motion.h1>
 
-          <motion.p
-            className="mx-auto mt-4 max-w-[19rem] text-sm font-light leading-6 text-gray-300 sm:mt-6 sm:max-w-[32rem] sm:text-base md:max-w-3xl md:text-xl md:leading-relaxed"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 1, ease: 'easeOut', delay: 0.1 }}
-          >
-            Experience the art of hair transformation at {settings.salonName}. Our expert stylists craft personalized looks that elevate your natural beauty.
-          </motion.p>
+            <motion.p
+              className="mx-auto mt-4 max-w-[19rem] text-sm font-light leading-6 text-gray-100 [text-shadow:0_2px_10px_rgba(0,0,0,0.95),0_0_22px_rgba(0,0,0,0.8)] sm:mt-6 sm:max-w-[32rem] sm:text-base md:max-w-3xl md:text-xl md:leading-relaxed"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 1, ease: 'easeOut', delay: 0.1 }}
+            >
+              Experience the art of hair transformation at {settings.salonName}. Our expert stylists craft personalized looks that elevate your natural beauty.
+            </motion.p>
+          </div>
 
           <motion.div
             className="mx-auto mt-7 flex w-full max-w-[19rem] flex-col justify-center gap-2.5 sm:mt-10 sm:max-w-none sm:flex-row sm:gap-4"
