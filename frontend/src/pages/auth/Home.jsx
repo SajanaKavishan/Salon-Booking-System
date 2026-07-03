@@ -384,7 +384,7 @@ function Home() {
       <div className="pointer-events-none absolute right-[-10%] top-[20%] h-[220px] w-[220px] rounded-full bg-primary/10 blur-[100px] sm:h-[300px] sm:w-[300px] sm:blur-[120px]" />
       <div className="pointer-events-none absolute bottom-[10%] left-[20%] h-[240px] w-[240px] rounded-full bg-primary/10 blur-[110px] sm:h-[320px] sm:w-[320px] sm:blur-[140px]" />
 
-      <section id="home" className="relative flex min-h-[100svh] w-full max-w-full items-center justify-center overflow-hidden px-4 pb-14 pt-24 sm:min-h-screen sm:px-6 sm:pb-44 sm:pt-32 md:pb-52">
+      <section id="home" className="relative flex min-h-[100svh] w-full max-w-full items-center justify-center overflow-hidden px-4 pb-[calc(env(safe-area-inset-bottom)+2rem)] pt-24 max-[380px]:pt-20 sm:min-h-screen sm:px-6 sm:pb-44 sm:pt-32 md:pb-52">
         <div className="absolute inset-0 z-0">
           <div className="absolute inset-0 bg-[#0a0a0a]/85" />
           <img
@@ -398,16 +398,16 @@ function Home() {
           className="salon-shell relative z-10 mx-auto w-full max-w-full overflow-hidden text-center"
           variants={containerVariants}
         >
-          <div className="relative mx-auto max-w-full px-1 sm:px-6">
+          <div className="relative mx-auto max-w-full px-1 max-[380px]:px-0 sm:px-6">
             <motion.span
-              className="text-xs uppercase tracking-[0.24em] text-primary [text-shadow:0_3px_16px_rgba(0,0,0,0.95),0_0_28px_rgba(0,0,0,0.7)] sm:text-xl sm:tracking-[0.2em]"
+              className="text-xs uppercase tracking-[0.22em] text-primary [text-shadow:0_3px_16px_rgba(0,0,0,0.95),0_0_28px_rgba(0,0,0,0.7)] max-[380px]:text-[0.68rem] max-[380px]:tracking-[0.18em] sm:text-xl sm:tracking-[0.2em]"
               variants={itemVariants}
             >
               Premium Hair Studio
             </motion.span>
 
             <motion.h1
-              className="mx-auto mt-4 max-w-[19rem] bg-gradient-to-b from-white to-neutral-300 bg-clip-text font-brand text-[2.45rem] leading-[1.02] tracking-normal text-transparent drop-shadow-[0_8px_24px_rgba(0,0,0,0.95)] [filter:drop-shadow(0_0_18px_rgba(0,0,0,0.82))] sm:mt-6 sm:max-w-none sm:text-6xl md:text-7xl lg:text-8xl"
+              className="mx-auto mt-4 max-w-[19rem] bg-gradient-to-b from-white to-neutral-300 bg-clip-text font-brand text-[clamp(2.15rem,11vw,2.7rem)] leading-[1.02] tracking-normal text-transparent drop-shadow-[0_8px_24px_rgba(0,0,0,0.95)] [filter:drop-shadow(0_0_18px_rgba(0,0,0,0.82))] max-[380px]:mt-3 sm:mt-6 sm:max-w-none sm:text-6xl md:text-7xl lg:text-8xl"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 1, ease: 'easeOut' }}
@@ -416,7 +416,7 @@ function Home() {
             </motion.h1>
 
             <motion.p
-              className="mx-auto mt-4 max-w-[19rem] text-sm font-light leading-6 text-gray-100 [text-shadow:0_2px_10px_rgba(0,0,0,0.95),0_0_22px_rgba(0,0,0,0.8)] sm:mt-6 sm:max-w-[32rem] sm:text-base md:max-w-3xl md:text-xl md:leading-relaxed"
+              className="mx-auto mt-4 max-w-[19rem] text-sm font-light leading-6 text-gray-100 [text-shadow:0_2px_10px_rgba(0,0,0,0.95),0_0_22px_rgba(0,0,0,0.8)] max-[380px]:mt-3 max-[380px]:max-w-[18rem] max-[380px]:text-[0.82rem] max-[380px]:leading-5 sm:mt-6 sm:max-w-[32rem] sm:text-base md:max-w-3xl md:text-xl md:leading-relaxed"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 1, ease: 'easeOut', delay: 0.1 }}
@@ -426,14 +426,14 @@ function Home() {
           </div>
 
           <motion.div
-            className="mx-auto mt-7 flex w-full max-w-[19rem] flex-col justify-center gap-2.5 sm:mt-10 sm:max-w-none sm:flex-row sm:gap-4"
+            className="mx-auto mt-7 flex w-full max-w-[19rem] flex-col justify-center gap-2.5 max-[380px]:mt-5 max-[380px]:max-w-[18rem] max-[380px]:gap-2 sm:mt-10 sm:max-w-none sm:flex-row sm:gap-4"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 1, ease: 'easeOut', delay: 0.2 }}
           >
             <motion.button
               onClick={handlePrimaryCTA}
-              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-[#C9A227] px-8 py-3.5 text-base font-semibold text-black shadow-[0_18px_40px_rgba(255,255,255,0.18)] transition duration-300 ease-out hover:scale-[1.02] hover:bg-gray-200 sm:w-auto sm:px-10 sm:py-4 sm:text-lg"
+              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-primary to-[#C9A227] px-8 py-3.5 text-base font-semibold text-black shadow-[0_18px_40px_rgba(255,255,255,0.18)] transition duration-300 ease-out hover:scale-[1.02] hover:bg-gray-200 max-[380px]:min-h-11 max-[380px]:py-3 max-[380px]:text-sm sm:w-auto sm:px-10 sm:py-4 sm:text-lg"
               whileHover={{ y: -4, transition: { duration: 0.2 } }}
             >
               {primaryCTALabel} <ArrowRight className="h-5 w-5" />
@@ -441,16 +441,20 @@ function Home() {
 
             <motion.button
               onClick={() => scrollToSection('services')}
-              className="min-h-12 rounded-full border border-white/20 px-8 py-3.5 text-base font-medium text-white shadow-[0_12px_30px_rgba(15,15,15,0.45)] transition duration-300 ease-out hover:scale-[1.02] hover:bg-white/10 sm:px-10 sm:py-4 sm:text-lg"
+              className="min-h-12 rounded-full border border-white/20 px-8 py-3.5 text-base font-medium text-white shadow-[0_12px_30px_rgba(15,15,15,0.45)] transition duration-300 ease-out hover:scale-[1.02] hover:bg-white/10 max-[380px]:min-h-11 max-[380px]:py-3 max-[380px]:text-sm sm:px-10 sm:py-4 sm:text-lg"
               whileHover={{ y: -4, transition: { duration: 0.2 } }}
             >
               View Services
             </motion.button>
+
+            <div className="w-full sm:hidden">
+              <ChatWidget mode="mobile-trigger" />
+            </div>
           </motion.div>
 
           {/* Mobile Ratings Card - same animation as web info cards */}
           <motion.div
-            className="mx-auto mt-10 w-full max-w-[18rem] md:hidden"
+            className="mx-auto mt-10 w-full max-w-[18rem] max-[380px]:mt-7 max-[380px]:max-w-[17rem] md:hidden"
             variants={infoCardsContainerVariants}
           >
             <motion.div
@@ -848,7 +852,7 @@ function Home() {
         <p>&copy; {new Date().getFullYear()} {settings.salonName}. All rights reserved.</p>
       </motion.footer>
 
-      <ChatWidget />
+      <ChatWidget mode="desktop-floating" />
     </motion.div>
   );
 }

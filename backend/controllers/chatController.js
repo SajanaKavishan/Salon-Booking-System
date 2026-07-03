@@ -3,9 +3,21 @@ const Service = require('../models/Service');
 const Staff = require('../models/Staff');
 const SalonSettings = require('../models/SalonSettings');
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 const GROQ_MODEL = 'llama-3.1-8b-instant';
-const DEFAULT_REPLY = 'I am here to help with SalonDEES services, stylists, and timings.';
+const DEFAULT_REPLY = 'I am here to help with SalonDEES services, stylists, timings, and beauty care guidance.';
+let groqClient = null;
+
+const getGroqClient = () => {
+  if (!process.env.GROQ_API_KEY) {
+    return null;
+  }
+
+  if (!groqClient) {
+    groqClient = new Groq({ apiKey: process.env.GROQ_API_KEY });
+  }
+
+  return groqClient;
+};
 
 const dayLabels = {
   monday: 'Monday',
@@ -61,7 +73,7 @@ const buildSalonContext = async () => {
 Salon profile:
 - Name: ${settings?.salonName || 'SalonDEES'}
 - Contact number: ${settings?.contactNumber || 'Not listed'}
-- Address: ${settings?.address || 'Not listed'}
+- Address: ${settings?.address || 'Pothuhera Junction'}
 
 Salon services:
 ${serviceLines}
@@ -90,12 +102,15 @@ const toGroqMessages = (history = []) => {
 
 const buildSystemPrompt = (salonContext) => `
 You are the official AI Assistant of SalonDEES management system.
-Be polite, premium, and welcoming.
-Speak in the language the user uses, Sinhala or English.
-Provide details only about Salon Services, Stylists, and timings.
-If asked about booking, tell them to click the "Appointments" or "Book Now" buttons on the website.
-Do not answer unrelated questions. Politely guide users back to SalonDEES services, stylists, timings, or booking.
-Use the live salon context below as your source of truth.
+Your persona is a polite, premium, welcoming salon concierge and expert beauty/grooming consultant.
+Speak in the language the user uses, Sinhala or English, and keep the tone warm, professional, and salon-host friendly.
+Core SalonDEES details are the top priority: location at Pothuhera Junction, opening hours, services, stylists, and stylist off-days.
+Use the live salon context below as your source of truth for salon services, prices, timings, stylists, off-days, contact details, and opening hours.
+You may answer beauty and grooming consultation questions, including hair care tips, skin care guidance, styling suggestions, product/routine advice, and preparation or aftercare for salon services.
+You may handle friendly small talk and chit-chat briefly while keeping the conversation refined and helpful.
+If the user asks about coming in, appointments, reservations, availability, or booking, smoothly guide them to use the "Book Appointment", "Appointments", or "Book Now" feature on the website.
+For medical, allergy, or severe skin/scalp issues, provide general care guidance only and suggest consulting a qualified healthcare professional.
+Do not answer topics unrelated to SalonDEES, beauty, grooming, hair care, skin care, styling, small talk, or booking. Politely guide users back to SalonDEES or beauty care.
 
 ${salonContext}
 `;
@@ -115,7 +130,8 @@ const handleChat = async (req, res) => {
       return res.status(400).json({ message: 'Message is required.' });
     }
 
-    if (!process.env.GROQ_API_KEY) {
+    const groq = getGroqClient();
+    if (!groq) {
       return res.status(500).json({ message: 'Groq API key is not configured.' });
     }
 

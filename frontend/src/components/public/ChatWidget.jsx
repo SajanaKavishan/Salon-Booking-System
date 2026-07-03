@@ -18,12 +18,13 @@ const quickActions = [
   'Find Stylist',
 ];
 
-function ChatWidget() {
+function ChatWidget({ mode = 'desktop-floating' }) {
   const [isOpen, setIsOpen] = useState(false);
   const [shouldRenderChat, setShouldRenderChat] = useState(false);
   const [messages, setMessages] = useState(initialMessages);
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [isInputFocused, setIsInputFocused] = useState(false);
   const chatScrollRef = useRef(null);
   const messagesEndRef = useRef(null);
 
@@ -108,8 +109,23 @@ function ChatWidget() {
     scrollContainer.scrollTop += event.deltaY;
   };
 
+  const isMobileTrigger = mode === 'mobile-trigger';
+  const rootClassName = isMobileTrigger
+    ? 'w-full sm:hidden'
+    : 'fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+1rem)] z-50 hidden flex-col items-end gap-3 sm:inset-x-auto sm:bottom-8 sm:right-8 sm:flex sm:gap-4';
+  const panelPositionClassName = isMobileTrigger
+    ? `fixed inset-x-3 top-[calc(env(safe-area-inset-top)+4.25rem)] z-50 max-[360px]:inset-x-2 ${
+        isInputFocused
+          ? 'bottom-[calc(env(safe-area-inset-bottom)+0.5rem)]'
+          : 'bottom-[calc(env(safe-area-inset-bottom)+5.25rem)]'
+      }`
+    : '';
+  const panelSizeClassName = isMobileTrigger
+    ? 'h-auto w-auto'
+    : 'h-[min(560px,calc(100svh-112px))] w-full sm:h-[min(600px,calc(100vh-110px))] sm:w-[410px]';
+
   return (
-    <div className="fixed inset-x-3 bottom-4 z-50 flex flex-col items-end gap-3 sm:inset-x-auto sm:bottom-8 sm:right-8 sm:gap-4">
+    <div className={rootClassName}>
       <style>
         {`
           @keyframes salonBotPulse {
@@ -162,6 +178,15 @@ function ChatWidget() {
             }
           }
 
+          @keyframes salonButtonSheen {
+            0% {
+              transform: translateX(-180%) skewX(-18deg);
+            }
+            58%, 100% {
+              transform: translateX(280%) skewX(-18deg);
+            }
+          }
+
           .salon-chat-scrollbar {
             scrollbar-width: thin;
             scrollbar-color: rgba(212, 175, 55, 0.75) transparent;
@@ -183,34 +208,49 @@ function ChatWidget() {
       </style>
       {shouldRenderChat && (
         <div
+          className={`fixed inset-0 z-40 bg-black/45 backdrop-blur-sm transition-opacity duration-260 sm:hidden ${
+            isOpen ? 'opacity-100' : 'opacity-0'
+          }`}
+          aria-hidden="true"
+        />
+      )}
+      {shouldRenderChat && (
+        <div
           onWheel={handlePanelWheel}
-          className={`flex h-[min(560px,calc(100svh-96px))] w-full origin-bottom-right flex-col overflow-hidden rounded-2xl border border-[#d4af37]/25 bg-[#101010]/95 shadow-2xl shadow-black/60 backdrop-blur-md sm:h-[min(600px,calc(100vh-110px))] sm:w-[410px] sm:rounded-3xl ${
+          className={`${panelPositionClassName} ${panelSizeClassName} flex origin-bottom-right flex-col overflow-hidden rounded-2xl border border-[#d4af37]/25 bg-[#101010]/95 shadow-2xl shadow-black/60 backdrop-blur-md transition-[bottom] duration-300 ease-out sm:rounded-3xl ${
             isOpen
               ? 'animate-[salonChatUnfold_360ms_cubic-bezier(0.16,1,0.3,1)_both]'
               : 'animate-[salonChatFold_260ms_ease-in_both]'
           }`}
         >
-          <div className="relative overflow-hidden border-b border-[#d4af37]/20 bg-black/80 px-4 py-3.5 backdrop-blur-md sm:px-5 sm:py-4">
+          <div className="relative overflow-hidden border-b border-[#d4af37]/20 bg-black/80 px-3.5 py-3 backdrop-blur-md sm:px-5 sm:py-4">
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(212,175,55,0.18),transparent_34%)]" />
             <div className="relative flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[#d4af37]/40 bg-[#d4af37] text-neutral-950 shadow-lg shadow-[#d4af37]/20 sm:h-11 sm:w-11">
-                  <Bot size={20} strokeWidth={2.4} />
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-[#d4af37]/40 bg-[#d4af37] text-neutral-950 shadow-lg shadow-[#d4af37]/20 sm:h-11 sm:w-11">
+                  <Bot size={19} strokeWidth={2.4} />
                 </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-white sm:text-[15px]">SalonDEES Concierge</h3>
-                  <div className="mt-1 inline-flex items-center gap-1.5 rounded-full border border-emerald-400/15 bg-emerald-400/5 px-2 py-0.5 text-[10px] font-medium text-emerald-200">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.7)]" />
-                    Online
-                  </div>
+                <div className="min-w-0">
+                  <h3 className="truncate text-[0.95rem] font-bold tracking-wide text-white sm:text-lg">SalonDEES Concierge</h3>
                 </div>
               </div>
 
-              <div className="h-9 w-9" aria-hidden="true" />
+              {isMobileTrigger ? (
+                <button
+                  type="button"
+                  onClick={() => setIsOpen(false)}
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#d4af37]/25 bg-[#141414] text-[#d4af37] transition hover:bg-[#d4af37]/10"
+                  aria-label="Minimize SalonDEES Concierge"
+                >
+                  <ChevronDown size={20} strokeWidth={2.7} />
+                </button>
+              ) : (
+                <div className="h-9 w-9" aria-hidden="true" />
+              )}
             </div>
           </div>
 
-          <div ref={chatScrollRef} className="salon-chat-scrollbar flex-1 space-y-3 overflow-y-auto bg-[#101010] px-3 py-4 sm:space-y-4 sm:px-4 sm:py-5">
+          <div ref={chatScrollRef} className="salon-chat-scrollbar flex-1 overscroll-contain space-y-3 overflow-y-auto bg-[#101010] px-3 py-4 sm:space-y-4 sm:px-4 sm:py-5">
             {messages.map((message, index) => {
               const isUser = message.role === 'user';
 
@@ -225,7 +265,7 @@ function ChatWidget() {
                     </div>
                   )}
                   <div
-                    className={`max-w-[86%] whitespace-pre-wrap px-3.5 py-2.5 text-sm leading-relaxed shadow-lg sm:max-w-[82%] sm:px-4 sm:py-3 ${
+                    className={`max-w-[88%] whitespace-pre-wrap px-3.5 py-2.5 text-sm leading-relaxed shadow-lg max-[360px]:max-w-[92%] max-[360px]:text-[0.82rem] sm:max-w-[82%] sm:px-4 sm:py-3 ${
                       isUser
                         ? 'rounded-2xl rounded-br-md border border-white/10 bg-gradient-to-r from-[#2a2a2a] to-[#1f1f1f] font-medium text-white shadow-black/20'
                         : 'rounded-2xl rounded-bl-md border border-[#d4af37]/25 bg-[#141414] text-neutral-100 shadow-black/20'
@@ -252,7 +292,7 @@ function ChatWidget() {
             <div ref={messagesEndRef} />
           </div>
 
-          <div className="flex gap-2 overflow-x-auto border-t border-[#d4af37]/15 bg-[#101010] px-3 py-2.5 sm:flex-wrap sm:overflow-visible sm:px-4 sm:py-3">
+          <div className="salon-chat-scrollbar flex gap-2 overflow-x-auto overscroll-contain border-t border-[#d4af37]/15 bg-[#101010] px-3 py-2.5 sm:flex-wrap sm:overflow-visible sm:px-4 sm:py-3">
             {quickActions.map((action) => (
               <button
                 key={action}
@@ -265,19 +305,21 @@ function ChatWidget() {
             ))}
           </div>
 
-          <form onSubmit={handleSubmit} className="flex items-center gap-2 border-t border-[#d4af37]/15 bg-[#141414] p-3 sm:p-3.5">
+          <form onSubmit={handleSubmit} className="flex items-center gap-2 border-t border-[#d4af37]/15 bg-[#141414] p-2.5 sm:p-3.5">
             <input
               type="text"
               value={input}
               onChange={(event) => setInput(event.target.value)}
+              onFocus={() => setIsInputFocused(true)}
+              onBlur={() => setIsInputFocused(false)}
               placeholder="Ask about services, stylists, or timings..."
-              className="min-w-0 flex-1 rounded-full border border-[#d4af37]/20 bg-[#101010] px-4 py-3 text-sm text-white outline-none transition placeholder:text-neutral-500 focus:border-[#d4af37] focus:ring-2 focus:ring-[#d4af37]/20"
+              className="min-w-0 flex-1 rounded-full border border-[#d4af37]/20 bg-[#101010] px-4 py-3 text-sm text-white outline-none transition placeholder:text-neutral-500 focus:border-[#d4af37] focus:ring-2 focus:ring-[#d4af37]/20 max-[360px]:px-3 max-[360px]:text-[0.82rem]"
               disabled={isSending}
             />
             <button
               type="submit"
               disabled={!input.trim() || isSending}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#d4af37] text-neutral-950 shadow-lg shadow-[#d4af37]/25 transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-45"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#d4af37] text-neutral-950 shadow-lg shadow-[#d4af37]/25 transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-45 max-[360px]:h-10 max-[360px]:w-10"
               aria-label="Send message"
             >
               {isSending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
@@ -286,23 +328,34 @@ function ChatWidget() {
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={() => setIsOpen((current) => !current)}
-        className={`group relative overflow-hidden rounded-full p-3.5 shadow-2xl shadow-black/35 transition-all duration-500 ease-in-out hover:scale-110 hover:shadow-xl focus:outline-none focus:ring-4 sm:p-4 ${
-          isOpen
-            ? 'bg-[#d4af37] text-neutral-950 focus:ring-[#d4af37]/30'
-            : 'bg-[#d4af37] text-neutral-950 focus:ring-[#d4af37]/30'
-        }`}
-        aria-label={isOpen ? 'Close SalonDEES AI Assistant' : 'Open SalonDEES AI Assistant'}
-      >
-        <span className="pointer-events-none absolute inset-0 rounded-full bg-white/20 opacity-0 transition group-hover:opacity-100" />
-        <span
-          className={`relative flex origin-center ${!isOpen ? 'animate-[salonBotPulse_3.2s_ease-in-out_infinite]' : ''}`}
+      {isMobileTrigger ? (
+        !shouldRenderChat && (
+        <button
+          type="button"
+          onClick={() => setIsOpen(true)}
+          className="group relative flex min-h-12 w-full items-center justify-center gap-2 overflow-hidden rounded-full border border-[#d4af37]/35 bg-black/45 px-8 py-3.5 text-base font-semibold text-white shadow-[0_12px_30px_rgba(15,15,15,0.45)] backdrop-blur-sm transition duration-300 ease-out hover:scale-[1.02] hover:bg-[#d4af37]/10 hover:shadow-[0_18px_40px_rgba(212,175,55,0.18)] max-[380px]:min-h-11 max-[380px]:py-3 max-[380px]:text-sm"
+          aria-label="Open SalonDEES Concierge"
         >
-          {isOpen ? <ChevronDown size={28} strokeWidth={2.8} /> : <Bot size={28} strokeWidth={2.5} />}
-        </span>
-      </button>
+          <span className="pointer-events-none absolute inset-y-[-35%] left-0 w-1/2 bg-gradient-to-r from-transparent via-[#d4af37]/45 to-transparent opacity-75 animate-[salonButtonSheen_3.8s_ease-in-out_infinite]" />
+          <Bot className="relative" size={18} strokeWidth={2.4} />
+          <span className="relative">Ask Concierge</span>
+        </button>
+        )
+      ) : (
+        <button
+          type="button"
+          onClick={() => setIsOpen((current) => !current)}
+          className="group relative overflow-hidden rounded-full bg-[#d4af37] p-3.5 text-neutral-950 shadow-2xl shadow-black/35 transition-all duration-500 ease-in-out hover:scale-110 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-[#d4af37]/30 sm:p-4"
+          aria-label={isOpen ? 'Close SalonDEES AI Assistant' : 'Open SalonDEES AI Assistant'}
+        >
+          <span className="pointer-events-none absolute inset-0 rounded-full bg-white/20 opacity-0 transition group-hover:opacity-100" />
+          <span
+            className={`relative flex origin-center ${!isOpen ? 'animate-[salonBotPulse_3.2s_ease-in-out_infinite]' : ''}`}
+          >
+            {isOpen ? <ChevronDown size={28} strokeWidth={2.8} /> : <Bot size={28} strokeWidth={2.5} />}
+          </span>
+        </button>
+      )}
     </div>
   );
 }
