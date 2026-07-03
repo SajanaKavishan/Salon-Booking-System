@@ -91,6 +91,9 @@ function Login() {
 
   const onSubmit = async (e) => {
     e.preventDefault();
+
+    if (isLoading) return;
+
     setIsLoading(true);
 
     try {
@@ -260,8 +263,9 @@ function Login() {
 
               <form onSubmit={onSubmit} className="mt-8 space-y-6">
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-400">Email Address</label>
+                  <label htmlFor="login-email" className="mb-2 block text-sm font-medium text-gray-400">Email Address</label>
                   <input
+                    id="login-email"
                     type="email"
                     name="email"
                     value={email}
@@ -274,7 +278,7 @@ function Login() {
 
                 <div>
                   <div className="mb-2 flex items-center justify-between gap-4">
-                    <label className="text-sm font-medium text-gray-400">Password</label>
+                    <label htmlFor="login-password" className="text-sm font-medium text-gray-400">Password</label>
                     <Link
                       to="/forgot-password"
                       className="text-xs font-medium text-[#d4af37] transition hover:text-yellow-400 hover:underline"
@@ -284,6 +288,7 @@ function Login() {
                   </div>
                   <div className="relative">
                     <input
+                      id="login-password"
                       type={showPassword ? 'text' : 'password'}
                       name="password"
                       value={password}
@@ -294,6 +299,7 @@ function Login() {
                     />
                     <button
                       type="button"
+                      aria-label="Toggle password visibility"
                       onClick={() => setShowPassword((prev) => !prev)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 transition-colors hover:text-[#d4af37]"
                     >
@@ -320,8 +326,9 @@ function Login() {
 
               <button
                 type="button"
+                disabled={isLoading}
                 onClick={handleGoogleLogin}
-                className="flex w-full items-center justify-center gap-3 rounded-md border border-white/10 bg-black/90 px-4 py-3 text-sm text-gray-200 transition duration-300 hover:bg-white/10"
+                className="flex w-full items-center justify-center gap-3 rounded-md border border-white/10 bg-black/90 px-4 py-3 text-sm text-gray-200 transition duration-300 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-70"
               >
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
                   <path d="M19.64 10.2045C19.64 9.51136 19.5777 8.84659 19.4614 8.20455H10V12.0057H15.4023C15.1693 13.2614 14.4568 14.3239 13.3943 15.0341V17.5H16.6477C18.5489 15.75 19.64 13.2159 19.64 10.2045Z" fill="#4285F4" />

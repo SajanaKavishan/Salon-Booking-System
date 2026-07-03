@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Lock, Scissors } from 'lucide-react';
+import { FaEye, FaEyeSlash } from 'react-icons/fa';
 import Spinner from '../../components/common/Spinner';
 import { AuthShell } from '../../components/admin/SystemUI';
 
@@ -17,6 +18,9 @@ function ResetPassword() {
     confirmPassword: '',
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [resetSucceeded, setResetSucceeded] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
@@ -29,6 +33,9 @@ function ResetPassword() {
 
   const onSubmit = async (event) => {
     event.preventDefault();
+
+    if (isLoading || resetSucceeded) return;
+
     setMessage('');
     setError('');
 
@@ -51,6 +58,7 @@ function ResetPassword() {
 
       const successMessage = response.data?.message || 'Password reset successful. You can now sign in.';
       setMessage(successMessage);
+      setResetSucceeded(true);
       toast.success(successMessage);
 
       setTimeout(() => {
@@ -95,34 +103,52 @@ function ResetPassword() {
 
           <form onSubmit={onSubmit} className="space-y-5">
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-400">New Password</label>
+              <label htmlFor="reset-password" className="mb-2 block text-sm font-medium text-gray-400">New Password</label>
               <div className="relative">
                 <input
-                  type="password"
+                  id="reset-password"
+                  type={showPassword ? 'text' : 'password'}
                   name="password"
                   value={formData.password}
                   onChange={onChange}
                   placeholder="Enter new password"
                   required
-                  className="w-full rounded-md bg-[#edf2ff] px-4 py-3 pl-11 text-sm text-gray-900 placeholder:text-gray-500 shadow-inner transition-all duration-300 focus:border-[#D4AF37] focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/40"
+                  className="w-full rounded-md bg-[#edf2ff] px-4 py-3 pl-11 pr-11 text-sm text-gray-900 placeholder:text-gray-500 shadow-inner transition-all duration-300 focus:border-[#D4AF37] focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/40"
                 />
                 <Lock className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+                <button
+                  type="button"
+                  aria-label="Toggle password visibility"
+                  onClick={() => setShowPassword((current) => !current)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 transition-colors hover:text-[#d4af37]"
+                >
+                  {showPassword ? <FaEyeSlash size={16} /> : <FaEye size={16} />}
+                </button>
               </div>
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-400">Confirm New Password</label>
+              <label htmlFor="reset-confirm-password" className="mb-2 block text-sm font-medium text-gray-400">Confirm New Password</label>
               <div className="relative">
                 <input
-                  type="password"
+                  id="reset-confirm-password"
+                  type={showConfirmPassword ? 'text' : 'password'}
                   name="confirmPassword"
                   value={formData.confirmPassword}
                   onChange={onChange}
                   placeholder="Confirm new password"
                   required
-                  className="w-full rounded-md bg-[#edf2ff] px-4 py-3 pl-11 text-sm text-gray-900 placeholder:text-gray-500 shadow-inner transition-all duration-300 focus:border-[#D4AF37] focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/40"
+                  className="w-full rounded-md bg-[#edf2ff] px-4 py-3 pl-11 pr-11 text-sm text-gray-900 placeholder:text-gray-500 shadow-inner transition-all duration-300 focus:border-[#D4AF37] focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/40"
                 />
                 <Lock className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+                <button
+                  type="button"
+                  aria-label="Toggle password visibility"
+                  onClick={() => setShowConfirmPassword((current) => !current)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 transition-colors hover:text-[#d4af37]"
+                >
+                  {showConfirmPassword ? <FaEyeSlash size={16} /> : <FaEye size={16} />}
+                </button>
               </div>
             </div>
 
@@ -140,7 +166,7 @@ function ResetPassword() {
 
             <motion.button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || resetSucceeded}
               whileTap={{ scale: 0.99 }}
               className="flex w-full items-center justify-center rounded-md bg-[#d4af37] px-4 py-3 text-sm font-semibold text-black shadow-[0_12px_30px_rgba(212,175,55,0.25)] transition-all duration-200 hover:bg-[#b8952e] hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-70"
             >

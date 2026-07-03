@@ -8,6 +8,7 @@ import Spinner from '../../components/common/Spinner';
 import { AuthShell } from '../../components/admin/SystemUI';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const GENERIC_RECOVERY_MESSAGE = 'If an account exists with that email, a password reset link has been sent.';
 
 function ForgotPassword() {
   const [email, setEmail] = useState('');
@@ -22,14 +23,19 @@ function ForgotPassword() {
     setError('');
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/users/forgot-password`, {
+      await axios.post(`${API_BASE_URL}/api/users/forgot-password`, {
         email: email.trim(),
       });
 
-      const successMessage = response.data?.message || 'Password reset link sent to your email.';
-      setMessage(successMessage);
-      toast.success(successMessage);
+      setMessage(GENERIC_RECOVERY_MESSAGE);
+      toast.success(GENERIC_RECOVERY_MESSAGE);
     } catch (requestError) {
+      if (requestError.response?.status === 404) {
+        setMessage(GENERIC_RECOVERY_MESSAGE);
+        toast.success(GENERIC_RECOVERY_MESSAGE);
+        return;
+      }
+
       const errorMessage = requestError.response?.data?.message || 'Unable to send reset link. Please try again.';
       setError(errorMessage);
       toast.error(errorMessage);
@@ -68,9 +74,10 @@ function ForgotPassword() {
 
           <form onSubmit={onSubmit} className="space-y-5">
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-400">Email Address</label>
+              <label htmlFor="forgot-password-email" className="mb-2 block text-sm font-medium text-gray-400">Email Address</label>
               <div className="relative">
                 <input
+                  id="forgot-password-email"
                   type="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}

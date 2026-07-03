@@ -132,6 +132,7 @@ const login = async (req, res) => {
 const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
+    const genericSuccessMessage = 'If an account exists with that email, a password reset link has been sent.';
 
     if (!email) {
       return res.status(400).json({ message: 'Email is required.' });
@@ -139,7 +140,7 @@ const forgotPassword = async (req, res) => {
 
     const user = await User.findOne({ email: email.toLowerCase().trim() });
     if (!user) {
-      return res.status(404).json({ message: 'No account found with that email address.' });
+      return res.status(200).json({ success: true, message: genericSuccessMessage });
     }
 
     const resetToken = crypto.randomBytes(32).toString('hex');
@@ -177,7 +178,7 @@ const forgotPassword = async (req, res) => {
         text: `Reset your Salon DEES password using this link: ${resetUrl}. This link expires in 10 minutes.`,
       });
 
-      return res.status(200).json({ message: 'Password reset link sent to your email.' });
+      return res.status(200).json({ success: true, message: genericSuccessMessage });
     } catch (emailError) {
       user.resetPasswordToken = undefined;
       user.resetPasswordExpire = undefined;
