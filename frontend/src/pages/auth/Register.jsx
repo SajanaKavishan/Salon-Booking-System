@@ -76,6 +76,8 @@ function Register() {
   const onSubmit = async (e) => {
     e.preventDefault();
 
+    if (isLoading) return;
+
     if (password.length < MIN_PASSWORD_LENGTH) {
       toast.error(`Password must be at least ${MIN_PASSWORD_LENGTH} characters long.`);
       return;
@@ -210,40 +212,46 @@ function Register() {
 
           <form onSubmit={onSubmit} className="mt-8 space-y-4">
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-300">Full Name</label>
+              <label htmlFor="register-name" className="mb-2 block text-sm font-medium text-gray-300">Full Name</label>
               <input
+                id="register-name"
                 type="text"
                 name="name"
                 value={name}
                 onChange={onChange}
                 placeholder="Enter your full name"
                 required
+                autoComplete="name"
                 className="w-full rounded-md bg-slate-100 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/40 focus:border-[#D4AF37] transition-all duration-300"
               />
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-300">Email Address</label>
+              <label htmlFor="register-email" className="mb-2 block text-sm font-medium text-gray-300">Email Address</label>
               <input
+                id="register-email"
                 type="email"
                 name="email"
                 value={email}
                 onChange={onChange}
                 placeholder="Enter your email"
                 required
+                autoComplete="email"
                 className="w-full rounded-md bg-slate-100 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/40 focus:border-[#D4AF37] transition-all duration-300"
               />
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-300">Phone Number</label>
+              <label htmlFor="register-phone" className="mb-2 block text-sm font-medium text-gray-300">Phone Number</label>
               <input
+                id="register-phone"
                 type="tel"
                 name="phone"
                 value={phone}
                 onChange={onChange}
                 placeholder="Enter your phone number"
                 required
+                autoComplete="tel"
                 pattern="[+()\-\s0-9]{7,20}"
                 title="Enter a valid phone number using 7 to 15 digits."
                 className="w-full rounded-md bg-slate-100 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/40 focus:border-[#D4AF37] transition-all duration-300"
@@ -251,9 +259,10 @@ function Register() {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-300">Password</label>
+              <label htmlFor="register-password" className="mb-2 block text-sm font-medium text-gray-300">Password</label>
               <div className="relative">
                 <input
+                  id="register-password"
                   type={showPassword ? 'text' : 'password'}
                   name="password"
                   value={password}
@@ -261,10 +270,12 @@ function Register() {
                   placeholder="Create a password"
                   required
                   minLength={MIN_PASSWORD_LENGTH}
+                  autoComplete="new-password"
                   className="w-full rounded-md bg-slate-100 px-4 py-2.5 pr-12 text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/40 focus:border-[#D4AF37] transition-all duration-300"
                 />
                 <button
                   type="button"
+                  aria-label="Toggle password visibility"
                   onClick={() => setShowPassword((prev) => !prev)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 transition-colors hover:text-[#d4af37]"
                 >
