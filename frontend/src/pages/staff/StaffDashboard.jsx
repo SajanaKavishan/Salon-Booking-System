@@ -513,9 +513,7 @@ function StaffDashboard() {
       const token = localStorage.getItem('token');
       setActionKey(`${appointmentId}-${status}`);
 
-      const endpoint = status === 'Approved' || status === 'Rejected'
-        ? `http://localhost:5000/api/appointments/${appointmentId}/status`
-        : `http://localhost:5000/api/appointments/${appointmentId}/staff-status`;
+      const endpoint = `http://localhost:5000/api/appointments/${appointmentId}/staff-status`;
 
       const response = await axios.put(
         endpoint,
@@ -544,6 +542,75 @@ function StaffDashboard() {
     } finally {
       setActionKey('');
     }
+  };
+
+  const renderAppointmentActions = (appointment, { stacked = false } = {}) => {
+    const startDateTime = buildAppointmentDateTime(appointment);
+    const endDateTime = buildAppointmentDateTime(appointment, appointment.endTime);
+    const isStarted = startDateTime?.getTime() <= currentTime;
+    const isEnded = endDateTime?.getTime() <= currentTime;
+    const actionWrapperClass = stacked
+      ? 'grid gap-2'
+      : 'flex flex-wrap justify-end gap-2';
+    const buttonClass = stacked
+      ? 'w-full rounded-lg px-4 py-2.5 text-sm'
+      : 'rounded-lg px-4 py-2 text-sm';
+
+    if (!['Pending', 'Approved', 'Completed'].includes(appointment.status)) return null;
+
+    return (
+      <div className={actionWrapperClass}>
+        {appointment.status === 'Pending' && (
+          <>
+            <GoldButton
+              type="button"
+              onClick={() => handleStatusUpdate(appointment._id, 'Approved')}
+              disabled={actionKey === `${appointment._id}-Approved`}
+              className={buttonClass}
+            >
+              {actionKey === `${appointment._id}-Approved` ? 'Working...' : 'Accept'}
+            </GoldButton>
+            <GoldButton
+              type="button"
+              variant="ghost"
+              onClick={() => handleStatusUpdate(appointment._id, 'Rejected')}
+              disabled={actionKey === `${appointment._id}-Rejected`}
+              className={`${buttonClass} border border-red-900/50 bg-[#1a1a1a] text-red-400 hover:border-transparent hover:bg-red-900/80 hover:text-white`}
+            >
+              {actionKey === `${appointment._id}-Rejected` ? 'Working...' : 'Reject'}
+            </GoldButton>
+          </>
+        )}
+
+        {appointment.status === 'Approved' && (
+          isEnded ? (
+            <GoldButton
+              type="button"
+              onClick={() => handleStatusUpdate(appointment._id, 'Completed')}
+              disabled={actionKey === `${appointment._id}-Completed`}
+              className={buttonClass}
+            >
+              {actionKey === `${appointment._id}-Completed` ? 'Working...' : 'Complete'}
+            </GoldButton>
+          ) : (
+            <GoldButton
+              type="button"
+              variant="ghost"
+              className={`${buttonClass} border border-white/10 bg-black/20 text-gray-400 hover:bg-black/20 hover:text-gray-400`}
+              disabled
+            >
+              {isStarted ? 'In Progress' : 'Start'}
+            </GoldButton>
+          )
+        )}
+
+        {appointment.status === 'Completed' && (
+          <span className="inline-flex justify-center rounded-full border border-green-700/50 bg-green-900/30 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-green-400">
+            Done
+          </span>
+        )}
+      </div>
+    );
   };
 
   const renderFocusAppointment = (title, appointment, emptyText, isActive = false, eyebrow = 'Active Status') => (
@@ -848,104 +915,108 @@ function StaffDashboard() {
             <p className="mt-2 text-sm text-gray-400">Your client roster will appear here as soon as bookings are assigned.</p>
           </div>
         ) : (
-          <div className="salon-scrollbar overflow-x-auto">
-            <table className="min-w-[760px] text-left">
-              <thead>
-                <tr className="border-b border-white/10 text-xs uppercase tracking-[0.16em] text-[#d4af37]">
-                  <th className="px-4 py-4 font-medium">Time</th>
-                  <th className="px-4 py-4 font-medium">Client Name</th>
-                  <th className="px-4 py-4 font-medium">Service</th>
-                  <th className="px-4 py-4 font-medium">Status</th>
-                  <th className="px-4 py-4 font-medium text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
+          <>
+            <div className="block md:hidden">
+              <div className="grid gap-4">
                 {todayAppointments.map((appointment) => {
                   const services = getServicesLabel(appointment);
-                  const startDateTime = buildAppointmentDateTime(appointment);
-                  const endDateTime = buildAppointmentDateTime(appointment, appointment.endTime);
-                  const isStarted = startDateTime?.getTime() <= currentTime;
-                  const isEnded = endDateTime?.getTime() <= currentTime;
+                  const actions = renderAppointmentActions(appointment, { stacked: true });
 
                   return (
-                    <tr key={appointment._id} className="border-b border-white/10 last:border-b-0 hover:bg-white/5">
-                      <td className="px-4 py-4 align-middle">
-                        <div className="text-sm font-semibold text-white">
-                          {appointment.startTime} {appointment.endTime ? `- ${appointment.endTime}` : ''}
+                    <article
+                      key={appointment._id}
+                      className="rounded-xl border border-white/10 bg-black/20 p-4 shadow-lg"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold uppercase tracking-[0.16em] text-gray-500">Customer</p>
+                          <h3 className="mt-1 break-words text-lg font-bold leading-snug text-white">
+                            {appointment.user?.name || 'Client'}
+                          </h3>
+                          <p className="mt-1 break-words text-xs text-gray-400">
+                            {appointment.user?.phone || appointment.user?.email || 'No contact details'}
+                          </p>
                         </div>
-                        <div className="mt-0.5 text-xs text-zinc-500">
-                          {formatRosterDate(appointment)}
+                        <div className="shrink-0">
+                          <StatusBadge status={appointment.status} />
                         </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="font-semibold text-white">{appointment.user?.name || 'Client'}</div>
-                        <div className="mt-1 text-xs text-gray-400">{appointment.user?.phone || appointment.user?.email || 'No contact details'}</div>
-                      </td>
-                      <td className="px-4 py-4 text-sm text-gray-300">{services}</td>
-                      <td className="px-4 py-4">
-                        <StatusBadge status={appointment.status} />
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="flex flex-wrap justify-end gap-2">
-                          {appointment.status === 'Pending' && (
-                            <>
-                              <GoldButton
-                                type="button"
-                                onClick={() => handleStatusUpdate(appointment._id, 'Approved')}
-                                disabled={actionKey === `${appointment._id}-Approved`}
-                                className="rounded-lg px-4 py-2 text-sm"
-                              >
-                                {actionKey === `${appointment._id}-Approved` ? 'Working...' : 'Accept'}
-                              </GoldButton>
-                              <GoldButton
-                                type="button"
-                                variant="ghost"
-                                onClick={() => handleStatusUpdate(appointment._id, 'Rejected')}
-                                disabled={actionKey === `${appointment._id}-Rejected`}
-                                className="rounded-lg border border-red-900/50 bg-[#1a1a1a] px-4 py-2 text-sm text-red-400 hover:border-transparent hover:bg-red-900/80 hover:text-white"
-                              >
-                                {actionKey === `${appointment._id}-Rejected` ? 'Working...' : 'Reject'}
-                              </GoldButton>
-                            </>
-                          )}
+                      </div>
 
-                          {appointment.status === 'Approved' && (
-                            <>
-                              {isEnded ? (
-                                <GoldButton
-                                  type="button"
-                                  onClick={() => handleStatusUpdate(appointment._id, 'Completed')}
-                                  disabled={actionKey === `${appointment._id}-Completed`}
-                                  className="rounded-lg px-4 py-2 text-sm"
-                                >
-                                  {actionKey === `${appointment._id}-Completed` ? 'Working...' : 'Complete'}
-                                </GoldButton>
-                              ) : (
-                                <GoldButton
-                                  type="button"
-                                  variant="ghost"
-                                  className="rounded-lg border border-white/10 bg-black/20 px-4 py-2 text-sm text-gray-400 hover:bg-black/20 hover:text-gray-400"
-                                  disabled
-                                >
-                                  {isStarted ? 'In Progress' : 'Start'}
-                                </GoldButton>
-                              )}
-                            </>
-                          )}
-
-                          {appointment.status === 'Completed' && (
-                            <span className="rounded-full border border-green-700/50 bg-green-900/30 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-green-400">
-                              Done
-                            </span>
-                          )}
+                      <div className="mt-4 grid gap-3 rounded-lg border border-white/10 bg-[#07090d]/70 p-3">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Selected Service</p>
+                          <p className="mt-1 break-words text-sm font-semibold text-gray-100">{services}</p>
                         </div>
-                      </td>
-                    </tr>
+                        <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2">
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Appt Time</p>
+                            <p className="mt-1 text-sm font-semibold text-white">
+                              {appointment.startTime} {appointment.endTime ? `- ${appointment.endTime}` : ''}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Slot</p>
+                            <p className="mt-1 text-sm font-semibold text-white">{formatRosterDate(appointment)}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {actions && (
+                        <div className="mt-4 border-t border-white/10 pt-4">
+                          {actions}
+                        </div>
+                      )}
+                    </article>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
+              </div>
+            </div>
+
+            <div className="hidden md:block">
+              <div className="salon-scrollbar overflow-x-auto">
+                <table className="min-w-[760px] text-left">
+                  <thead>
+                    <tr className="border-b border-white/10 text-xs uppercase tracking-[0.16em] text-[#d4af37]">
+                      <th className="px-4 py-4 font-medium">Time</th>
+                      <th className="px-4 py-4 font-medium">Client Name</th>
+                      <th className="px-4 py-4 font-medium">Service</th>
+                      <th className="px-4 py-4 font-medium">Status</th>
+                      <th className="px-4 py-4 font-medium text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {todayAppointments.map((appointment) => {
+                      const services = getServicesLabel(appointment);
+
+                      return (
+                        <tr key={appointment._id} className="border-b border-white/10 last:border-b-0 hover:bg-white/5">
+                          <td className="px-4 py-4 align-middle">
+                            <div className="text-sm font-semibold text-white">
+                              {appointment.startTime} {appointment.endTime ? `- ${appointment.endTime}` : ''}
+                            </div>
+                            <div className="mt-0.5 text-xs text-zinc-500">
+                              {formatRosterDate(appointment)}
+                            </div>
+                          </td>
+                          <td className="px-4 py-4">
+                            <div className="font-semibold text-white">{appointment.user?.name || 'Client'}</div>
+                            <div className="mt-1 text-xs text-gray-400">{appointment.user?.phone || appointment.user?.email || 'No contact details'}</div>
+                          </td>
+                          <td className="px-4 py-4 text-sm text-gray-300">{services}</td>
+                          <td className="px-4 py-4">
+                            <StatusBadge status={appointment.status} />
+                          </td>
+                          <td className="px-4 py-4">
+                            {renderAppointmentActions(appointment)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
         )}
       </section>
     </div>

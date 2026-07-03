@@ -849,6 +849,28 @@ const updateAppointmentStatus = async (req, res) => {
             return res.status(404).json({ message: "Appointment not found." });
         }
 
+        if (req.user.role === 'staff') {
+            const userId = (req.user.id || req.user._id)?.toString();
+            const assignedStaffIds = [appointment.stylist, appointment.staffId]
+                .filter(Boolean)
+                .map((staffId) => staffId.toString());
+            const staffProfiles = await Staff.find({
+                $or: [
+                    { userId: req.user._id },
+                    { name: req.user.name }
+                ]
+            }).select('_id');
+            const allowedStaffIds = new Set([
+                userId,
+                ...staffProfiles.map((staffProfile) => staffProfile._id.toString())
+            ]);
+            const isAssignedStaff = assignedStaffIds.some((staffId) => allowedStaffIds.has(staffId));
+
+            if (!isAssignedStaff) {
+                return res.status(403).json({ message: "Unauthorized: You are not assigned to this appointment." });
+            }
+        }
+
         appointment.status = normalizedStatus;
         const updatedAppointment = await appointment.save();
 
