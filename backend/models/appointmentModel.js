@@ -96,6 +96,10 @@ const appointmentSchema = new mongoose.Schema({
         type: Number,
         required: true,
     },
+    customerMobile: {
+        type: String,
+        trim: true,
+    },
     isHiddenByCustomer: {
         type: Boolean,
         default: false,

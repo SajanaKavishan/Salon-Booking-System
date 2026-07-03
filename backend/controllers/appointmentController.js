@@ -100,6 +100,7 @@ const createAppointment = async (req, res) => {
             timeSlot,
             startTime: legacyStartTime,
             services,
+            customerMobile,
             bypassBuffer = false,
         } = req.body;
         const stylist = staffId || legacyStylist;
@@ -278,6 +279,7 @@ const createAppointment = async (req, res) => {
             endTime: formattedEndTime,
             totalDuration: totalDuration,
             totalAmount: totalAmount,
+            customerMobile: typeof customerMobile === 'string' ? customerMobile.trim() : '',
             staffId: stylistId,
             bookingDate: appointmentDate,
             timeSlot: `${formattedStartTime} - ${formattedEndTime}`,

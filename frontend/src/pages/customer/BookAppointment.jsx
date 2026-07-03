@@ -104,12 +104,6 @@ function BookingCalendarPicker({ value, onChange, holidays = [], minDate, weeken
   );
 
   useEffect(() => {
-    if (selectedDate) {
-      setViewDate(selectedDate);
-    }
-  }, [value]);
-
-  useEffect(() => {
     if (!isOpen) return undefined;
 
     const updateOpenDirection = () => {
@@ -157,6 +151,10 @@ function BookingCalendarPicker({ value, onChange, holidays = [], minDate, weeken
   };
 
   const handleToggleCalendar = () => {
+    if (selectedDate && viewDate.getTime() !== selectedDate.getTime()) {
+      setViewDate(selectedDate);
+    }
+
     if (!pickerRef.current) {
       setIsOpen((current) => !current);
       return;
