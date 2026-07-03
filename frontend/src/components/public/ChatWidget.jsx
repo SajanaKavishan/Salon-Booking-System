@@ -6,6 +6,7 @@ const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:500
 
 const initialMessages = [
   {
+    id: 'welcome-message',
     role: 'assistant',
     text: 'Welcome to SalonDEES. How may I help you with our services, stylists, or opening hours today?',
   },
@@ -18,6 +19,45 @@ const quickActions = [
   'Find Stylist',
 ];
 
+function TypingMessage({ text, shouldAnimate, onProgress, onComplete }) {
+  const [displayText, setDisplayText] = useState(shouldAnimate ? '' : text);
+  const onProgressRef = useRef(onProgress);
+  const onCompleteRef = useRef(onComplete);
+
+  useEffect(() => {
+    onProgressRef.current = onProgress;
+  }, [onProgress]);
+
+  useEffect(() => {
+    onCompleteRef.current = onComplete;
+  }, [onComplete]);
+
+  useEffect(() => {
+    if (!shouldAnimate) {
+      setDisplayText(text);
+      return undefined;
+    }
+
+    let index = 0;
+    setDisplayText('');
+
+    const timer = setInterval(() => {
+      index += 1;
+      setDisplayText(text.slice(0, index));
+      onProgressRef.current?.();
+
+      if (index >= text.length) {
+        clearInterval(timer);
+        onCompleteRef.current?.();
+      }
+    }, 24);
+
+    return () => clearInterval(timer);
+  }, [shouldAnimate, text]);
+
+  return displayText;
+}
+
 function ChatWidget({ mode = 'desktop-floating' }) {
   const [isOpen, setIsOpen] = useState(false);
   const [shouldRenderChat, setShouldRenderChat] = useState(false);
@@ -27,10 +67,24 @@ function ChatWidget({ mode = 'desktop-floating' }) {
   const [isInputFocused, setIsInputFocused] = useState(false);
   const chatScrollRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const typedMessageIdsRef = useRef(new Set());
+  const shouldStickToBottomRef = useRef(true);
+
+  const scrollToLatestMessage = (behavior = 'smooth') => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
+  };
+
+  const handleChatScroll = () => {
+    const scrollContainer = chatScrollRef.current;
+    if (!scrollContainer) return;
+
+    const distanceFromBottom = scrollContainer.scrollHeight - scrollContainer.scrollTop - scrollContainer.clientHeight;
+    shouldStickToBottomRef.current = distanceFromBottom < 80;
+  };
 
   useEffect(() => {
     if (isOpen) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      scrollToLatestMessage();
     }
   }, [isOpen, messages]);
 
@@ -65,7 +119,11 @@ function ChatWidget({ mode = 'desktop-floating' }) {
     const trimmedInput = input.trim();
     if (!trimmedInput || isSending) return;
 
-    const userMessage = { role: 'user', text: trimmedInput };
+    const userMessage = {
+      id: `user-${Date.now()}`,
+      role: 'user',
+      text: trimmedInput,
+    };
     const nextMessages = [...messages, userMessage];
 
     setMessages(nextMessages);
@@ -81,16 +139,20 @@ function ChatWidget({ mode = 'desktop-floating' }) {
       setMessages((currentMessages) => [
         ...currentMessages,
         {
+          id: `assistant-${Date.now()}`,
           role: 'assistant',
           text: response.data?.reply || 'I am here to help with SalonDEES services, stylists, and timings.',
+          animate: true,
         },
       ]);
     } catch (error) {
       setMessages((currentMessages) => [
         ...currentMessages,
         {
+          id: `assistant-error-${Date.now()}`,
           role: 'assistant',
           text: error.response?.data?.message || 'Sorry, the SalonDEES AI Assistant is unavailable right now.',
+          animate: true,
         },
       ]);
     } finally {
@@ -250,13 +312,19 @@ function ChatWidget({ mode = 'desktop-floating' }) {
             </div>
           </div>
 
-          <div ref={chatScrollRef} className="salon-chat-scrollbar flex-1 overscroll-contain space-y-3 overflow-y-auto bg-[#101010] px-3 py-4 sm:space-y-4 sm:px-4 sm:py-5">
+          <div
+            ref={chatScrollRef}
+            onScroll={handleChatScroll}
+            className="salon-chat-scrollbar flex-1 overscroll-contain space-y-3 overflow-y-auto bg-[#101010] px-3 py-4 sm:space-y-4 sm:px-4 sm:py-5"
+          >
             {messages.map((message, index) => {
               const isUser = message.role === 'user';
+              const messageId = message.id || `${message.role}-${index}`;
+              const shouldAnimateMessage = !isUser && message.animate && !typedMessageIdsRef.current.has(messageId);
 
               return (
                 <div
-                  key={`${message.role}-${index}`}
+                  key={messageId}
                   className={`flex items-end gap-2 ${isUser ? 'justify-end' : 'justify-start'}`}
                 >
                   {!isUser && (
@@ -271,7 +339,20 @@ function ChatWidget({ mode = 'desktop-floating' }) {
                         : 'rounded-2xl rounded-bl-md border border-[#d4af37]/25 bg-[#141414] text-neutral-100 shadow-black/20'
                     }`}
                   >
-                    {message.text}
+                    {isUser ? (
+                      message.text
+                    ) : (
+                      <TypingMessage
+                        text={message.text}
+                        shouldAnimate={shouldAnimateMessage}
+                        onProgress={() => {
+                          if (shouldStickToBottomRef.current) {
+                            scrollToLatestMessage('auto');
+                          }
+                        }}
+                        onComplete={() => typedMessageIdsRef.current.add(messageId)}
+                      />
+                    )}
                   </div>
                 </div>
               );
