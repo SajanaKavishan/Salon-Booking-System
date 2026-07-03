@@ -1,9 +1,13 @@
 const Shift = require("../models/Shift");
 const LeaveRequest = require("../models/LeaveRequest");
 const Staff = require("../models/Staff");
+const Holiday = require("../models/Holiday");
+const User = require("../models/User");
+const mongoose = require("mongoose");
 const { ensureSettingsDocument } = require("./settingsController");
 
 const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const allowedLeaveTypes = ["Casual", "Medical", "Annual", "Unpaid"];
 
 const getDateKey = (date) => {
     const year = date.getFullYear();
@@ -22,6 +26,30 @@ const addDays = (date, days) => {
     const nextDate = new Date(date);
     nextDate.setDate(nextDate.getDate() + days);
     return nextDate;
+};
+
+const parseDateOnly = (value) => {
+    if (value instanceof Date) return value;
+    if (typeof value === "string") {
+        const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (match) {
+            return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+        }
+    }
+    return new Date(value);
+};
+
+const getDateKeysInRange = (startDate, endDate) => {
+    const dateKeys = [];
+    let cursor = startOfDay(startDate);
+    const lastDate = startOfDay(endDate);
+
+    while (cursor <= lastDate) {
+        dateKeys.push(getDateKey(cursor));
+        cursor = addDays(cursor, 1);
+    }
+
+    return dateKeys;
 };
 
 const normalizeOffDays = (offDays) => {
@@ -153,24 +181,96 @@ const getStaffMetrics = async (req, res) => {
 
 const applyLeave = async (req, res) => {
     try {
-        const staffId = req.user._id;
-        const { startDate, endDate, type, reason } = req.body;
+        const { startDate, endDate, staffId: requestedStaffId } = req.body;
+        const leaveType = typeof req.body.type === "string" ? req.body.type.trim() : req.body.type;
+        const leaveReason = typeof req.body.reason === "string" ? req.body.reason.trim() : "";
         
-        if (!startDate || !type || !reason) {
+        if (!startDate || !leaveType || !leaveReason) {
             return res.status(400).json({ message: "Start date, leave type, and reason are required." });
         }
 
+        if (!allowedLeaveTypes.includes(leaveType)) {
+            return res.status(400).json({ message: "Leave type must be one of: Casual, Medical, Annual, Unpaid." });
+        }
+
+        let staffId;
+        if (req.user.role === "staff") {
+            staffId = req.user._id;
+        } else if (req.user.role === "admin") {
+            if (!requestedStaffId) {
+                return res.status(400).json({ message: "staffId is required when an admin submits a leave request." });
+            }
+
+            if (!mongoose.isValidObjectId(requestedStaffId)) {
+                return res.status(400).json({ message: "Please provide a valid staffId." });
+            }
+
+            const staffUser = await User.findOne({ _id: requestedStaffId, role: "staff" }).select("_id").lean();
+            if (!staffUser) {
+                return res.status(404).json({ message: "Staff member not found." });
+            }
+
+            staffId = staffUser._id;
+        } else {
+            return res.status(403).json({ message: "Only staff or admins can submit leave requests." });
+        }
+
         const resolvedEndDate = endDate || startDate;
-        if (new Date(resolvedEndDate) < new Date(startDate)) {
+        const parsedStartDate = startOfDay(parseDateOnly(startDate));
+        const parsedEndDate = startOfDay(parseDateOnly(resolvedEndDate));
+
+        if (Number.isNaN(parsedStartDate.getTime()) || Number.isNaN(parsedEndDate.getTime())) {
+            return res.status(400).json({ message: "Please provide valid start and end dates." });
+        }
+
+        if (parsedEndDate < parsedStartDate) {
             return res.status(400).json({ message: "End date must be on or after the start date." });
+        }
+
+        const todayStart = startOfDay(new Date());
+        if (parsedStartDate < todayStart) {
+            return res.status(400).json({ message: "Leave requests cannot be submitted for past dates." });
+        }
+
+        const dateKeys = getDateKeysInRange(parsedStartDate, parsedEndDate);
+        const settings = await ensureSettingsDocument();
+        const weekendClosedDate = dateKeys.find((dateKey) => isSalonClosed(parseDateOnly(dateKey), settings));
+        if (weekendClosedDate) {
+            return res.status(400).json({
+                message: `Leave cannot be requested on ${weekendClosedDate} because the salon is closed.`,
+            });
+        }
+
+        const conflictingHoliday = await Holiday.findOne({
+            date: { $in: dateKeys },
+            isActive: { $ne: false },
+        }).select("date name").lean();
+
+        if (conflictingHoliday) {
+            return res.status(400).json({
+                message: `Leave cannot be requested on ${conflictingHoliday.date} because the salon is closed for ${conflictingHoliday.name}.`,
+            });
+        }
+
+        const overlappingLeave = await LeaveRequest.findOne({
+            staffId,
+            status: { $in: ["Pending", "Approved"] },
+            startDate: { $lte: parsedEndDate },
+            endDate: { $gte: parsedStartDate },
+        }).select("_id status startDate endDate").lean();
+
+        if (overlappingLeave) {
+            return res.status(409).json({
+                message: `This request overlaps with an existing ${overlappingLeave.status.toLowerCase()} leave request.`,
+            });
         }
 
         const newLeave = new LeaveRequest({
             staffId,
-            startDate,
-            endDate: resolvedEndDate,
-            leaveType: type,
-            reason
+            startDate: parsedStartDate,
+            endDate: parsedEndDate,
+            leaveType,
+            reason: leaveReason
         });
 
         await newLeave.save();

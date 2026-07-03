@@ -7,6 +7,7 @@ import { format, addDays, startOfWeek, isSameDay, isWithinInterval, startOfMonth
 
 const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const calendarDaysOfWeek = ["M", "T", "W", "T", "F", "S", "S"];
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000").replace(/\/$/, "");
 
 const getTimeValue = (date) => {
   const value = date instanceof Date ? date.getTime() : new Date(date).getTime();
@@ -51,7 +52,7 @@ export default function RosterShifts() {
           },
         };
 
-        const shiftsPromise = axios.get("http://localhost:5000/api/roster/shifts", config).catch(error => {
+        const shiftsPromise = axios.get(`${API_BASE_URL}/api/roster/shifts`, config).catch(error => {
           console.error("Error fetching shifts:", error);
           if (error.response?.status === 401) {
             toast.error("Session expired, please sign out and log back in.");
@@ -60,7 +61,7 @@ export default function RosterShifts() {
           }
           return { data: [] }; // Return empty array on error
         });
-        const metricsPromise = axios.get("http://localhost:5000/api/roster/metrics", config).catch(error => {
+        const metricsPromise = axios.get(`${API_BASE_URL}/api/roster/metrics`, config).catch(error => {
           console.error("Error fetching staff metrics:", error);
           if (error.response?.status === 401) {
             toast.error("Session expired, please sign out and log back in.");
@@ -69,7 +70,7 @@ export default function RosterShifts() {
           }
           return { data: { leaveBalance: 12 } };
         });
-        const leavesPromise = axios.get("http://localhost:5000/api/leaves", config).catch(error => {
+        const leavesPromise = axios.get(`${API_BASE_URL}/api/leaves`, config).catch(error => {
           console.error("Error fetching leaves:", error);
           if (error.response?.status === 401) {
             toast.error("Session expired, please sign out and log back in.");
@@ -78,7 +79,7 @@ export default function RosterShifts() {
           }
           return { data: [] }; // Return empty array on error
         });
-        const staffProfilePromise = axios.get("http://localhost:5000/api/users/me", config).catch(error => {
+        const staffProfilePromise = axios.get(`${API_BASE_URL}/api/users/me`, config).catch(error => {
           console.error("Error fetching staff profile:", error);
           if (error.response?.status === 401) {
             toast.error("Session expired, please sign out and log back in.");
@@ -87,7 +88,7 @@ export default function RosterShifts() {
           }
           return { data: null }; // Return null on error
         });
-        const holidaysPromise = axios.get("http://localhost:5000/api/holidays").catch(error => {
+        const holidaysPromise = axios.get(`${API_BASE_URL}/api/holidays`).catch(error => {
           console.error("Error fetching salon closures:", error);
           return { data: { holidays: [] } };
         });
@@ -113,7 +114,8 @@ export default function RosterShifts() {
         const fetchedOffDays = userData.offDays || userData.staffProfile?.offDays || userData.user?.offDays || [];
         setCurrentStaffData({ ...userData, offDays: fetchedOffDays }); // Set current staff data with mapped offDays
         
-        const mappedLeaves = leavesRes.data.map(l => {
+        const leavesData = Array.isArray(leavesRes.data) ? leavesRes.data : [];
+        const mappedLeaves = leavesData.map(l => {
           const start = new Date(l.startDate);
           const end = l.endDate ? new Date(l.endDate) : start;
           return {
@@ -173,7 +175,7 @@ export default function RosterShifts() {
      }
 
      if (shift) {
-       return shift.shiftType;
+       return shift.shiftType?.toUpperCase() === "WORKING" ? "WORKING" : shift.shiftType?.toUpperCase();
      }
 
      const onLeave = leaveHistory.some(l =>
@@ -201,6 +203,22 @@ export default function RosterShifts() {
          return "bg-gray-700/50 text-gray-400 border-gray-600/50";
      }
    };
+
+   const getStatusTextClass = (status, date) => {
+     if (status === "SALON CLOSED") return "text-red-300";
+     if (isSameDay(date, new Date())) return "text-white";
+     if (status === "ON LEAVE") return "text-rose-300";
+     if (status === "OFF DAY") return "text-amber-300";
+     return "text-emerald-300";
+   };
+
+   const getWeekDayCardClass = (status, date) => (
+     status === "SALON CLOSED"
+       ? getDayStatusClass(status)
+       : isSameDay(date, new Date())
+         ? "border-[#d4af37] bg-[#d4af37]/10"
+         : getDayStatusClass(status)
+   );
 
   const getWeekDays = () => {
     const days = [];
@@ -261,11 +279,20 @@ export default function RosterShifts() {
       return;
     }
 
+    const holiday = getHolidayForDate(date);
+    if (holiday) {
+      toast.error(`You cannot apply leave on a salon holiday${holiday.name ? `: ${holiday.name}` : "."}`);
+      return;
+    }
+
     const dateKey = getSelectedDateKey(date);
     setSelectedDates((prev) => (
       prev.includes(dateKey)
         ? prev.filter((selectedDate) => selectedDate !== dateKey)
-        : [...prev, dateKey].filter((selectedDate) => !isStaffOffDay(new Date(`${selectedDate}T00:00:00`)))
+        : [...prev, dateKey].filter((selectedDate) => {
+          const selectedDateValue = new Date(`${selectedDate}T00:00:00`);
+          return !isStaffOffDay(selectedDateValue) && !getHolidayForDate(selectedDateValue);
+        })
     ));
   };
 
@@ -306,10 +333,13 @@ export default function RosterShifts() {
         return;
       }
 
-      const validSelectedDates = selectedDates.filter((dateKey) => !isStaffOffDay(new Date(`${dateKey}T00:00:00`)));
+      const validSelectedDates = selectedDates.filter((dateKey) => {
+        const selectedDateValue = new Date(`${dateKey}T00:00:00`);
+        return !isStaffOffDay(selectedDateValue) && !getHolidayForDate(selectedDateValue);
+      });
       if (validSelectedDates.length !== selectedDates.length) {
         setSelectedDates(validSelectedDates);
-        toast.error("Scheduled off days were removed from your leave selection.");
+        toast.error("Scheduled off days or salon holidays were removed from your leave selection.");
         return;
       }
 
@@ -318,7 +348,7 @@ export default function RosterShifts() {
       const leaveDateRanges = groupConsecutiveDates(validSelectedDates);
       const leaveRequests = await Promise.all(
         leaveDateRanges.map((range) => axios.post(
-          "http://localhost:5000/api/roster/leaves",
+          `${API_BASE_URL}/api/roster/leaves`,
           {
             ...leaveForm,
             startDate: range.startDate,
@@ -391,7 +421,7 @@ export default function RosterShifts() {
           <GlassCard className="order-1 flex items-center justify-between p-4 sm:p-6">
             <div>
               <p className="text-sm font-medium text-gray-400">Leave Balance</p>
-              <p className="text-2xl font-bold text-white sm:text-3xl">{metrics.leaveBalance} Requests</p>
+              <p className="text-2xl font-bold text-white sm:text-3xl">{metrics.leaveBalance} Days Left</p>
             </div>
             <Palmtree className="h-8 w-8 text-[#d4af37]" />
           </GlassCard>
@@ -408,27 +438,14 @@ export default function RosterShifts() {
               </div>
             </div>
             <div className="w-full overflow-x-auto scrollbar-none pb-2">
-              <div className="grid grid-cols-7 text-center text-sm font-medium text-gray-400 mb-4 min-w-[600px] lg:min-w-0">
+              <div className="mb-4 grid min-w-[600px] grid-cols-7 text-center text-sm font-medium text-gray-400 lg:min-w-0">
                 {daysOfWeek.map(day => <div key={day}>{day}</div>)}
               </div>
-              <div className="grid grid-cols-7 gap-2 min-w-[650px] lg:min-w-0">
+              <div className="grid min-w-[650px] grid-cols-7 gap-2 lg:min-w-0">
                 {getWeekDays().map((date, index) => {
                   const dayStatus = getDayStatus(date);
-                  const dayClass = dayStatus === "SALON CLOSED"
-                    ? getDayStatusClass(dayStatus)
-                    : isSameDay(date, new Date())
-                      ? "border-[#d4af37] bg-[#d4af37]/10"
-                      : getDayStatusClass(dayStatus);
-
-                  const statusTextClass = dayStatus === "SALON CLOSED"
-                    ? "text-red-300"
-                    : isSameDay(date, new Date())
-                      ? "text-white"
-                      : dayStatus === "ON LEAVE"
-                        ? "text-rose-300"
-                        : dayStatus === "OFF DAY"
-                          ? "text-amber-300"
-                          : "text-emerald-300";
+                  const dayClass = getWeekDayCardClass(dayStatus, date);
+                  const statusTextClass = getStatusTextClass(dayStatus, date);
 
                   return (
                     <div key={index} className={`flex flex-col items-center justify-center rounded-lg border p-3 ${dayClass}`}>
@@ -490,8 +507,9 @@ export default function RosterShifts() {
             </h2>
             <form onSubmit={handleLeaveSubmit} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Leave Type</label>
+                <label htmlFor="leave-type" className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Leave Type</label>
                 <select
+                  id="leave-type"
                   name="type"
                   value={leaveForm.type}
                   onChange={(e) => setLeaveForm({ ...leaveForm, type: e.target.value })}
@@ -505,10 +523,15 @@ export default function RosterShifts() {
               </div>
               <div className="flex flex-col gap-2">
                 <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Select Leave Dates</label>
+                  <label id="leave-date-selector-label" htmlFor="leave-date-selector-grid" className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Select Leave Dates</label>
                   <span className="text-xs font-semibold text-[#d4af37]">Total: {selectedDates.length} Days</span>
                 </div>
-                <div className="rounded-xl border border-slate-800 bg-[#07090d] p-2.5 sm:p-3">
+                <div
+                  id="leave-date-selector-grid"
+                  role="group"
+                  aria-labelledby="leave-date-selector-label"
+                  className="rounded-xl border border-slate-800 bg-[#07090d] p-2.5 sm:p-3"
+                >
                   <div className="mb-3 flex items-center justify-between">
                     <button
                       type="button"
@@ -540,19 +563,25 @@ export default function RosterShifts() {
                       }
 
                       const dateKey = getSelectedDateKey(calendarDay.date);
+                      const dateString = format(calendarDay.date, "MMMM d, yyyy");
                       const isSelected = selectedDates.includes(dateKey);
                       const isToday = isSameDay(calendarDay.date, new Date());
                       const isOffDay = isStaffOffDay(calendarDay.date);
+                      const isHoliday = Boolean(getHolidayForDate(calendarDay.date));
+                      const isUnavailable = isOffDay || isHoliday;
 
                       return (
                         <button
                           type="button"
                           key={calendarDay.id}
                           onClick={() => toggleSelectedDate(calendarDay.date)}
-                          disabled={isOffDay}
+                          disabled={isUnavailable}
+                          aria-label={`Select leave date ${dateString}`}
                           className={`aspect-square min-h-9 rounded-lg text-xs font-semibold transition ${
-                            isOffDay
-                              ? "opacity-40 cursor-not-allowed pointer-events-none text-slate-600 bg-slate-900/40"
+                            isUnavailable
+                              ? isHoliday
+                                ? "opacity-50 cursor-not-allowed pointer-events-none text-red-300 bg-red-500/10"
+                                : "opacity-40 cursor-not-allowed pointer-events-none text-slate-600 bg-slate-900/40"
                               : isSelected
                               ? "bg-[#c5a880] text-black shadow-[0_0_16px_rgba(197,168,128,0.35)]"
                               : isToday
@@ -592,8 +621,9 @@ export default function RosterShifts() {
                 </div>
               </div>
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Reason</label>
+                <label htmlFor="leave-reason" className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Reason</label>
                 <textarea
+                  id="leave-reason"
                   name="reason"
                   required
                   placeholder="Provide a brief reason..."
