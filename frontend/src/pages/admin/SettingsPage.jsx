@@ -15,6 +15,8 @@ import { toast } from 'react-toastify';
 import { GlassCard, GoldButton, SectionPanel } from '../../components/admin/SystemUI';
 import { WEEKLY_OPENING_HOURS, defaultOpeningHours, useSalonSettings } from '../../hooks/useSalonSettings';
 
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+
 function SettingsToggle({ label, description, checked, onChange, disabled = false }) {
   return (
     <div className="flex items-start justify-between gap-4 border-b border-white/10 py-4 last:border-b-0 sm:items-center">
@@ -32,6 +34,7 @@ function SettingsToggle({ label, description, checked, onChange, disabled = fals
             : 'border-white/10 bg-white/10'
         }`}
         aria-pressed={checked}
+        aria-label={`Toggle ${label}. Currently ${checked ? 'on' : 'off'}.`}
       >
         <span
           className={`inline-block h-5 w-5 rounded-full bg-black transition-transform ${
@@ -44,10 +47,13 @@ function SettingsToggle({ label, description, checked, onChange, disabled = fals
 }
 
 function SmartNumberField({ label, description, name, value, onChange }) {
+  const inputId = `settings-${name}`;
+
   return (
-    <label className="block">
-      <span className="block text-sm font-semibold text-white">{label}</span>
+    <div className="block">
+      <label htmlFor={inputId} className="block text-sm font-semibold text-white">{label}</label>
       <input
+        id={inputId}
         type="number"
         name={name}
         value={value}
@@ -57,7 +63,7 @@ function SmartNumberField({ label, description, name, value, onChange }) {
         className="salon-field mt-3"
       />
       <span className="mt-2 block text-xs leading-5 text-gray-400">{description}</span>
-    </label>
+    </div>
   );
 }
 
@@ -236,6 +242,8 @@ function OpeningHoursScheduler({ value, onChange }) {
       <div className="mt-4 grid gap-3">
         {slots.map((slot, slotIndex) => {
           const hasInvalidTime = slot.openTime >= slot.closeTime;
+          const startTimeId = `opening-${slot.id}-start`;
+          const endTimeId = `opening-${slot.id}-end`;
 
           return (
             <div
@@ -274,27 +282,29 @@ function OpeningHoursScheduler({ value, onChange }) {
                 </div>
 
                 <div className="grid w-full gap-3 sm:grid-cols-[minmax(9rem,1fr)_auto_minmax(9rem,1fr)] sm:items-end lg:w-[23rem] lg:flex-none">
-                  <label className="block">
-                    <span className="mb-1.5 block text-xs font-medium text-gray-400">Start Time</span>
+                  <div className="block">
+                    <label htmlFor={startTimeId} className="mb-1.5 block text-xs font-medium text-gray-400">Start Time</label>
                     <input
+                      id={startTimeId}
                       type="time"
                       value={slot.openTime}
                       onChange={(event) => handleTimeChange(slot.id, 'openTime', event.target.value)}
                       className="salon-field h-11 w-full min-w-0 pr-3 [color-scheme:dark] sm:min-w-[9rem]"
                     />
-                  </label>
+                  </div>
 
                   <span className="hidden pb-3 text-sm font-semibold text-zinc-600 sm:block">to</span>
 
-                  <label className="block">
-                    <span className="mb-1.5 block text-xs font-medium text-gray-400">End Time</span>
+                  <div className="block">
+                    <label htmlFor={endTimeId} className="mb-1.5 block text-xs font-medium text-gray-400">End Time</label>
                     <input
+                      id={endTimeId}
                       type="time"
                       value={slot.closeTime}
                       onChange={(event) => handleTimeChange(slot.id, 'closeTime', event.target.value)}
                       className="salon-field h-11 w-full min-w-0 pr-3 [color-scheme:dark] sm:min-w-[9rem]"
                     />
-                  </label>
+                  </div>
                 </div>
 
                 <button
@@ -704,6 +714,7 @@ function HolidaySelectedDateChips({ selectedDates = [], onRemove, disabled = fal
 function SettingsPage() {
   const { settings, setSettings, isLoading } = useSalonSettings();
   const [isSaving, setIsSaving] = useState(false);
+  const isSavingRef = useRef(false);
   const [savedSettingsSignature, setSavedSettingsSignature] = useState('');
   const [holidays, setHolidays] = useState([]);
   const [holidayForm, setHolidayForm] = useState({
@@ -716,19 +727,27 @@ function SettingsPage() {
     }
   });
   const [isHolidaySaving, setIsHolidaySaving] = useState(false);
+  const isHolidaySavingRef = useRef(false);
   const [isHolidaySyncing, setIsHolidaySyncing] = useState(false);
+  const isHolidaySyncingRef = useRef(false);
   const [holidayConflict, setHolidayConflict] = useState(null);
   const [editingHolidayId, setEditingHolidayId] = useState(null);
   const [holidayDeleteTarget, setHolidayDeleteTarget] = useState(null);
 
-  const getAuthConfig = () => {
+  const requireAuthConfig = () => {
     const token = localStorage.getItem('token');
-    return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+
+    if (!token) {
+      toast.error('Your session has expired. Please sign in again.');
+      return null;
+    }
+
+    return { headers: { Authorization: `Bearer ${token}` } };
   };
 
   const fetchHolidays = async () => {
     try {
-      const response = await axios.get('http://localhost:5000/api/holidays');
+      const response = await axios.get(`${API_BASE_URL}/api/holidays`);
       setHolidays(Array.isArray(response.data?.holidays) ? response.data.holidays : []);
     } catch (error) {
       console.error('Error loading holidays:', error);
@@ -785,7 +804,7 @@ function SettingsPage() {
   };
 
   const handleSave = async () => {
-    if (!hasSettingsChanges) return;
+    if (isSavingRef.current || isSaving || !hasSettingsChanges) return;
 
     try {
       const openingHours = normalizeOpeningHours(settings.openingHours);
@@ -799,8 +818,12 @@ function SettingsPage() {
         return;
       }
 
+      const authConfig = requireAuthConfig();
+
+      if (!authConfig) return;
+
+      isSavingRef.current = true;
       setIsSaving(true);
-      const token = localStorage.getItem('token');
       const payload = {
         ...settings,
         openingHours,
@@ -808,11 +831,7 @@ function SettingsPage() {
         gracePeriod: normalizeMinutes(settings.gracePeriod)
       };
 
-      const response = await axios.put('http://localhost:5000/api/settings', payload, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
+      const response = await axios.put(`${API_BASE_URL}/api/settings`, payload, authConfig);
 
       const nextSettings = {
         ...settings,
@@ -830,6 +849,7 @@ function SettingsPage() {
       console.error('Error saving settings:', error);
       toast.error(error.response?.data?.message || 'Failed to save settings.');
     } finally {
+      isSavingRef.current = false;
       setIsSaving(false);
     }
   };
@@ -866,14 +886,14 @@ function SettingsPage() {
   const handleHolidaySubmit = async (event) => {
     event.preventDefault();
 
+    if (isHolidaySavingRef.current || isHolidaySaving) return;
+
     if (holidayForm.dates.length === 0 || !holidayForm.name.trim()) {
       toast.error('Please select closure dates and add a description.');
       return;
     }
 
     if (
-      editingHolidayId
-      &&
       !holidayForm.isFullDay
       && (
         holidayForm.dates.length === 0
@@ -887,12 +907,18 @@ function SettingsPage() {
     }
 
     try {
+      const authConfig = requireAuthConfig();
+
+      if (!authConfig) return;
+
+      isHolidaySavingRef.current = true;
       setIsHolidaySaving(true);
+      const isSingleHolidayRequest = Boolean(editingHolidayId || !holidayForm.isFullDay);
       const requestUrl = editingHolidayId
-        ? `http://localhost:5000/api/holidays/${editingHolidayId}`
-        : 'http://localhost:5000/api/holidays';
+        ? `${API_BASE_URL}/api/holidays/${editingHolidayId}`
+        : `${API_BASE_URL}/api/holidays`;
       const requestMethod = editingHolidayId ? axios.put : axios.post;
-      const holidayPayload = editingHolidayId
+      const holidayPayload = isSingleHolidayRequest
         ? {
             date: holidayForm.dates[0],
             name: holidayForm.name.trim(),
@@ -912,12 +938,17 @@ function SettingsPage() {
       const response = await requestMethod(
         requestUrl,
         holidayPayload,
-        getAuthConfig()
+        authConfig
       );
 
       if (response.data?.success) {
         const createdCount = response.data?.createdCount || response.data?.modifiedCount || holidayForm.dates.length;
-        toast.success(editingHolidayId ? 'Salon closure updated.' : `${createdCount} closure date(s) saved.`);
+        const successMessage = editingHolidayId
+          ? 'Salon closure updated.'
+          : holidayForm.isFullDay
+            ? `${createdCount} closure date(s) saved.`
+            : 'Partial closure saved.';
+        toast.success(successMessage);
         resetHolidayForm();
         fetchHolidays();
       }
@@ -925,10 +956,27 @@ function SettingsPage() {
       const response = error.response?.data;
 
       if (response?.conflict) {
+        const conflictingDates = Array.isArray(response.conflictingDates)
+          ? response.conflictingDates
+          : [];
+        const firstConflict = conflictingDates[0];
+
+        if (!editingHolidayId && conflictingDates.length > 0) {
+          toast.error(`Cannot close dates with active appointments: ${conflictingDates.map((conflict) => conflict.date).join(', ')}.`);
+          return;
+        }
+
         setHolidayConflict({
-          date: holidayForm.dates[0],
+          date: firstConflict?.date || holidayForm.dates[0],
           name: holidayForm.name.trim(),
-          appointmentCount: response.appointmentCount || 0
+          appointmentCount: response.appointmentCount || firstConflict?.appointmentCount || 0,
+          isFullDay: holidayForm.isFullDay,
+          hours: holidayForm.isFullDay
+            ? { start: '', end: '' }
+            : {
+                start: holidayForm.hours.start,
+                end: holidayForm.hours.end
+              }
         });
         return;
       }
@@ -936,23 +984,31 @@ function SettingsPage() {
       console.error('Error saving holiday:', error);
       toast.error(response?.message || 'Could not save salon closure.');
     } finally {
+      isHolidaySavingRef.current = false;
       setIsHolidaySaving(false);
     }
   };
 
   const handleForceHoliday = async () => {
-    if (!holidayConflict) return;
+    if (isHolidaySavingRef.current || isHolidaySaving || !holidayConflict) return;
 
     try {
+      const authConfig = requireAuthConfig();
+
+      if (!authConfig) return;
+
+      isHolidaySavingRef.current = true;
       setIsHolidaySaving(true);
       const response = await axios.post(
-        'http://localhost:5000/api/holidays/force',
+        `${API_BASE_URL}/api/holidays/force`,
         {
           date: holidayConflict.date,
           name: holidayConflict.name,
-          type: 'custom'
+          type: 'custom',
+          isFullDay: holidayConflict.isFullDay,
+          hours: holidayConflict.hours
         },
-        getAuthConfig()
+        authConfig
       );
 
       toast.success(`Date closed. ${response.data?.cancelledAppointments || 0} appointment(s) cancelled.`);
@@ -963,6 +1019,7 @@ function SettingsPage() {
       console.error('Error force closing holiday:', error);
       toast.error(error.response?.data?.message || 'Could not force close this date.');
     } finally {
+      isHolidaySavingRef.current = false;
       setIsHolidaySaving(false);
     }
   };
@@ -981,12 +1038,24 @@ function SettingsPage() {
   };
 
   const handleSyncPublicHolidays = async () => {
+    if (
+      isHolidaySyncingRef.current
+      || isHolidaySyncing
+      || isHolidaySavingRef.current
+      || isHolidaySaving
+    ) return;
+
     try {
+      const authConfig = requireAuthConfig();
+
+      if (!authConfig) return;
+
+      isHolidaySyncingRef.current = true;
       setIsHolidaySyncing(true);
       const response = await axios.post(
-        'http://localhost:5000/api/holidays/sync',
+        `${API_BASE_URL}/api/holidays/sync`,
         { year: new Date().getFullYear() },
-        getAuthConfig()
+        authConfig
       );
 
       toast.success(`Synced ${response.data?.fetched || 0} Sri Lankan public holidays.`);
@@ -995,21 +1064,31 @@ function SettingsPage() {
       console.error('Error syncing holidays:', error);
       toast.error(error.response?.data?.message || 'Could not sync public holidays.');
     } finally {
+      isHolidaySyncingRef.current = false;
       setIsHolidaySyncing(false);
     }
   };
 
   const handleDeleteHoliday = async () => {
-    if (!holidayDeleteTarget?._id) return;
+    if (isHolidaySavingRef.current || isHolidaySaving || !holidayDeleteTarget?._id) return;
     
     try {
-      await axios.delete(`http://localhost:5000/api/holidays/${holidayDeleteTarget._id}`, getAuthConfig());
+      const authConfig = requireAuthConfig();
+
+      if (!authConfig) return;
+
+      isHolidaySavingRef.current = true;
+      setIsHolidaySaving(true);
+      await axios.delete(`${API_BASE_URL}/api/holidays/${holidayDeleteTarget._id}`, authConfig);
       toast.success('Salon date reopened.');
       setHolidayDeleteTarget(null);
       fetchHolidays();
     } catch (error) {
       console.error('Error deleting holiday:', error);
       toast.error(error.response?.data?.message || 'Could not reopen this date.');
+    } finally {
+      isHolidaySavingRef.current = false;
+      setIsHolidaySaving(false);
     }
   };
 
@@ -1067,50 +1146,58 @@ function SettingsPage() {
             </div>
 
             <div className="mt-5 grid gap-4 sm:mt-7 sm:gap-5">
-              <label className="block">
-                <span className="mb-2 block text-sm font-medium text-gray-300">Salon Name</span>
+              <div className="block">
+                <label htmlFor="settings-salon-name" className="mb-2 block text-sm font-medium text-gray-300">Salon Name</label>
                 <input
+                  id="settings-salon-name"
                   type="text"
                   name="salonName"
                   value={settings.salonName}
                   onChange={handleProfileChange}
+                  autoComplete="organization"
                   className="salon-field"
                 />
-              </label>
+              </div>
 
-              <label className="block">
-                <span className="mb-2 block text-sm font-medium text-gray-300">Support Email</span>
+              <div className="block">
+                <label htmlFor="settings-support-email" className="mb-2 block text-sm font-medium text-gray-300">Support Email</label>
                 <input
+                  id="settings-support-email"
                   type="email"
                   name="supportEmail"
                   value={settings.supportEmail}
                   onChange={handleProfileChange}
+                  autoComplete="email"
                   className="salon-field"
                 />
-              </label>
+              </div>
 
               <div className="grid gap-4 md:grid-cols-2 md:gap-5">
-                <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-gray-300">Contact Number</span>
+                <div className="block">
+                  <label htmlFor="settings-contact-number" className="mb-2 block text-sm font-medium text-gray-300">Contact Number</label>
                   <input
+                    id="settings-contact-number"
                     type="text"
                     name="contactNumber"
                     value={settings.contactNumber}
                     onChange={handleProfileChange}
+                    autoComplete="tel"
                     className="salon-field"
                   />
-                </label>
+                </div>
 
-                <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-gray-300">Address</span>
+                <div className="block">
+                  <label htmlFor="settings-address" className="mb-2 block text-sm font-medium text-gray-300">Address</label>
                   <input
+                    id="settings-address"
                     type="text"
                     name="address"
                     value={settings.address}
                     onChange={handleProfileChange}
+                    autoComplete="street-address"
                     className="salon-field"
                   />
-                </label>
+                </div>
               </div>
 
               <OpeningHoursScheduler
@@ -1147,16 +1234,6 @@ function SettingsPage() {
                   checked={settings.darkReceipts}
                   onChange={() => toggleSetting('darkReceipts')}
                 />
-                <SettingsToggle
-                  label="Partial Day Closure"
-                  description="Edit a single closure to block only a selected time range while keeping the rest of the day open."
-                  checked={Boolean(editingHolidayId && !holidayForm.isFullDay)}
-                  disabled={!editingHolidayId}
-                  onChange={() => {
-                    if (!editingHolidayId) return;
-                    setHolidayForm((current) => ({ ...current, isFullDay: !current.isFullDay }));
-                  }}
-                />
               </div>
             </div>
 
@@ -1191,7 +1268,7 @@ function SettingsPage() {
                 <button
                   type="button"
                   onClick={handleSyncPublicHolidays}
-                  disabled={isHolidaySyncing}
+                  disabled={isHolidaySyncing || isHolidaySaving}
                   className="inline-flex h-11 w-full items-center justify-center rounded-full border border-white/10 px-4 text-sm font-semibold text-zinc-300 transition hover:border-[#d4af37]/40 hover:text-[#d4af37] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                 >
                   {isHolidaySyncing ? 'Syncing...' : 'Sync Public Holidays'}
@@ -1203,11 +1280,13 @@ function SettingsPage() {
               <div className="w-full md:w-[42%] md:min-w-[20rem] xl:w-[38%]">
                 <div className="mb-2 flex items-center justify-between gap-3">
                   <span className="block text-sm font-medium text-gray-300">
-                    {editingHolidayId ? 'Closure Date' : 'Closure Dates'}
+                    {editingHolidayId || !holidayForm.isFullDay ? 'Closure Date' : 'Closure Dates'}
                   </span>
                   {!editingHolidayId && (
                     <span className="text-xs font-semibold text-[#d4af37]">
-                      Total: {holidayForm.dates.length} Day{holidayForm.dates.length === 1 ? '' : 's'}
+                      {holidayForm.isFullDay
+                        ? `Total: ${holidayForm.dates.length} Day${holidayForm.dates.length === 1 ? '' : 's'}`
+                        : 'Single day'}
                     </span>
                   )}
                 </div>
@@ -1215,7 +1294,7 @@ function SettingsPage() {
                   selectedDates={holidayForm.dates}
                   onChange={(dates) => setHolidayForm((current) => ({
                     ...current,
-                    dates: editingHolidayId ? dates.slice(-1) : dates
+                    dates: editingHolidayId || !current.isFullDay ? dates.slice(-1) : dates
                   }))}
                   holidays={holidays}
                 />
@@ -1231,10 +1310,31 @@ function SettingsPage() {
                   }))}
                 />
 
+                <div className="rounded-xl border border-white/10 bg-black/20 px-4 sm:px-5">
+                  <SettingsToggle
+                    label="Partial Day Closure"
+                    description="Block only selected hours on one closure date while keeping other time slots available."
+                    checked={!holidayForm.isFullDay}
+                    disabled={isHolidaySaving}
+                    onChange={() => {
+                      setHolidayForm((current) => {
+                        const nextIsFullDay = !current.isFullDay;
+
+                        return {
+                          ...current,
+                          isFullDay: nextIsFullDay,
+                          dates: nextIsFullDay ? current.dates : current.dates.slice(-1)
+                        };
+                      });
+                    }}
+                  />
+                </div>
+
                 <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-                  <label className="block min-w-0">
-                    <span className="mb-2 block text-sm font-medium text-gray-300">Description</span>
+                  <div className="block min-w-0">
+                    <label htmlFor="holiday-description" className="mb-2 block text-sm font-medium text-gray-300">Description</label>
                     <input
+                      id="holiday-description"
                       type="text"
                       name="name"
                       value={holidayForm.name}
@@ -1242,44 +1342,52 @@ function SettingsPage() {
                       placeholder="Poya Day, Christmas, emergency closure..."
                       className="salon-field"
                     />
-                  </label>
+                  </div>
 
                   <button
                     type="submit"
                     disabled={isHolidaySaving || !isHolidayFormReady}
                     className="inline-flex h-12 w-full items-center justify-center rounded-full border border-[#d4af37]/40 px-5 text-sm font-semibold text-[#d4af37] transition hover:bg-[#d4af37]/10 disabled:cursor-not-allowed disabled:border-white/10 disabled:bg-white/[0.03] disabled:text-zinc-600 sm:h-[52px] lg:w-auto lg:min-w-[9.5rem]"
                   >
-                    {isHolidaySaving ? 'Saving...' : editingHolidayId ? 'Update Closure' : 'Add Closure'}
+                    {isHolidaySaving
+                      ? 'Saving...'
+                      : editingHolidayId
+                        ? 'Update Closure'
+                        : holidayForm.isFullDay
+                          ? 'Add Closure'
+                          : 'Add Partial Closure'}
                   </button>
                 </div>
 
-                {editingHolidayId && !holidayForm.isFullDay && (
+                {!holidayForm.isFullDay && (
                   <div className="overflow-hidden rounded-xl border border-sky-400/15 bg-sky-400/[0.03] p-3 transition-all duration-300 sm:p-4">
                     <p className="text-sm font-semibold text-white">Partial Closure Hours</p>
                     <p className="mt-1 text-xs leading-5 text-gray-400">
                       These hours will be blocked while time slots outside this range stay available.
                     </p>
                     <div className="mt-4 grid gap-4 sm:mt-5 sm:grid-cols-2">
-                      <label className="block">
-                        <span className="mb-2 block text-sm font-medium text-gray-300">Start Time</span>
+                      <div className="block">
+                        <label htmlFor="holiday-partial-start" className="mb-2 block text-sm font-medium text-gray-300">Start Time</label>
                         <input
+                          id="holiday-partial-start"
                           type="time"
                           name="start"
                           value={holidayForm.hours.start}
                           onChange={handleHolidayTimeChange}
                           className="salon-field [color-scheme:dark]"
                         />
-                      </label>
-                      <label className="block">
-                        <span className="mb-2 block text-sm font-medium text-gray-300">End Time</span>
+                      </div>
+                      <div className="block">
+                        <label htmlFor="holiday-partial-end" className="mb-2 block text-sm font-medium text-gray-300">End Time</label>
                         <input
+                          id="holiday-partial-end"
                           type="time"
                           name="end"
                           value={holidayForm.hours.end}
                           onChange={handleHolidayTimeChange}
                           className="salon-field [color-scheme:dark]"
                         />
-                      </label>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -1322,14 +1430,16 @@ function SettingsPage() {
                             <button
                               type="button"
                               onClick={() => handleEditHoliday(holiday)}
-                              className="rounded-md bg-sky-400/5 px-3 py-1.5 text-sm font-semibold text-sky-300/85 transition-colors duration-200 hover:border-sky-300/40 hover:bg-sky-400/10 hover:text-sky-200"
+                              disabled={isHolidaySaving}
+                              className="rounded-md bg-sky-400/5 px-3 py-1.5 text-sm font-semibold text-sky-300/85 transition-colors duration-200 hover:border-sky-300/40 hover:bg-sky-400/10 hover:text-sky-200 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               Edit
                             </button>
                             <button
                               type="button"
                               onClick={() => setHolidayDeleteTarget(holiday)}
-                              className="rounded-md px-3 py-1.5 text-sm font-semibold text-red-400/75 transition-colors duration-200 hover:bg-red-500/10 hover:text-red-300"
+                              disabled={isHolidaySaving}
+                              className="rounded-md px-3 py-1.5 text-sm font-semibold text-red-400/75 transition-colors duration-200 hover:bg-red-500/10 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               Delete
                             </button>
@@ -1407,9 +1517,10 @@ function SettingsPage() {
               <button
                 type="button"
                 onClick={handleDeleteHoliday}
-                className="rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700"
+                disabled={isHolidaySaving}
+                className="rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Re-open Date
+                {isHolidaySaving ? 'Re-opening...' : 'Re-open Date'}
               </button>
             </div>
           </div>

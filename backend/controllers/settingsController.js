@@ -106,6 +106,13 @@ const updateSettings = async (req, res) => {
     const updatedSettings = await settings.save();
     res.status(200).json(updatedSettings);
   } catch (error) {
+    if (error?.name === 'ValidationError') {
+      return res.status(400).json({
+        message: 'Invalid settings data.',
+        errors: Object.values(error.errors || {}).map((validationError) => validationError.message),
+      });
+    }
+
     console.error('Update Settings Error:', error);
     res.status(500).json({ message: 'Could not update settings.' });
   }

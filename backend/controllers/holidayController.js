@@ -171,6 +171,36 @@ const findConflictingAppointmentsForPayload = async (payload) => {
   ));
 };
 
+const findConflictingAppointmentDates = async (dates = []) => {
+  const conflictResults = await Promise.all(
+    dates.map(async (date) => {
+      const appointments = await findActiveAppointmentsOnDate(date);
+
+      return {
+        date,
+        appointmentCount: appointments.length,
+      };
+    })
+  );
+
+  return conflictResults.filter((result) => result.appointmentCount > 0);
+};
+
+const shouldCheckHolidayUpdateConflicts = (existingHoliday, payload) => {
+  if (!existingHoliday) return false;
+  if (existingHoliday.date !== payload.date) return true;
+  if (existingHoliday.isFullDay !== payload.isFullDay) return true;
+
+  if (!payload.isFullDay) {
+    return (
+      existingHoliday.hours?.start !== payload.hours.start
+      || existingHoliday.hours?.end !== payload.hours.end
+    );
+  }
+
+  return false;
+};
+
 const upsertHoliday = ({ date, name, type }) => (
   Holiday.findOneAndUpdate(
     { date },
@@ -213,6 +243,17 @@ const createHoliday = async (req, res) => {
         return res.status(400).json({
           success: false,
           message: validationMessage,
+        });
+      }
+
+      const conflictingDates = await findConflictingAppointmentDates(payload.dates);
+
+      if (conflictingDates.length > 0) {
+        return res.status(400).json({
+          success: false,
+          conflict: true,
+          message: 'Cannot close dates with active appointments.',
+          conflictingDates,
         });
       }
 
@@ -371,15 +412,35 @@ const updateHoliday = async (req, res) => {
       });
     }
 
+    const existingHoliday = await Holiday.findById(req.params.id).lean();
+
+    if (!existingHoliday) {
+      return res.status(404).json({ success: false, message: 'Holiday not found.' });
+    }
+
+    if (shouldCheckHolidayUpdateConflicts(existingHoliday, payload)) {
+      const conflictingAppointments = await findConflictingAppointmentsForPayload(payload);
+
+      if (conflictingAppointments.length > 0) {
+        return res.status(400).json({
+          success: false,
+          conflict: true,
+          message: 'Cannot update this closure because active appointments would be affected.',
+          conflictingDates: [
+            {
+              date: payload.date,
+              appointmentCount: conflictingAppointments.length,
+            },
+          ],
+        });
+      }
+    }
+
     const holiday = await Holiday.findByIdAndUpdate(
       req.params.id,
       { $set: { ...payload, isActive: true } },
       { new: true, runValidators: true }
     );
-
-    if (!holiday) {
-      return res.status(404).json({ success: false, message: 'Holiday not found.' });
-    }
 
     return res.status(200).json({
       success: true,

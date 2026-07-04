@@ -1,5 +1,8 @@
 const mongoose = require('mongoose');
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const CONTACT_NUMBER_PATTERN = /^\+?[\d\s().-]{7,20}$/;
+
 const dayHoursSchema = new mongoose.Schema(
   {
     isOpen: {
@@ -32,11 +35,19 @@ const salonSettingsSchema = new mongoose.Schema(
       default: 'support@salondees.com',
       trim: true,
       lowercase: true,
+      maxlength: 254,
+      match: [EMAIL_PATTERN, 'Please provide a valid support email address.'],
     },
     contactNumber: {
       type: String,
       default: '+94 77 123 4567',
       trim: true,
+      minlength: [7, 'Contact number must be at least 7 characters long.'],
+      maxlength: [20, 'Contact number cannot exceed 20 characters.'],
+      match: [
+        CONTACT_NUMBER_PATTERN,
+        'Contact number can include digits, spaces, parentheses, dots, hyphens, and an optional leading plus sign.',
+      ],
     },
     address: {
       type: String,
