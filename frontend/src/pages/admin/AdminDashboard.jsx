@@ -10,7 +10,7 @@ import { createPortal } from "react-dom";
 
 import { useNavigate } from "react-router-dom";
 
-import { AlertCircle, AlertTriangle, CalendarDays, DollarSign, Loader2, RotateCw, Users, XCircle } from "lucide-react";
+import { AlertCircle, AlertTriangle, CalendarDays, DollarSign, Loader2, RotateCw, Users, X, XCircle } from "lucide-react";
 
 import {
   ResponsiveContainer,
@@ -25,6 +25,8 @@ import {
 import { GoldButton, GlassCard } from "../../components/admin/SystemUI";
 
 
+
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000").replace(/\/$/, "");
 
 const formatYAxis = (value) => {
   const numericValue = Number(value) || 0;
@@ -217,7 +219,7 @@ function AdminDashboard() {
     [calculateYAxisWidth, chartData]
   );
 
-  const fetchDashboardData = useCallback(async () => {
+  const fetchDashboardData = useCallback(async ({ signal } = {}) => {
 
       try {
 
@@ -230,57 +232,77 @@ function AdminDashboard() {
         }
 
         const authHeaders = {
-
           headers: { Authorization: `Bearer ${token}` },
-
+          signal,
         };
+        const publicRequestConfig = { signal };
 
-
-
-        const [summaryResponse, analyticsResponse, appointmentsRes, leaveRes, holidaysRes, settingsRes] = await Promise.all([
-
-          axios.get("http://localhost:5000/api/dashboard/summary", authHeaders),
-
-          axios.get("http://localhost:5000/api/dashboard/weekly-analytics", authHeaders),
-
-          axios.get("http://localhost:5000/api/appointments/all", authHeaders),
-
-          axios.get("http://localhost:5000/api/leaves", authHeaders), 
-
-          axios.get("http://localhost:5000/api/holidays").catch((holidayError) => {
-            console.error("Error loading salon closures:", holidayError);
-            return { data: { holidays: [] } };
-          }),
-
-          axios.get("http://localhost:5000/api/settings").catch((settingsError) => {
-            console.error("Error loading salon settings:", settingsError);
-            return { data: null };
-          }),
-
+        const [
+          summaryResult,
+          analyticsResult,
+          appointmentsResult,
+          leavesResult,
+          holidaysResult,
+          settingsResult,
+        ] = await Promise.allSettled([
+          axios.get(`${API_BASE_URL}/api/dashboard/summary`, authHeaders),
+          axios.get(`${API_BASE_URL}/api/dashboard/weekly-analytics`, authHeaders),
+          axios.get(`${API_BASE_URL}/api/appointments/all`, authHeaders),
+          axios.get(`${API_BASE_URL}/api/leaves`, authHeaders),
+          axios.get(`${API_BASE_URL}/api/holidays`, publicRequestConfig),
+          axios.get(`${API_BASE_URL}/api/settings`, publicRequestConfig),
         ]);
 
+        if (signal?.aborted) return;
 
+        const logPartialFailure = (label, result) => {
+          if (result.status === "rejected" && !axios.isCancel(result.reason)) {
+            console.warn(`Dashboard ${label} request failed:`, result.reason);
+          }
+        };
 
-        setSummaryData(summaryResponse.data.data);
+        [
+          ["summary", summaryResult],
+          ["weekly analytics", analyticsResult],
+          ["appointments", appointmentsResult],
+          ["leave requests", leavesResult],
+          ["salon closures", holidaysResult],
+          ["salon settings", settingsResult],
+        ].forEach(([label, result]) => logPartialFailure(label, result));
 
-        const weeklyAnalytics = Array.isArray(analyticsResponse.data)
-          ? analyticsResponse.data
-          : analyticsResponse.data?.data;
+        if (summaryResult.status === "fulfilled") {
+          setSummaryData(summaryResult.value.data?.data || null);
+        }
 
-        setChartData(Array.isArray(weeklyAnalytics) ? weeklyAnalytics : []);
+        if (analyticsResult.status === "fulfilled") {
+          const weeklyAnalytics = Array.isArray(analyticsResult.value.data)
+            ? analyticsResult.value.data
+            : analyticsResult.value.data?.data;
 
-        const fetchedAppointments = Array.isArray(appointmentsRes.data) ? appointmentsRes.data : [];
+          setChartData(Array.isArray(weeklyAnalytics) ? weeklyAnalytics : []);
+        }
 
-        setAllAppointments(fetchedAppointments);
+        if (appointmentsResult.status === "fulfilled") {
+          const fetchedAppointments = Array.isArray(appointmentsResult.value.data) ? appointmentsResult.value.data : [];
+          setAllAppointments(fetchedAppointments);
+          setRecentAppointments(fetchedAppointments.slice(0, 5));
+        }
 
-        setRecentAppointments(fetchedAppointments.slice(0, 5));
+        if (leavesResult.status === "fulfilled") {
+          setRecentLeaveRequests(getThisWeekLeaveRequests(leavesResult.value.data));
+        }
 
-        setRecentLeaveRequests(getThisWeekLeaveRequests(leaveRes.data));
+        if (holidaysResult.status === "fulfilled") {
+          setHolidays(Array.isArray(holidaysResult.value.data?.holidays) ? holidaysResult.value.data.holidays : []);
+        }
 
-        setHolidays(Array.isArray(holidaysRes.data?.holidays) ? holidaysRes.data.holidays : []);
-        setSalonSettings(settingsRes.data || null);
+        if (settingsResult.status === "fulfilled") {
+          setSalonSettings(settingsResult.value.data || null);
+        }
 
       } catch (error) {
+
+        if (signal?.aborted || axios.isCancel(error)) return;
 
         console.error("Dashboard data fetch error:", error);
 
@@ -288,7 +310,9 @@ function AdminDashboard() {
 
       } finally {
 
-        setLoading(false);
+        if (!signal?.aborted) {
+          setLoading(false);
+        }
 
       }
 
@@ -297,7 +321,11 @@ function AdminDashboard() {
 
   useEffect(() => {
 
-    fetchDashboardData();
+    const controller = new AbortController();
+
+    fetchDashboardData({ signal: controller.signal });
+
+    return () => controller.abort();
 
   }, [fetchDashboardData]);
 
@@ -308,6 +336,25 @@ function AdminDashboard() {
 
     return () => window.clearInterval(timerId);
   }, []);
+
+  const closeConflictModal = useCallback(() => {
+    setIsConflictModalOpen(false);
+    setConflictingAppointments([]);
+    setCurrentLeaveRequest(null);
+  }, []);
+
+  useEffect(() => {
+    if (!isConflictModalOpen) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape" && !isLeaveActionLoading) {
+        closeConflictModal();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [closeConflictModal, isConflictModalOpen, isLeaveActionLoading]);
 
 
 
@@ -466,7 +513,7 @@ function AdminDashboard() {
       }
 
       const response = await axios.post(
-        "http://localhost:5000/api/appointments/shift-slots",
+        `${API_BASE_URL}/api/appointments/shift-slots`,
         {
           stylistId: shiftTarget.stylistId,
           date: todayDateKey,
@@ -504,7 +551,7 @@ function AdminDashboard() {
 
       const authHeaders = token ? { headers: { Authorization: `Bearer ${token}` } } : undefined;
 
-      const conflictsRes = await axios.get(`http://localhost:5000/api/leaves/${leaveRequest._id}/conflicts`, authHeaders);
+      const conflictsRes = await axios.get(`${API_BASE_URL}/api/leaves/${leaveRequest._id}/conflicts`, authHeaders);
 
       
 
@@ -557,7 +604,7 @@ function AdminDashboard() {
 
       const authHeaders = token ? { headers: { Authorization: `Bearer ${token}` } } : undefined;
 
-      await axios.post(`http://localhost:5000/api/leaves/${leaveRequestId}/approve`, {}, authHeaders);
+      await axios.post(`${API_BASE_URL}/api/leaves/${leaveRequestId}/approve`, {}, authHeaders);
 
       toast.success("Leave request approved!");
 
@@ -575,7 +622,7 @@ function AdminDashboard() {
 
       const authHeadersRefresh = tokenRefresh ? { headers: { Authorization: `Bearer ${tokenRefresh}` } } : undefined;
 
-      const leaveRes = await axios.get("http://localhost:5000/api/leaves", authHeadersRefresh); 
+      const leaveRes = await axios.get(`${API_BASE_URL}/api/leaves`, authHeadersRefresh); 
 
       setRecentLeaveRequests(getThisWeekLeaveRequests(leaveRes.data));
 
@@ -621,7 +668,7 @@ function AdminDashboard() {
 
       const authHeaders = token ? { headers: { Authorization: `Bearer ${token}` } } : undefined;
 
-      await axios.post(`http://localhost:5000/api/leaves/${leaveId}/reject`, {}, authHeaders);
+      await axios.post(`${API_BASE_URL}/api/leaves/${leaveId}/reject`, {}, authHeaders);
 
       toast.success("Leave request rejected.");
 
@@ -635,7 +682,7 @@ function AdminDashboard() {
 
       const authHeadersRefresh = tokenRefresh ? { headers: { Authorization: `Bearer ${tokenRefresh}` } } : undefined;
 
-      const leaveRes = await axios.get("http://localhost:5000/api/leaves", authHeadersRefresh); 
+      const leaveRes = await axios.get(`${API_BASE_URL}/api/leaves`, authHeadersRefresh); 
 
       setRecentLeaveRequests(getThisWeekLeaveRequests(leaveRes.data));
 
@@ -834,7 +881,8 @@ function AdminDashboard() {
                         }`}
                       >
                         <RotateCw className="h-3.5 w-3.5" />
-                        Shift Remaining Slots (+15m)
+                        <span className="md:hidden">Shift +15m</span>
+                        <span className="hidden md:inline">Shift Remaining Slots (+15m)</span>
                       </button>
                     </div>
 
@@ -1315,6 +1363,16 @@ function AdminDashboard() {
 
                 </div>
 
+                <button
+                  type="button"
+                  onClick={() => setReviewLeaveRequest(null)}
+                  disabled={isLeaveActionLoading}
+                  aria-label="Close leave request review"
+                  className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-zinc-300 transition hover:border-[#d4af37]/40 hover:bg-[#d4af37]/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </button>
+
               </div>
 
               <div className="relative mt-7 grid gap-3 sm:grid-cols-2">
@@ -1470,6 +1528,9 @@ function AdminDashboard() {
       {isConflictModalOpen && (
 
         <motion.div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="leave-conflict-title"
           className="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto bg-black/90 px-3 py-4 backdrop-blur-xl sm:items-center sm:px-4 sm:py-8"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -1478,7 +1539,7 @@ function AdminDashboard() {
 
           <GlassCard className="w-full max-w-lg border-t-4 border-t-red-600 bg-[#111111] p-4 sm:p-6">
 
-            <h4 className="mb-3 flex items-start gap-2 text-lg font-semibold text-white sm:text-xl">
+            <h4 id="leave-conflict-title" className="mb-3 flex items-start gap-2 text-lg font-semibold text-white sm:text-xl">
 
               <XCircle className="shrink-0 text-red-400" size={24} /> Warning: Conflicts Detected
 
@@ -1520,15 +1581,7 @@ function AdminDashboard() {
                 variant="ghost"
                 disabled={isLeaveActionLoading}
 
-                onClick={() => {
-
-                  setIsConflictModalOpen(false);
-
-                  setConflictingAppointments([]);
-
-                  setCurrentLeaveRequest(null);
-
-                }}
+                onClick={closeConflictModal}
 
                 className="border border-white/20 bg-transparent px-4 py-2 text-white hover:bg-white/10 hover:text-white"
 
