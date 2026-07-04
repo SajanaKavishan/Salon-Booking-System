@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Service = require('../models/Service');
 
 // @desc    Get all services
@@ -37,6 +38,10 @@ const createService = async (req, res) => {
 // @route   PUT /api/services/:id
 const updateService = async (req, res) => {
   try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid service ID' });
+    }
+
     const updateData = {
       ...req.body,
     };
@@ -65,6 +70,10 @@ const updateService = async (req, res) => {
 // @route   DELETE /api/services/:id
 const deleteService = async (req, res) => {
   try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: 'Invalid service ID' });
+    }
+
     const service = await Service.findByIdAndDelete(req.params.id);
     if (!service) {
       return res.status(404).json({ message: 'Service not found' });
