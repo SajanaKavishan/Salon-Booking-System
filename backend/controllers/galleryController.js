@@ -49,8 +49,13 @@ const deleteImage = async (req, res) => {
       return res.status(404).json({ message: 'Gallery image not found' });
     }
 
-    await cloudinary.uploader.destroy(image.publicId);
-    await image.deleteOne();
+    try {
+      await cloudinary.uploader.destroy(image.publicId);
+    } catch (cloudinaryError) {
+      console.error('Cloudinary gallery image deletion failed:', cloudinaryError);
+    }
+
+    await GalleryImage.findByIdAndDelete(req.params.id);
 
     res.status(200).json({ id: req.params.id, message: 'Gallery image deleted' });
   } catch (error) {
