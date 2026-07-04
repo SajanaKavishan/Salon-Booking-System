@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify'; 
 
-const BACKEND_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
+const BACKEND_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const formLabelClassName = 'text-xs font-bold uppercase leading-5 tracking-[0.12em] text-gray-400';
 const formValueClassName = 'mt-2 text-base leading-6 text-white';
 const formInputClassName = 'mt-2 w-full bg-transparent pb-2 text-base font-medium leading-6 text-white outline-none border-b border-[#D4AF37]/40 transition focus:border-[#D4AF37]';
@@ -34,19 +34,19 @@ function StaffProfile({ onClose }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [profileImage, setProfileImage] = useState('');
+  const [profileImageFile, setProfileImageFile] = useState(null);
 
   const [formValues, setFormValues] = useState({
     name: '',
     email: '',
-    phone: '',
-    specialty: '',
-    workingHours: '',
-    offDays: ''
+    phone: ''
   });
 
   // Password Modal States
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [isPasswordSaving, setIsPasswordSaving] = useState(false);
   const [passwordValues, setPasswordValues] = useState({
+    currentPassword: '',
     newPassword: '',
     confirmPassword: ''
   });
@@ -59,13 +59,16 @@ function StaffProfile({ onClose }) {
       return '';
     };
 
+    const controller = new AbortController();
+
     const fetchStaffData = async () => {
       try {
         const token = localStorage.getItem('token');
         if (!token) return;
 
         const response = await axios.get(`${BACKEND_BASE_URL}/api/users/profile`, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal
         });
 
         if (response.data) {
@@ -84,18 +87,20 @@ function StaffProfile({ onClose }) {
           setFormValues({
             name: mergedData.name || '',
             email: mergedData.email || '',
-            phone: mergedData.phone || '',
-            specialty: mergedData.specialty || '',
-            workingHours: formatWorkingHours(mergedData.workingHours),
-            offDays: mergedData.offDays || ''
+            phone: mergedData.phone || ''
           });
         }
       } catch (error) {
+        if (axios.isCancel(error) || error.name === 'CanceledError') return;
         console.error('Error fetching staff details:', error);
       }
     };
 
     fetchStaffData();
+
+    return () => {
+      controller.abort();
+    };
   }, []);
 
   const displayName = user?.name || 'Staff Member';
@@ -117,6 +122,7 @@ function StaffProfile({ onClose }) {
       const imageUrl = typeof reader.result === 'string' ? reader.result : '';
       if (!imageUrl) return;
       setProfileImage(imageUrl);
+      setProfileImageFile(file);
       if (!isEditing) setIsEditing(true);
     };
     reader.readAsDataURL(file);
@@ -142,20 +148,19 @@ function StaffProfile({ onClose }) {
       normalize(formValues.name) !== normalize(user?.name)
       || normalize(formValues.email) !== normalize(user?.email)
       || normalize(formValues.phone) !== normalize(user?.phone)
+      || Boolean(profileImageFile)
       || normalize(profileImage) !== normalize(user?.profileImage)
     );
-  }, [formValues, isEditing, profileImage, user]);
+  }, [formValues, isEditing, profileImage, profileImageFile, user]);
 
   const resetForm = () => {
     setFormValues({
       name: user?.name || '',
       email: user?.email || '',
-      phone: user?.phone || '',
-      specialty: user?.specialty || '',
-      workingHours: formatWorkingHours(user?.workingHours),
-      offDays: user?.offDays || ''
+      phone: user?.phone || ''
     });
     setProfileImage(user?.profileImage || '');
+    setProfileImageFile(null);
     setIsEditing(false);
   };
 
@@ -170,14 +175,26 @@ function StaffProfile({ onClose }) {
       const updatedUser = {
         name: formValues.name.trim(),
         email: formValues.email.trim(),
-        phone: formValues.phone.trim(),
-        profileImage: profileImage || user.profileImage || ''
+        phone: formValues.phone.trim()
       };
+
+      const payload = new FormData();
+      payload.append('name', updatedUser.name);
+      payload.append('email', updatedUser.email);
+      payload.append('phone', updatedUser.phone);
+      if (profileImageFile) {
+        payload.append('profileImage', profileImageFile);
+      }
 
       const response = await axios.put(
         `${BACKEND_BASE_URL}/api/users/profile`,
-        updatedUser,
-        { headers: { Authorization: `Bearer ${token}` } }
+        payload,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data'
+          }
+        }
       );
 
       if (response.data) {
@@ -189,18 +206,16 @@ function StaffProfile({ onClose }) {
           specialty: response.data.specialty || response.data.staffDetails?.specialty || user?.specialty || '',
           workingHours: formatWorkingHours(response.data.workingHours || response.data.staffDetails?.workingHours || user?.workingHours),
           offDays: Array.isArray(response.data.offDays) ? response.data.offDays.join(', ') : response.data.offDays || user?.offDays || '',
-          profileImage: response.data.profileImage || response.data.imageUrl || response.data.staffDetails?.imageUrl || updatedUser.profileImage
+          profileImage: response.data.profileImage || response.data.imageUrl || response.data.staffDetails?.imageUrl || user?.profileImage || ''
         };
         setUser(mergedResponse);
         setFormValues({
           name: mergedResponse.name || '',
           email: mergedResponse.email || '',
-          phone: mergedResponse.phone || '',
-          specialty: mergedResponse.specialty || '',
-          workingHours: formatWorkingHours(mergedResponse.workingHours),
-          offDays: mergedResponse.offDays || ''
+          phone: mergedResponse.phone || ''
         });
         setProfileImage(mergedResponse.profileImage || '');
+        setProfileImageFile(null);
       }
     } catch (err) {
       toast.error('Failed to update profile: ' + (err.response?.data?.message || err.message));
@@ -210,21 +225,28 @@ function StaffProfile({ onClose }) {
   };
 
   const handlePasswordUpdate = async () => {
-    if (!passwordValues.newPassword || !passwordValues.confirmPassword) return toast.warning("Please fill in all fields.");
+    if (isPasswordSaving) return;
+    if (!passwordValues.currentPassword || !passwordValues.newPassword || !passwordValues.confirmPassword) return toast.warning("Please fill in all fields.");
     if (passwordValues.newPassword !== passwordValues.confirmPassword) return toast.error("Passwords do not match!");
 
     try {
+      setIsPasswordSaving(true);
       const token = localStorage.getItem('token');
       await axios.put(
         `${BACKEND_BASE_URL}/api/users/profile`,
-        { password: passwordValues.newPassword },
+        {
+          currentPassword: passwordValues.currentPassword,
+          newPassword: passwordValues.newPassword
+        },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       toast.success("Password updated successfully!");
       setIsPasswordModalOpen(false);
-      setPasswordValues({ newPassword: '', confirmPassword: '' });
+      setPasswordValues({ currentPassword: '', newPassword: '', confirmPassword: '' });
     } catch (error) {
       toast.error('Failed to update password: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setIsPasswordSaving(false);
     }
   };
 
@@ -269,7 +291,7 @@ function StaffProfile({ onClose }) {
             </div>
           </aside>
 
-          <section className="font-sans order-2 md:order-2 md:col-span-1">
+          <section className="font-sans order-1 md:order-2 md:col-span-1">
             <div className="flex items-center gap-3">
               <p className="text-sm font-bold uppercase leading-6 tracking-[0.12em] text-[#D4AF37]">Personal Information</p>
               {!isEditing && (
@@ -289,16 +311,43 @@ function StaffProfile({ onClose }) {
 
             <div className="mt-8 grid grid-cols-1 gap-6 md:mt-6 md:gap-5">
               <div>
-                <p className={formLabelClassName}>Full Name</p>
-                {isEditing ? <input type="text" value={formValues.name} onChange={(e) => updateField('name', e.target.value)} className={formInputClassName} /> : <p className={formValueClassName}>{displayName}</p>}
+                <label htmlFor="staff-profile-name" className={formLabelClassName}>Full Name</label>
+                {isEditing ? (
+                  <input
+                    id="staff-profile-name"
+                    type="text"
+                    value={formValues.name}
+                    onChange={(e) => updateField('name', e.target.value)}
+                    className={formInputClassName}
+                    autoComplete="name"
+                  />
+                ) : <p className={formValueClassName}>{displayName}</p>}
               </div>
               <div>
-                <p className={formLabelClassName}>Email Address</p>
-                {isEditing ? <input type="email" value={formValues.email} onChange={(e) => updateField('email', e.target.value)} className={formInputClassName} /> : <p className={formValueClassName}>{displayEmail}</p>}
+                <label htmlFor="staff-profile-email" className={formLabelClassName}>Email Address</label>
+                {isEditing ? (
+                  <input
+                    id="staff-profile-email"
+                    type="email"
+                    value={formValues.email}
+                    onChange={(e) => updateField('email', e.target.value)}
+                    className={formInputClassName}
+                    autoComplete="email"
+                  />
+                ) : <p className={formValueClassName}>{displayEmail}</p>}
               </div>
               <div>
-                <p className={formLabelClassName}>Phone Number</p>
-                {isEditing ? <input type="text" value={formValues.phone} onChange={(e) => updateField('phone', e.target.value)} className={formInputClassName} /> : <p className={formValueClassName}>{displayPhone}</p>}
+                <label htmlFor="staff-profile-phone" className={formLabelClassName}>Phone Number</label>
+                {isEditing ? (
+                  <input
+                    id="staff-profile-phone"
+                    type="tel"
+                    value={formValues.phone}
+                    onChange={(e) => updateField('phone', e.target.value)}
+                    className={formInputClassName}
+                    autoComplete="tel"
+                  />
+                ) : <p className={formValueClassName}>{displayPhone}</p>}
               </div>
             </div>
 
@@ -332,7 +381,7 @@ function StaffProfile({ onClose }) {
           </section>
 
           {/* Left Column: Professional Details */}
-          <section className="font-sans order-1 md:order-1 md:col-span-1">
+          <section className="font-sans order-2 md:order-1 md:col-span-1">
             <div className="flex items-center gap-3 text-[#D4AF37]">
               <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#D4AF37]/40">
                 <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.6"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
@@ -370,17 +419,28 @@ function StaffProfile({ onClose }) {
             <p className="text-sm text-gray-400 mb-6">Ensure your account is using a secure password.</p>
             <div className="space-y-5">
               <div>
-                <p className="text-[10px] uppercase tracking-widest text-gray-500 mb-2">New Password</p>
-                <input type="password" value={passwordValues.newPassword} onChange={(e) => setPasswordValues({...passwordValues, newPassword: e.target.value})} className="w-full rounded-xl border border-[#D4AF37]/40 bg-transparent px-4 py-3 text-sm text-white outline-none focus:border-[#D4AF37]" placeholder="Enter new password" />
+                <label htmlFor="staff-current-password" className="mb-2 block text-[10px] uppercase tracking-widest text-gray-500">Current Password</label>
+                <input id="staff-current-password" type="password" value={passwordValues.currentPassword} onChange={(e) => setPasswordValues({...passwordValues, currentPassword: e.target.value})} className="w-full rounded-xl border border-[#D4AF37]/40 bg-transparent px-4 py-3 text-sm text-white outline-none focus:border-[#D4AF37]" placeholder="Enter current password" autoComplete="current-password" />
               </div>
               <div>
-                <p className="text-[10px] uppercase tracking-widest text-gray-500 mb-2">Confirm New Password</p>
-                <input type="password" value={passwordValues.confirmPassword} onChange={(e) => setPasswordValues({...passwordValues, confirmPassword: e.target.value})} className="w-full rounded-xl border border-[#D4AF37]/40 bg-transparent px-4 py-3 text-sm text-white outline-none focus:border-[#D4AF37]" placeholder="Confirm new password" />
+                <label htmlFor="staff-new-password" className="mb-2 block text-[10px] uppercase tracking-widest text-gray-500">New Password</label>
+                <input id="staff-new-password" type="password" value={passwordValues.newPassword} onChange={(e) => setPasswordValues({...passwordValues, newPassword: e.target.value})} className="w-full rounded-xl border border-[#D4AF37]/40 bg-transparent px-4 py-3 text-sm text-white outline-none focus:border-[#D4AF37]" placeholder="Enter new password" autoComplete="new-password" />
+              </div>
+              <div>
+                <label htmlFor="staff-confirm-password" className="mb-2 block text-[10px] uppercase tracking-widest text-gray-500">Confirm New Password</label>
+                <input id="staff-confirm-password" type="password" value={passwordValues.confirmPassword} onChange={(e) => setPasswordValues({...passwordValues, confirmPassword: e.target.value})} className="w-full rounded-xl border border-[#D4AF37]/40 bg-transparent px-4 py-3 text-sm text-white outline-none focus:border-[#D4AF37]" placeholder="Confirm new password" autoComplete="new-password" />
               </div>
             </div>
-            <div className="mt-8 flex items-center justify-end gap-4 text-[10px] uppercase tracking-widest">
-              <button type="button" onClick={() => { setIsPasswordModalOpen(false); setPasswordValues({ newPassword: '', confirmPassword: '' }); }} className="text-neutral-400 hover:text-white">Cancel</button>
-              <button type="button" onClick={handlePasswordUpdate} className="rounded-full bg-[#D4AF37] px-6 py-2.5 font-bold text-black hover:bg-[#f3d77a]">Update Password</button>
+            <div className="mt-8 flex flex-col-reverse items-stretch gap-3 text-[10px] uppercase tracking-widest sm:flex-row sm:items-center sm:justify-end">
+              <button type="button" onClick={() => { setIsPasswordModalOpen(false); setPasswordValues({ currentPassword: '', newPassword: '', confirmPassword: '' }); }} className="min-h-11 px-4 text-neutral-400 hover:text-white">Cancel</button>
+              <button
+                type="button"
+                onClick={handlePasswordUpdate}
+                disabled={isPasswordSaving}
+                className="min-h-11 rounded-full bg-[#D4AF37] px-6 py-2.5 font-bold text-black hover:bg-[#f3d77a] disabled:cursor-not-allowed disabled:bg-[#D4AF37]/40 disabled:text-black/50"
+              >
+                {isPasswordSaving ? 'Updating...' : 'Update Password'}
+              </button>
             </div>
           </div>
         </div>

@@ -478,7 +478,7 @@ const updateUserProfile = async (req, res) => {
           userId: updatedUser._id,
           name: updatedUser.name,
           imageUrl: uploadedProfileImage || '',
-          specialty: specialty || '',
+          specialty: specialty || 'General Stylist',
           workingHours: normalizeWorkingHours(workingHours),
           offDays: normalizedOffDays || [],
         });
