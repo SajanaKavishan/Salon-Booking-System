@@ -1,18 +1,188 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import axios from "axios";
 import { toast } from "react-toastify";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
+import { Check, ChevronDown } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { GlassCard, GoldButton } from "./SystemUI";
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000").replace(/\/$/, "");
 const currentYear = new Date().getFullYear();
 const leaveYearOptions = Array.from({ length: 5 }, (_, index) => currentYear - 2 + index);
+const mutedGoldButtonClassName = "disabled:cursor-not-allowed disabled:border-[#756a1d] disabled:bg-[#756a1d] disabled:text-black/70 disabled:shadow-none disabled:brightness-75 disabled:hover:bg-[#756a1d] disabled:hover:text-black/70";
+const workingHourOptions = [
+  "09:00 AM - 05:00 PM",
+  "10:00 AM - 06:00 PM",
+  "11:00 AM - 07:00 PM",
+  "12:00 PM - 08:00 PM",
+];
+
+const to12HourTime = (value) => {
+  const [hourValue, minuteValue = "00"] = String(value || "").split(":");
+  const hourNumber = Number(hourValue);
+  if (Number.isNaN(hourNumber)) return "";
+
+  const period = hourNumber >= 12 ? "PM" : "AM";
+  const displayHour = hourNumber % 12 || 12;
+  return `${String(displayHour).padStart(2, "0")}:${minuteValue.padStart(2, "0")} ${period}`;
+};
+
+const getWorkingHoursValue = (workingHours) => {
+  if (!workingHours) return "";
+  if (typeof workingHours === "string") return workingHours;
+  return `${to12HourTime(workingHours.start)} - ${to12HourTime(workingHours.end)}`;
+};
+
+const getOffDayValue = (offDays) => {
+  if (Array.isArray(offDays)) return offDays[0] || "";
+  return offDays || "";
+};
+
+const offDayOptions = [
+  { value: "", label: "No Regular Off Day" },
+  { value: "Monday", label: "Monday" },
+  { value: "Tuesday", label: "Tuesday" },
+  { value: "Wednesday", label: "Wednesday" },
+  { value: "Thursday", label: "Thursday" },
+  { value: "Friday", label: "Friday" },
+  { value: "Saturday", label: "Saturday" },
+  { value: "Sunday", label: "Sunday" },
+];
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem("token");
   return token ? { headers: { Authorization: `Bearer ${token}` } } : undefined;
 };
+
+function SalonSelect({ id, label, value, onChange, options, placeholder = "Select an option", required = false }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const containerRef = useRef(null);
+  const normalizedOptions = options.map((option) => (
+    typeof option === "string" ? { value: option, label: option } : option
+  ));
+  const selectedOption = normalizedOptions.find((option) => option.value === value);
+  const visibleLabel = selectedOption?.label || placeholder;
+  const listboxId = `${id}-listbox`;
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    const handlePointerDown = (event) => {
+      if (!containerRef.current?.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
+  }, [isOpen]);
+
+  const chooseOption = (option) => {
+    onChange(option.value);
+    setIsOpen(false);
+  };
+
+  const handleButtonKeyDown = (event) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const nextIndex = event.key === "ArrowDown"
+        ? (activeIndex + 1) % normalizedOptions.length
+        : (activeIndex - 1 + normalizedOptions.length) % normalizedOptions.length;
+      setActiveIndex(nextIndex);
+      setIsOpen(true);
+      return;
+    }
+
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      if (isOpen) {
+        chooseOption(normalizedOptions[activeIndex]);
+      } else {
+        const selectedIndex = normalizedOptions.findIndex((option) => option.value === value);
+        setActiveIndex(Math.max(selectedIndex, 0));
+        setIsOpen(true);
+      }
+      return;
+    }
+
+    if (event.key === "Escape") {
+      setIsOpen(false);
+    }
+  };
+
+  return (
+    <div ref={containerRef} className="relative">
+      <label htmlFor={id} className="mb-1 block text-xs font-medium text-gray-400">{label}</label>
+      <button
+        id={id}
+        type="button"
+        onClick={() => {
+          const selectedIndex = normalizedOptions.findIndex((option) => option.value === value);
+          setActiveIndex(Math.max(selectedIndex, 0));
+          setIsOpen((current) => !current);
+        }}
+        onKeyDown={handleButtonKeyDown}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+        aria-controls={listboxId}
+        className={`flex min-h-[50px] w-full items-center justify-between gap-3 rounded-lg border bg-black/50 p-3 text-left text-white outline-none transition-all ${
+          isOpen
+            ? "border-[#d4af37] ring-1 ring-[#d4af37]"
+            : "border-gray-700 hover:border-[#c5a880]/70"
+        }`}
+      >
+        <span className={selectedOption ? "truncate text-white" : "truncate text-gray-500"}>{visibleLabel}</span>
+        <ChevronDown size={18} className={`shrink-0 text-[#d4af37] transition-transform ${isOpen ? "rotate-180" : ""}`} />
+      </button>
+      {required && (
+        <input
+          tabIndex={-1}
+          aria-hidden="true"
+          value={value}
+          onChange={() => {}}
+          required
+          className="pointer-events-none absolute bottom-0 left-3 h-px w-px opacity-0"
+        />
+      )}
+
+      {isOpen && (
+        <div
+          id={listboxId}
+          role="listbox"
+          className="salon-scrollbar absolute z-[120] mt-2 max-h-56 w-full overflow-y-auto rounded-xl border border-[#d4af37]/20 bg-[#0c0c0c]/95 p-1.5 shadow-2xl shadow-black/60 backdrop-blur-xl"
+        >
+          {normalizedOptions.map((option, index) => {
+            const isSelected = option.value === value;
+            const isActive = index === activeIndex;
+
+            return (
+              <button
+                key={`${id}-${option.value || "empty"}`}
+                type="button"
+                role="option"
+                aria-selected={isSelected}
+                onMouseEnter={() => setActiveIndex(index)}
+                onClick={() => chooseOption(option)}
+                className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition ${
+                  isSelected
+                    ? "bg-[#d4af37]/15 text-[#f4d46f]"
+                    : isActive
+                      ? "bg-white/8 text-white"
+                      : "text-gray-300 hover:bg-white/8 hover:text-white"
+                }`}
+              >
+                <span className="truncate">{option.label}</span>
+                {isSelected && <Check size={16} className="shrink-0 text-[#d4af37]" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function StaffManager() {
   const fieldClassName = "w-full bg-black/50 border border-gray-700 rounded-lg p-3 text-white focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] outline-none transition-all";
@@ -33,8 +203,18 @@ function StaffManager() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
-  const [editData, setEditData] = useState({ name: "", specialty: "" });
+  const [editData, setEditData] = useState({ specialty: "", workingHours: "", offDays: "" });
+  const [originalEditData, setOriginalEditData] = useState({ specialty: "", workingHours: "", offDays: "" });
   const [editingId, setEditingId] = useState(null);
+  const [isUpdatingStaff, setIsUpdatingStaff] = useState(false);
+  const hasEditChanges = JSON.stringify(editData) !== JSON.stringify(originalEditData);
+  const canAddStaff = Boolean(
+    formData.name.trim() &&
+    formData.email.trim() &&
+    formData.password &&
+    formData.specialty &&
+    formData.workingHours
+  );
 
   useEffect(() => {
     let isActive = true;
@@ -152,13 +332,9 @@ function StaffManager() {
     }
   };
 
-  const handleEditInputChange = (e) => {
-    setEditData({ ...editData, [e.target.name]: e.target.value });
-  };
-
   const handleAddStaff = async (e) => {
     e.preventDefault();
-    if (isAddingStaff) return;
+    if (isAddingStaff || !canAddStaff) return;
 
     setIsAddingStaff(true);
     try {
@@ -221,10 +397,13 @@ function StaffManager() {
   };
 
   const openEditModal = (staff) => {
-    setEditData({
-      name: staff.name,
+    const nextEditData = {
       specialty: staff.specialty,
-    });
+      workingHours: getWorkingHoursValue(staff.workingHours),
+      offDays: getOffDayValue(staff.offDays),
+    };
+    setEditData(nextEditData);
+    setOriginalEditData(nextEditData);
     setEditingId(staff._id);
     setIsEditModalOpen(true);
     setActiveMenuId(null);
@@ -232,13 +411,19 @@ function StaffManager() {
 
   const handleUpdateStaff = async (e) => {
     e.preventDefault();
+    if (isUpdatingStaff || !hasEditChanges) return;
+
+    setIsUpdatingStaff(true);
     try {
       const response = await axios.put(`${API_BASE_URL}/api/staff/${editingId}`, editData, getAuthHeaders());
       setStaffList((currentStaff) => currentStaff.map((staff) => (staff._id === editingId ? response.data : staff)));
       setIsEditModalOpen(false);
+      setOriginalEditData(editData);
       toast.success("Staff updated successfully!");
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to update staff");
+    } finally {
+      setIsUpdatingStaff(false);
     }
   };
 
@@ -307,46 +492,33 @@ function StaffManager() {
               </button>
             </div>
           </div>
-          <div>
-            <label htmlFor="staff-specialty" className="mb-1 block text-xs font-medium text-gray-400">Specialty</label>
-            <select id="staff-specialty" name="specialty" value={formData.specialty} onChange={handleInputChange} required className={fieldClassName}>
-              <option value="" disabled className="bg-[#111111] text-gray-500">Select Specialty</option>
-              {specialtyOptions.map((option) => (
-                <option key={option} value={option} className="bg-[#111111]">{option}</option>
-              ))}
-            </select>
-          </div>
+          <SalonSelect
+            id="staff-specialty"
+            label="Specialty"
+            value={formData.specialty}
+            onChange={(value) => setFormData((current) => ({ ...current, specialty: value }))}
+            options={specialtyOptions}
+            placeholder="Select Specialty"
+            required
+          />
 
-          <div>
-            <label htmlFor="staff-working-hours" className="mb-1 block text-xs font-medium text-gray-400">Working Hours</label>
-            <select id="staff-working-hours" name="workingHours" value={formData.workingHours} onChange={handleInputChange} required className={fieldClassName}>
-              <option value="" disabled className="bg-[#111111] text-gray-500">Select Working Hours</option>
-              <option value="09:00 AM - 05:00 PM" className="bg-[#111111]">09:00 AM - 05:00 PM</option>
-              <option value="10:00 AM - 06:00 PM" className="bg-[#111111]">10:00 AM - 06:00 PM</option>
-              <option value="11:00 AM - 07:00 PM" className="bg-[#111111]">11:00 AM - 07:00 PM</option>
-              <option value="12:00 PM - 08:00 PM" className="bg-[#111111]">12:00 PM - 08:00 PM</option>
-            </select>
-          </div>
+          <SalonSelect
+            id="staff-working-hours"
+            label="Working Hours"
+            value={formData.workingHours}
+            onChange={(value) => setFormData((current) => ({ ...current, workingHours: value }))}
+            options={workingHourOptions}
+            placeholder="Select Working Hours"
+            required
+          />
 
-          <div className="flex-1">
-            <label htmlFor="staff-off-day" className="block text-xs font-medium text-gray-400 mb-1">Weekly Off Day (Optional)</label>
-            <select
-              id="staff-off-day"
-              name="offDays"
-              value={formData.offDays}
-              onChange={(e) => setFormData({ ...formData, offDays: e.target.value })}
-              className="w-full px-4 py-2.5 rounded-lg border border-gray-800 bg-[#121212] text-white focus:outline-none focus:border-[#d4af37] transition-colors text-sm"
-            >
-              <option value="">No Regular Off Day</option>
-              <option value="Monday">Monday</option>
-              <option value="Tuesday">Tuesday</option>
-              <option value="Wednesday">Wednesday</option>
-              <option value="Thursday">Thursday</option>
-              <option value="Friday">Friday</option>
-              <option value="Saturday">Saturday</option>
-              <option value="Sunday">Sunday</option>
-            </select>
-          </div>
+          <SalonSelect
+            id="staff-off-day"
+            label="Weekly Off Day (Optional)"
+            value={formData.offDays}
+            onChange={(value) => setFormData((current) => ({ ...current, offDays: value }))}
+            options={offDayOptions}
+          />
 
           <div className="md:col-span-2 xl:col-span-3">
             <input
@@ -395,10 +567,10 @@ function StaffManager() {
           <div className="md:col-span-2 xl:col-span-3">
             <GoldButton
               type="submit"
-              disabled={isAddingStaff}
-              className="rounded-lg px-5 py-3 font-bold shadow-[0_0_20px_rgba(212,175,55,0.28)] hover:shadow-[0_0_28px_rgba(212,175,55,0.4)] disabled:cursor-not-allowed disabled:opacity-70"
+              disabled={!canAddStaff || isAddingStaff}
+              className={`rounded-lg px-5 py-3 font-bold shadow-[0_0_20px_rgba(212,175,55,0.28)] hover:shadow-[0_0_28px_rgba(212,175,55,0.4)] ${mutedGoldButtonClassName}`}
             >
-              {isAddingStaff ? "Adding Staff..." : "+ Add Staff"}
+              {isAddingStaff ? "Adding..." : "+ Add Staff"}
             </GoldButton>
           </div>
         </form>
@@ -626,8 +798,8 @@ function StaffManager() {
         </section>
       )}
 
-      {isEditModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 backdrop-blur-sm">
+      {isEditModalOpen && createPortal(
+        <div className="fixed inset-0 z-[10000] flex min-h-[100dvh] items-center justify-center overflow-y-auto bg-black/35 px-4 py-6 backdrop-blur-2xl backdrop-saturate-50">
           <GlassCard
             role="dialog"
             aria-modal="true"
@@ -639,33 +811,51 @@ function StaffManager() {
             </button>
             <h3 id="edit-staff-title" className="salon-heading mb-6 border-b border-white/10 pb-4">Edit Staff Member</h3>
             <form onSubmit={handleUpdateStaff} className="flex flex-col gap-4">
-              <div>
-                <label htmlFor="edit-staff-name" className="mb-1 block text-xs font-medium text-gray-400">Name</label>
-                <input id="edit-staff-name" type="text" name="name" placeholder="Name" value={editData.name} onChange={handleEditInputChange} required className={fieldClassName} />
-              </div>
-              <div>
-                <label htmlFor="edit-staff-specialty" className="mb-1 block text-xs font-medium text-gray-400">Specialty</label>
-                <select id="edit-staff-specialty" name="specialty" value={editData.specialty} onChange={handleEditInputChange} required className={fieldClassName}>
-                  {specialtyOptions.map((option) => (
-                    <option key={option} value={option} className="bg-[#111111]">{option}</option>
-                  ))}
-                </select>
-              </div>
+              <SalonSelect
+                id="edit-staff-specialty"
+                label="Specialty"
+                value={editData.specialty}
+                onChange={(value) => setEditData((current) => ({ ...current, specialty: value }))}
+                options={specialtyOptions}
+                placeholder="Select Specialty"
+                required
+              />
+              <SalonSelect
+                id="edit-staff-working-hours"
+                label="Working Hours"
+                value={editData.workingHours}
+                onChange={(value) => setEditData((current) => ({ ...current, workingHours: value }))}
+                options={workingHourOptions}
+                placeholder="Select Working Hours"
+                required
+              />
+              <SalonSelect
+                id="edit-staff-off-day"
+                label="Weekly Off Day"
+                value={editData.offDays}
+                onChange={(value) => setEditData((current) => ({ ...current, offDays: value }))}
+                options={offDayOptions}
+              />
               <div className="mt-4 flex justify-end gap-3">
-                <GoldButton type="button" variant="ghost" onClick={() => setIsEditModalOpen(false)} className="bg-gray-800 px-4 py-2 text-white hover:bg-gray-700 hover:text-white">
+                <GoldButton type="button" variant="ghost" onClick={() => setIsEditModalOpen(false)} disabled={isUpdatingStaff} className="bg-gray-800 px-4 py-2 text-white hover:bg-gray-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-60">
                   Cancel
                 </GoldButton>
-                <GoldButton type="submit" className="px-4 py-2">
-                  Save Changes
+                <GoldButton
+                  type="submit"
+                  disabled={!hasEditChanges || isUpdatingStaff}
+                  className={`px-4 py-2 ${mutedGoldButtonClassName}`}
+                >
+                  {isUpdatingStaff ? "Saving..." : "Save Changes"}
                 </GoldButton>
               </div>
             </form>
           </GlassCard>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {isDeleteModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+      {isDeleteModalOpen && createPortal(
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/35 px-4 backdrop-blur-2xl backdrop-saturate-50">
           <GlassCard
             role="dialog"
             aria-modal="true"
@@ -695,7 +885,8 @@ function StaffManager() {
               </button>
             </div>
           </GlassCard>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

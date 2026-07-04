@@ -2,9 +2,84 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import axios from 'axios';
 import { toast } from 'react-toastify';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { GlassCard, GoldButton } from './SystemUI';
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
+const mutedGoldButtonClassName = 'disabled:cursor-not-allowed disabled:border-[#756a1d] disabled:bg-[#756a1d] disabled:text-black/70 disabled:shadow-none disabled:brightness-75 disabled:hover:bg-[#756a1d] disabled:hover:text-black/70';
+
+function SalonNumberField({
+  id,
+  label,
+  value,
+  onValueChange,
+  placeholder,
+  labelClassName,
+  fieldClassName,
+  step = 1,
+  min = 0,
+}) {
+  const commitValue = (nextValue) => {
+    const numericValue = Number(nextValue);
+    if (nextValue === '') {
+      onValueChange('');
+      return;
+    }
+
+    if (!Number.isNaN(numericValue)) {
+      onValueChange(String(Math.max(min, numericValue)));
+    }
+  };
+
+  const adjustValue = (direction) => {
+    const currentValue = Number(value) || 0;
+    const nextValue = Math.max(min, currentValue + direction * step);
+    onValueChange(String(nextValue));
+  };
+
+  return (
+    <div>
+      <label htmlFor={id} className={labelClassName}>{label}</label>
+      <div className="relative">
+        <input
+          id={id}
+          type="text"
+          inputMode="decimal"
+          placeholder={placeholder}
+          value={value}
+          onChange={(event) => {
+            const nextValue = event.target.value;
+            if (/^\d*\.?\d*$/.test(nextValue)) {
+              onValueChange(nextValue);
+            }
+          }}
+          onBlur={() => commitValue(value)}
+          required
+          className={`${fieldClassName} pr-12`}
+        />
+        <div className="absolute right-2 top-1/2 flex -translate-y-1/2 flex-col overflow-hidden rounded-md border border-[#d4af37]/20 bg-[#0b0b0b]/90">
+          <button
+            type="button"
+            onClick={() => adjustValue(1)}
+            aria-label={`Increase ${label}`}
+            className="flex h-5 w-8 items-center justify-center text-[#d4af37] transition hover:bg-[#d4af37]/15 hover:text-[#f5d76e]"
+          >
+            <ChevronUp size={13} strokeWidth={2.5} />
+          </button>
+          <span className="h-px bg-[#d4af37]/15" />
+          <button
+            type="button"
+            onClick={() => adjustValue(-1)}
+            aria-label={`Decrease ${label}`}
+            className="flex h-5 w-8 items-center justify-center text-[#d4af37] transition hover:bg-[#d4af37]/15 hover:text-[#f5d76e]"
+          >
+            <ChevronDown size={13} strokeWidth={2.5} />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function ServiceManager() {
   const fallbackServiceImage = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='300' viewBox='0 0 400 300'><rect width='400' height='300' fill='%23111111'/><rect x='24' y='24' width='352' height='252' rx='20' fill='%230a0a0a' stroke='%23d4af37' stroke-opacity='0.35'/><circle cx='200' cy='126' r='42' fill='%23d4af37' fill-opacity='0.18'/><path d='M200 92c-12 0-22 10-22 22s10 22 22 22 22-10 22-22-10-22-22-22Zm0 56c-26 0-60 13-60 38v10h120v-10c0-25-34-38-60-38Z' fill='%23d4af37'/><text x='200' y='232' text-anchor='middle' fill='%23cfcfcf' font-family='Arial, sans-serif' font-size='18'>Salon Service</text></svg>";
@@ -24,11 +99,18 @@ function ServiceManager() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
   const [editData, setEditData] = useState({ name: '', price: '', duration: '', image: '' });
+  const [originalEditData, setOriginalEditData] = useState({ name: '', price: '', duration: '', image: '' });
   const [selectedEditImage, setSelectedEditImage] = useState(null);
   const [editImagePreview, setEditImagePreview] = useState('');
   const [editingId, setEditingId] = useState(null);
   const serviceFileInputRef = useRef(null);
   const editFileInputRef = useRef(null);
+  const canAddService = Boolean(
+    formData.name.trim() &&
+    Number(formData.price) > 0 &&
+    Number(formData.duration) > 0
+  );
+  const hasEditChanges = JSON.stringify(editData) !== JSON.stringify(originalEditData) || Boolean(selectedEditImage);
 
   const getAuthConfig = () => {
     const token = localStorage.getItem('token');
@@ -124,7 +206,7 @@ function ServiceManager() {
 
   const handleAddService = async (e) => {
     e.preventDefault();
-    if (isAddingService) return;
+    if (isAddingService || !canAddService) return;
 
     setIsAddingService(true);
     try {
@@ -168,12 +250,14 @@ function ServiceManager() {
   };
 
   const openEditModal = (service) => {
-    setEditData({
+    const nextEditData = {
       name: service.name,
       price: service.price,
       duration: service.duration,
       image: service.image || ''
-    });
+    };
+    setEditData(nextEditData);
+    setOriginalEditData(nextEditData);
     clearSelectedEditImage();
     setEditingId(service._id);
     setIsEditModalOpen(true);
@@ -182,7 +266,7 @@ function ServiceManager() {
 
   const handleUpdateService = async (e) => {
     e.preventDefault();
-    if (isUpdatingService) return;
+    if (isUpdatingService || !hasEditChanges) return;
 
     setIsUpdatingService(true);
     try {
@@ -200,6 +284,7 @@ function ServiceManager() {
       const response = await axios.put(`${API_BASE_URL}/api/services/${editingId}`, payload, getAuthConfig());
       setServices((currentServices) => currentServices.map((service) => (service._id === editingId ? response.data : service)));
       setIsEditModalOpen(false);
+      setOriginalEditData(editData);
       clearSelectedEditImage();
       toast.success('Service updated successfully!');
     } catch (error) {
@@ -217,14 +302,24 @@ function ServiceManager() {
             <label htmlFor="service-name" className={labelClassName}>Service Name</label>
             <input id="service-name" type="text" name="name" placeholder="Service Name" value={formData.name} onChange={handleInputChange} required className={fieldClassName} />
           </div>
-          <div>
-            <label htmlFor="service-price" className={labelClassName}>Price</label>
-            <input id="service-price" type="number" name="price" placeholder="Price (Rs.)" value={formData.price} onChange={handleInputChange} required className={fieldClassName} />
-          </div>
-          <div>
-            <label htmlFor="service-duration" className={labelClassName}>Duration</label>
-            <input id="service-duration" type="number" name="duration" placeholder="Duration (Mins)" value={formData.duration} onChange={handleInputChange} required className={fieldClassName} />
-          </div>
+          <SalonNumberField
+            id="service-price"
+            label="Price"
+            value={formData.price}
+            onValueChange={(value) => setFormData((current) => ({ ...current, price: value }))}
+            placeholder="Price (Rs.)"
+            labelClassName={labelClassName}
+            fieldClassName={fieldClassName}
+          />
+          <SalonNumberField
+            id="service-duration"
+            label="Duration"
+            value={formData.duration}
+            onValueChange={(value) => setFormData((current) => ({ ...current, duration: value }))}
+            placeholder="Duration (Mins)"
+            labelClassName={labelClassName}
+            fieldClassName={fieldClassName}
+          />
           <button
             type="button"
             onClick={() => serviceFileInputRef.current?.click()}
@@ -275,10 +370,10 @@ function ServiceManager() {
           <div className="md:col-span-3">
             <GoldButton
               type="submit"
-              disabled={isAddingService}
-              className="w-full rounded-lg px-5 py-3 font-bold shadow-[0_0_20px_rgba(212,175,55,0.28)] hover:shadow-[0_0_28px_rgba(212,175,55,0.4)] disabled:cursor-not-allowed disabled:opacity-70 sm:w-fit"
+              disabled={!canAddService || isAddingService}
+              className={`w-full rounded-lg px-5 py-3 font-bold shadow-[0_0_20px_rgba(212,175,55,0.28)] hover:shadow-[0_0_28px_rgba(212,175,55,0.4)] sm:w-fit ${mutedGoldButtonClassName}`}
             >
-              {isAddingService ? 'Adding Service...' : '+ Add Service'}
+              {isAddingService ? 'Adding...' : '+ Add Service'}
             </GoldButton>
           </div>
         </form>
@@ -503,14 +598,24 @@ function ServiceManager() {
                 <label htmlFor="edit-service-name" className={labelClassName}>Service Name</label>
                 <input id="edit-service-name" type="text" name="name" placeholder="Service Name" value={editData.name} onChange={handleEditInputChange} required className={fieldClassName} />
               </div>
-              <div>
-                <label htmlFor="edit-service-price" className={labelClassName}>Price</label>
-                <input id="edit-service-price" type="number" name="price" placeholder="Price (Rs.)" value={editData.price} onChange={handleEditInputChange} required className={fieldClassName} />
-              </div>
-              <div>
-                <label htmlFor="edit-service-duration" className={labelClassName}>Duration</label>
-                <input id="edit-service-duration" type="number" name="duration" placeholder="Duration (Mins)" value={editData.duration} onChange={handleEditInputChange} required className={fieldClassName} />
-              </div>
+              <SalonNumberField
+                id="edit-service-price"
+                label="Price"
+                value={editData.price}
+                onValueChange={(value) => setEditData((current) => ({ ...current, price: value }))}
+                placeholder="Price (Rs.)"
+                labelClassName={labelClassName}
+                fieldClassName={fieldClassName}
+              />
+              <SalonNumberField
+                id="edit-service-duration"
+                label="Duration"
+                value={editData.duration}
+                onValueChange={(value) => setEditData((current) => ({ ...current, duration: value }))}
+                placeholder="Duration (Mins)"
+                labelClassName={labelClassName}
+                fieldClassName={fieldClassName}
+              />
               <button
                 type="button"
                 onClick={() => editFileInputRef.current?.click()}
@@ -572,10 +677,10 @@ function ServiceManager() {
               </button>
 
               <div className="mt-4 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-                <GoldButton type="button" variant="ghost" onClick={() => setIsEditModalOpen(false)} className="bg-gray-800 px-4 py-2 text-white hover:bg-gray-700 hover:text-white">
+                <GoldButton type="button" variant="ghost" onClick={() => setIsEditModalOpen(false)} disabled={isUpdatingService} className="bg-gray-800 px-4 py-2 text-white hover:bg-gray-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-60">
                   Cancel
                 </GoldButton>
-                <GoldButton type="submit" disabled={isUpdatingService} className="px-4 py-2 disabled:cursor-not-allowed disabled:opacity-70">
+                <GoldButton type="submit" disabled={!hasEditChanges || isUpdatingService} className={`px-4 py-2 ${mutedGoldButtonClassName}`}>
                   {isUpdatingService ? 'Saving...' : 'Save Changes'}
                 </GoldButton>
               </div>
