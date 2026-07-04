@@ -51,7 +51,18 @@ const tooltipStyle = {
   boxShadow: "0 16px 40px rgba(0, 0, 0, 0.45)",
 };
 
-const BACKEND_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000").replace(/\/$/, "");
+const getBackendBaseUrl = () => {
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
+
+  if (apiBaseUrl) return apiBaseUrl.replace(/\/$/, "");
+  if (import.meta.env.PROD) {
+    throw new Error("VITE_API_BASE_URL must be configured for production analytics requests.");
+  }
+
+  return "http://localhost:5000";
+};
+
+const BACKEND_BASE_URL = getBackendBaseUrl();
 
 const formatRating = (rating) => Number(rating || 0).toFixed(1);
 const getRangeLabel = (range) =>
@@ -125,6 +136,12 @@ const normalizeAppointmentStatusData = (statuses) => {
   }));
 };
 
+const getNextOptionIndex = (currentIndex, optionCount, direction) => {
+  if (optionCount <= 0) return 0;
+  if (direction === "next") return (currentIndex + 1) % optionCount;
+  return (currentIndex - 1 + optionCount) % optionCount;
+};
+
 const getImageUrl = (imageUrl) => {
   if (!imageUrl) return "";
   if (/^https?:\/\//i.test(imageUrl) || imageUrl.startsWith("data:")) return imageUrl;
@@ -148,6 +165,14 @@ function StaffAvatar({ staff, className = "" }) {
         />
       )}
     </span>
+  );
+}
+
+function ChartEmptyState() {
+  return (
+    <div className="flex h-full min-h-[220px] items-center justify-center rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/20 px-6 text-center text-sm text-zinc-500">
+      No data available for the selected period.
+    </div>
   );
 }
 
@@ -245,9 +270,9 @@ function StylistLeaderboard({ staffPerformanceData, isLoading }) {
 }
 
 function Analytics() {
-  const currentYear = new Date().getFullYear();
+  const currentYear = String(new Date().getFullYear());
   const isNarrowViewport = useIsNarrowViewport();
-  const [filterYear, setFilterYear] = useState("2026");
+  const [filterYear, setFilterYear] = useState(currentYear);
   const [filterRange, setFilterRange] = useState("YTD");
   const [summary, setSummary] = useState({
     revenue: 0,
@@ -263,9 +288,13 @@ function Analytics() {
   const [isRevenueRangeOpen, setIsRevenueRangeOpen] = useState(false);
   const [availableYears, setAvailableYears] = useState([currentYear]);
   const [isYearOpen, setIsYearOpen] = useState(false);
+  const [activeYearIndex, setActiveYearIndex] = useState(0);
+  const [activeRangeIndex, setActiveRangeIndex] = useState(0);
   const revenueRangeRef = useRef(null);
+  const revenueRangeListRef = useRef(null);
   const yearRef = useRef(null);
-  const selectedYear = Number(filterYear);
+  const yearListRef = useRef(null);
+  const selectedYear = filterYear;
   const rangeLabel = getRangeLabel(filterRange);
   const shouldShowSummaryLoader = isAnalyticsLoading;
 
@@ -320,6 +349,111 @@ function Analytics() {
     () => statusData.reduce((total, status) => total + status.value, 0),
     [statusData]
   );
+  const hasRevenueData = useMemo(
+    () => trendData.some((item) => Number(item.revenue) > 0),
+    [trendData]
+  );
+  const hasTopServicesData = useMemo(
+    () => topServicesData.some((item) => Number(item.bookings) > 0),
+    [topServicesData]
+  );
+  const hasStatusData = totalStatusAppointments > 0;
+
+  const openYearList = () => {
+    const selectedIndex = availableYears.findIndex(
+      (year) => String(year) === filterYear
+    );
+    setActiveYearIndex(selectedIndex >= 0 ? selectedIndex : 0);
+    setIsYearOpen(true);
+  };
+
+  const openRangeList = () => {
+    const selectedIndex = FILTER_RANGE_OPTIONS.findIndex(
+      (option) => option.value === filterRange
+    );
+    setActiveRangeIndex(selectedIndex >= 0 ? selectedIndex : 0);
+    setIsRevenueRangeOpen(true);
+  };
+
+  const selectYearByIndex = (index) => {
+    const year = availableYears[index];
+    if (year === undefined) return;
+
+    setFilterYear(String(year));
+    setIsYearOpen(false);
+  };
+
+  const selectRangeByIndex = (index) => {
+    const option = FILTER_RANGE_OPTIONS[index];
+    if (!option) return;
+
+    setFilterRange(option.value);
+    setIsRevenueRangeOpen(false);
+  };
+
+  const handleYearButtonKeyDown = (event) => {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+
+    event.preventDefault();
+    openYearList();
+  };
+
+  const handleRangeButtonKeyDown = (event) => {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+
+    event.preventDefault();
+    openRangeList();
+  };
+
+  const handleYearListKeyDown = (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setIsYearOpen(false);
+      return;
+    }
+
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      selectYearByIndex(activeYearIndex);
+      return;
+    }
+
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveYearIndex((index) =>
+        getNextOptionIndex(
+          index,
+          availableYears.length,
+          event.key === "ArrowDown" ? "next" : "previous"
+        )
+      );
+    }
+  };
+
+  const handleRangeListKeyDown = (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setIsRevenueRangeOpen(false);
+      return;
+    }
+
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      selectRangeByIndex(activeRangeIndex);
+      return;
+    }
+
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveRangeIndex((index) =>
+        getNextOptionIndex(
+          index,
+          FILTER_RANGE_OPTIONS.length,
+          event.key === "ArrowDown" ? "next" : "previous"
+        )
+      );
+    }
+  };
 
   useEffect(() => {
     const handleOutsideClick = (event) => {
@@ -340,6 +474,14 @@ function Analytics() {
   }, []);
 
   useEffect(() => {
+    if (isYearOpen) yearListRef.current?.focus();
+  }, [isYearOpen]);
+
+  useEffect(() => {
+    if (isRevenueRangeOpen) revenueRangeListRef.current?.focus();
+  }, [isRevenueRangeOpen]);
+
+  useEffect(() => {
     let isMounted = true;
 
     const fetchAnalytics = async () => {
@@ -356,62 +498,106 @@ function Analytics() {
           params: { year: filterYear, range: filterRange },
         };
 
-        const [
-          summaryResponse,
-          topServicesResponse,
-          statusResponse,
-          staffPerformanceResponse,
-        ] = await Promise.all([
-          axios.get(
-            `${BACKEND_BASE_URL}/api/dashboard/analytics-summary`,
-            config
-          ),
-          axios.get(
-            `${BACKEND_BASE_URL}/api/dashboard/top-services`,
-            config
-          ),
-          axios.get(
-            `${BACKEND_BASE_URL}/api/dashboard/appointment-status`,
-            config
-          ),
-          axios.get(
-            `${BACKEND_BASE_URL}/api/staff/performance`,
-            config
-          ),
-        ]);
+        const analyticsRequests = [
+          {
+            key: "summary",
+            label: "summary metrics",
+            request: axios.get(
+              `${BACKEND_BASE_URL}/api/dashboard/analytics-summary`,
+              config
+            ),
+          },
+          {
+            key: "topServices",
+            label: "top services",
+            request: axios.get(
+              `${BACKEND_BASE_URL}/api/dashboard/top-services`,
+              config
+            ),
+          },
+          {
+            key: "appointmentStatus",
+            label: "appointment status",
+            request: axios.get(
+              `${BACKEND_BASE_URL}/api/dashboard/appointment-status`,
+              config
+            ),
+          },
+          {
+            key: "staffPerformance",
+            label: "staff leaderboard",
+            request: axios.get(
+              `${BACKEND_BASE_URL}/api/staff/performance`,
+              config
+            ),
+          },
+        ];
+
+        const settledResponses = await Promise.allSettled(
+          analyticsRequests.map(({ request }) => request)
+        );
+
+        const responsesByKey = analyticsRequests.reduce((responses, request, index) => {
+          responses[request.key] = settledResponses[index];
+          return responses;
+        }, {});
 
         if (isMounted) {
-          const analyticsSummary = summaryResponse.data || {};
+          if (responsesByKey.summary.status === "fulfilled") {
+            const analyticsSummary = responsesByKey.summary.value.data || {};
+            const totalRevenue = Number(
+              analyticsSummary.totalRevenue ?? analyticsSummary.totalRevenueYTD
+            ) || 0;
 
-          setSummary({
-            revenue: Number(analyticsSummary.totalRevenueYTD) || 0,
-            appointments: Number(analyticsSummary.totalAppointments) || 0,
-            clients: Number(analyticsSummary.newClients) || 0,
-          });
-          setTrendData(
-            Array.isArray(analyticsSummary.revenueTrends)
-              ? analyticsSummary.revenueTrends
-              : []
-          );
-          setAvailableYears(
-            Array.isArray(analyticsSummary.availableYears) &&
-              analyticsSummary.availableYears.length > 0
-              ? analyticsSummary.availableYears
-              : [currentYear]
-          );
-          setTopServicesData(
-            Array.isArray(topServicesResponse.data)
-              ? topServicesResponse.data
-              : []
-          );
-          setStatusData(
-            normalizeAppointmentStatusData(statusResponse.data)
-          );
-          setStaffPerformanceData(
-            Array.isArray(staffPerformanceResponse.data)
-              ? staffPerformanceResponse.data
-              : []
-          );
+            setSummary({
+              revenue: totalRevenue,
+              appointments: Number(analyticsSummary.totalAppointments) || 0,
+              clients: Number(analyticsSummary.newClients) || 0,
+            });
+            setTrendData(
+              Array.isArray(analyticsSummary.revenueTrends)
+                ? analyticsSummary.revenueTrends
+                : []
+            );
+            setAvailableYears(
+              Array.isArray(analyticsSummary.availableYears) &&
+                analyticsSummary.availableYears.length > 0
+                ? analyticsSummary.availableYears
+                : [currentYear]
+            );
+          }
+
+          if (responsesByKey.topServices.status === "fulfilled") {
+            setTopServicesData(
+              Array.isArray(responsesByKey.topServices.value.data)
+                ? responsesByKey.topServices.value.data
+                : []
+            );
+          }
+
+          if (responsesByKey.appointmentStatus.status === "fulfilled") {
+            setStatusData(
+              normalizeAppointmentStatusData(responsesByKey.appointmentStatus.value.data)
+            );
+          }
+
+          if (responsesByKey.staffPerformance.status === "fulfilled") {
+            setStaffPerformanceData(
+              Array.isArray(responsesByKey.staffPerformance.value.data)
+                ? responsesByKey.staffPerformance.value.data
+                : []
+            );
+          }
+
+          const failedSections = analyticsRequests
+            .filter((request) => responsesByKey[request.key].status === "rejected")
+            .map((request) => request.label);
+
+          if (failedSections.length > 0) {
+            console.warn("Partial analytics fetch failure:", failedSections, responsesByKey);
+            toast.warn(`Some analytics could not be loaded: ${failedSections.join(", ")}.`);
+          }
+
           setHasLoadedAnalytics(true);
         }
       } catch (error) {
@@ -436,7 +622,7 @@ function Analytics() {
     return () => {
       isMounted = false;
     };
-  }, [filterRange, filterYear]);
+  }, [currentYear, filterRange, filterYear]);
 
   return (
     <div className="mx-auto w-full max-w-[1600px] space-y-6 sm:space-y-8">
@@ -457,7 +643,14 @@ function Analytics() {
           <div ref={yearRef} className="relative w-fit">
             <button
               type="button"
-              onClick={() => setIsYearOpen((isOpen) => !isOpen)}
+              onClick={() => {
+                if (isYearOpen) {
+                  setIsYearOpen(false);
+                } else {
+                  openYearList();
+                }
+              }}
+              onKeyDown={handleYearButtonKeyDown}
               className="flex min-h-10 items-center gap-2.5 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-neutral-300 transition hover:border-[#d4af37]/30 hover:text-white"
               aria-haspopup="listbox"
               aria-expanded={isYearOpen}
@@ -474,29 +667,42 @@ function Analytics() {
 
             {isYearOpen && (
               <div
+                ref={yearListRef}
                 className="absolute right-0 top-full z-30 mt-2 max-h-52 w-32 overflow-y-auto rounded-xl border border-white/10 bg-[#111]/95 p-1.5 shadow-2xl backdrop-blur-xl"
                 role="listbox"
                 aria-label="Analytics year"
+                aria-activedescendant={`analytics-year-option-${activeYearIndex}`}
+                tabIndex={-1}
+                onKeyDown={handleYearListKeyDown}
               >
-                {availableYears.map((year) => (
-                  <button
-                    key={year}
-                    type="button"
-                    onClick={() => {
-                      setFilterYear(String(year));
-                      setIsYearOpen(false);
-                    }}
-                    className={`w-full rounded-lg px-3.5 py-2.5 text-left text-sm transition ${
-                      filterYear === String(year)
-                        ? "bg-[#d4af37]/10 text-[#d4af37]"
-                        : "text-neutral-400 hover:bg-white/5 hover:text-white"
-                    }`}
-                    role="option"
-                    aria-selected={filterYear === String(year)}
-                  >
-                    {year}
-                  </button>
-                ))}
+                {availableYears.map((year, index) => {
+                  const isSelected = filterYear === String(year);
+                  const isActive = activeYearIndex === index;
+
+                  return (
+                    <button
+                      id={`analytics-year-option-${index}`}
+                      key={year}
+                      type="button"
+                      onClick={() => {
+                        setFilterYear(String(year));
+                        setIsYearOpen(false);
+                      }}
+                      onMouseEnter={() => setActiveYearIndex(index)}
+                      className={`w-full rounded-lg px-3.5 py-2.5 text-left text-sm transition ${
+                        isActive
+                          ? "bg-[#d4af37]/10 text-[#d4af37]"
+                          : isSelected
+                          ? "text-[#d4af37]"
+                          : "text-neutral-400 hover:bg-white/5 hover:text-white"
+                      }`}
+                      role="option"
+                      aria-selected={isSelected}
+                    >
+                      {year}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -504,7 +710,14 @@ function Analytics() {
           <div ref={revenueRangeRef} className="relative w-fit">
             <button
               type="button"
-              onClick={() => setIsRevenueRangeOpen((isOpen) => !isOpen)}
+              onClick={() => {
+                if (isRevenueRangeOpen) {
+                  setIsRevenueRangeOpen(false);
+                } else {
+                  openRangeList();
+                }
+              }}
+              onKeyDown={handleRangeButtonKeyDown}
               className="flex min-h-10 items-center gap-2.5 rounded-full border border-[#d4af37]/20 bg-[#d4af37]/10 px-4 py-2 text-sm font-semibold text-[#d4af37] transition hover:border-[#d4af37]/40 hover:bg-[#d4af37]/15"
               aria-haspopup="listbox"
               aria-expanded={isRevenueRangeOpen}
@@ -521,29 +734,42 @@ function Analytics() {
 
             {isRevenueRangeOpen && (
               <div
+                ref={revenueRangeListRef}
                 className="absolute right-0 top-full z-20 mt-2 w-44 overflow-hidden rounded-xl border border-white/10 bg-[#111]/95 p-1.5 shadow-2xl backdrop-blur-xl"
                 role="listbox"
                 aria-label="Analytics range"
+                aria-activedescendant={`analytics-range-option-${activeRangeIndex}`}
+                tabIndex={-1}
+                onKeyDown={handleRangeListKeyDown}
               >
-                {FILTER_RANGE_OPTIONS.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => {
-                      setFilterRange(option.value);
-                      setIsRevenueRangeOpen(false);
-                    }}
-                    className={`w-full rounded-lg px-3.5 py-2.5 text-left text-sm transition ${
-                      filterRange === option.value
-                        ? "bg-[#d4af37]/10 text-[#d4af37]"
-                        : "text-neutral-400 hover:bg-white/5 hover:text-white"
-                    }`}
-                    role="option"
-                    aria-selected={filterRange === option.value}
-                  >
-                    {option.label}
-                  </button>
-                ))}
+                {FILTER_RANGE_OPTIONS.map((option, index) => {
+                  const isSelected = filterRange === option.value;
+                  const isActive = activeRangeIndex === index;
+
+                  return (
+                    <button
+                      id={`analytics-range-option-${index}`}
+                      key={option.value}
+                      type="button"
+                      onClick={() => {
+                        setFilterRange(option.value);
+                        setIsRevenueRangeOpen(false);
+                      }}
+                      onMouseEnter={() => setActiveRangeIndex(index)}
+                      className={`w-full rounded-lg px-3.5 py-2.5 text-left text-sm transition ${
+                        isActive
+                          ? "bg-[#d4af37]/10 text-[#d4af37]"
+                          : isSelected
+                          ? "text-[#d4af37]"
+                          : "text-neutral-400 hover:bg-white/5 hover:text-white"
+                      }`}
+                      role="option"
+                      aria-selected={isSelected}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -591,80 +817,84 @@ function Analytics() {
         </div>
 
         <div className="mt-6 h-[350px] w-full min-w-0">
-          <ResponsiveContainer
-            width="100%"
-            height="100%"
-            minWidth={1}
-            minHeight={350}
-            initialDimension={{ width: 1, height: 350 }}
-          >
-            <AreaChart
-              data={trendData}
-              margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+          {!isAnalyticsLoading && !hasRevenueData ? (
+            <ChartEmptyState />
+          ) : (
+            <ResponsiveContainer
+              width="100%"
+              height="100%"
+              minWidth={1}
+              minHeight={350}
+              initialDimension={{ width: 1, height: 350 }}
             >
-              <defs>
-                <linearGradient
-                  id="analyticsRevenueGradient"
-                  x1="0"
-                  y1="0"
-                  x2="0"
-                  y2="1"
-                >
-                  <stop offset="5%" stopColor="#d4af37" stopOpacity={0.35} />
-                  <stop offset="95%" stopColor="#d4af37" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid
-                stroke="rgba(255,255,255,0.05)"
-                strokeDasharray="3 3"
-                vertical={false}
-              />
-              <XAxis
-                dataKey="month"
-                stroke="#737373"
-                tickLine={false}
-                axisLine={false}
-                interval={0}
-                minTickGap={isNarrowViewport ? 12 : 18}
-                padding={{ left: 4, right: isNarrowViewport ? 28 : 20 }}
-                tick={{ fill: "#a3a3a3", fontSize: isNarrowViewport ? 10 : 12 }}
-                tickMargin={10}
-                ticks={revenueXAxisTicks}
-              />
-              <YAxis
-                width={revenueYAxisWidth}
-                tickMargin={4}
-                stroke="#737373"
-                tickLine={false}
-                axisLine={false}
-                tick={{ fill: "#a3a3a3", fontSize: 12 }}
-                tickFormatter={formatRevenueAxis}
-              />
-              <Tooltip
-                contentStyle={tooltipStyle}
-                labelStyle={{ color: "#ffffff" }}
-                itemStyle={{ color: "#d4af37" }}
-                formatter={(value) => [
-                  `Rs. ${Number(value).toLocaleString()}`,
-                  "Revenue",
-                ]}
-              />
-              <Area
-                type="monotone"
-                dataKey="revenue"
-                stroke="#d4af37"
-                strokeWidth={2.5}
-                fill="url(#analyticsRevenueGradient)"
-                fillOpacity={1}
-                activeDot={{
-                  r: 5,
-                  fill: "#d4af37",
-                  stroke: "#111",
-                  strokeWidth: 2,
-                }}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
+              <AreaChart
+                data={trendData}
+                margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
+              >
+                <defs>
+                  <linearGradient
+                    id="analyticsRevenueGradient"
+                    x1="0"
+                    y1="0"
+                    x2="0"
+                    y2="1"
+                  >
+                    <stop offset="5%" stopColor="#d4af37" stopOpacity={0.35} />
+                    <stop offset="95%" stopColor="#d4af37" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid
+                  stroke="rgba(255,255,255,0.05)"
+                  strokeDasharray="3 3"
+                  vertical={false}
+                />
+                <XAxis
+                  dataKey="month"
+                  stroke="#737373"
+                  tickLine={false}
+                  axisLine={false}
+                  interval={0}
+                  minTickGap={isNarrowViewport ? 12 : 18}
+                  padding={{ left: 4, right: isNarrowViewport ? 28 : 20 }}
+                  tick={{ fill: "#a3a3a3", fontSize: isNarrowViewport ? 10 : 12 }}
+                  tickMargin={10}
+                  ticks={revenueXAxisTicks}
+                />
+                <YAxis
+                  width={revenueYAxisWidth}
+                  tickMargin={4}
+                  stroke="#737373"
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{ fill: "#a3a3a3", fontSize: 12 }}
+                  tickFormatter={formatRevenueAxis}
+                />
+                <Tooltip
+                  contentStyle={tooltipStyle}
+                  labelStyle={{ color: "#ffffff" }}
+                  itemStyle={{ color: "#d4af37" }}
+                  formatter={(value) => [
+                    `Rs. ${Number(value).toLocaleString()}`,
+                    "Revenue",
+                  ]}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="revenue"
+                  stroke="#d4af37"
+                  strokeWidth={2.5}
+                  fill="url(#analyticsRevenueGradient)"
+                  fillOpacity={1}
+                  activeDot={{
+                    r: 5,
+                    fill: "#d4af37",
+                    stroke: "#111",
+                    strokeWidth: 2,
+                  }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </GlassCard>
 
@@ -685,65 +915,69 @@ function Analytics() {
           </div>
 
           <div className="mt-6 h-[300px] w-full min-w-0">
-            <ResponsiveContainer
-              width="100%"
-              height="100%"
-              minWidth={1}
-              minHeight={300}
-              initialDimension={{ width: 1, height: 300 }}
-            >
-              <BarChart
-                data={topServicesData}
-                margin={{
-                  top: 12,
-                  right: isNarrowViewport ? 2 : 8,
-                  left: isNarrowViewport ? -28 : -18,
-                  bottom: isNarrowViewport ? 16 : 0,
-                }}
+            {!isAnalyticsLoading && !hasTopServicesData ? (
+              <ChartEmptyState />
+            ) : (
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+                minWidth={1}
+                minHeight={300}
+                initialDimension={{ width: 1, height: 300 }}
               >
-                <CartesianGrid
-                  stroke="rgba(255,255,255,0.05)"
-                  strokeDasharray="3 3"
-                  vertical={false}
-                />
-                <XAxis
-                  dataKey="name"
-                  stroke="#737373"
-                  tickLine={false}
-                  axisLine={false}
-                  tick={{
-                    fill: "#a3a3a3",
-                    fontSize: isNarrowViewport ? 10 : 12,
+                <BarChart
+                  data={topServicesData}
+                  margin={{
+                    top: 12,
+                    right: isNarrowViewport ? 2 : 8,
+                    left: isNarrowViewport ? -28 : -18,
+                    bottom: isNarrowViewport ? 16 : 0,
                   }}
-                  angle={isNarrowViewport ? -25 : 0}
-                  textAnchor={isNarrowViewport ? "end" : "middle"}
-                  height={isNarrowViewport ? 62 : 30}
-                  interval={0}
-                  tickFormatter={(value) =>
-                    compactAxisLabel(value, isNarrowViewport ? 8 : 14)
-                  }
-                />
-                <YAxis
-                  stroke="#737373"
-                  tickLine={false}
-                  axisLine={false}
-                  tick={{ fill: "#a3a3a3", fontSize: 12 }}
-                />
-                <Tooltip
-                  cursor={{ fill: "rgba(212, 175, 55, 0.05)" }}
-                  contentStyle={tooltipStyle}
-                  labelStyle={{ color: "#ffffff" }}
-                  itemStyle={{ color: "#d4af37" }}
-                  formatter={(value) => [value, "Bookings"]}
-                />
-                <Bar
-                  dataKey="bookings"
-                  fill="#d4af37"
-                  radius={[4, 4, 0, 0]}
-                  maxBarSize={64}
-                />
-              </BarChart>
-            </ResponsiveContainer>
+                >
+                  <CartesianGrid
+                    stroke="rgba(255,255,255,0.05)"
+                    strokeDasharray="3 3"
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="name"
+                    stroke="#737373"
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{
+                      fill: "#a3a3a3",
+                      fontSize: isNarrowViewport ? 10 : 12,
+                    }}
+                    angle={isNarrowViewport ? -25 : 0}
+                    textAnchor={isNarrowViewport ? "end" : "middle"}
+                    height={isNarrowViewport ? 62 : 30}
+                    interval={0}
+                    tickFormatter={(value) =>
+                      compactAxisLabel(value, isNarrowViewport ? 8 : 14)
+                    }
+                  />
+                  <YAxis
+                    stroke="#737373"
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fill: "#a3a3a3", fontSize: 12 }}
+                  />
+                  <Tooltip
+                    cursor={{ fill: "rgba(212, 175, 55, 0.05)" }}
+                    contentStyle={tooltipStyle}
+                    labelStyle={{ color: "#ffffff" }}
+                    itemStyle={{ color: "#d4af37" }}
+                    formatter={(value) => [value, "Bookings"]}
+                  />
+                  <Bar
+                    dataKey="bookings"
+                    fill="#d4af37"
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={64}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </GlassCard>
 
@@ -763,42 +997,47 @@ function Analytics() {
           </div>
 
           <div className="relative mt-6 h-[300px] w-full min-w-0">
-            <ResponsiveContainer
-              width="100%"
-              height="100%"
-              minWidth={1}
-              minHeight={300}
-              initialDimension={{ width: 1, height: 300 }}
-            >
-              <PieChart>
-                <Pie
-                  data={statusData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={90}
-                  paddingAngle={5}
-                  stroke="none"
-                >
-                  {statusData.map((entry) => (
-                    <Cell
-                      key={entry.name}
-                      fill={STATUS_COLORS[entry.name] || DEFAULT_STATUS_COLOR}
-                    />
-                  ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={tooltipStyle}
-                  labelStyle={{ color: "#ffffff" }}
-                  itemStyle={{ color: "#d4af37" }}
-                  formatter={(value) => [value, "Appointments"]}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+            {!isAnalyticsLoading && !hasStatusData ? (
+              <ChartEmptyState />
+            ) : (
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+                minWidth={1}
+                minHeight={300}
+                initialDimension={{ width: 1, height: 300 }}
+              >
+                <PieChart>
+                  <Pie
+                    data={statusData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={90}
+                    paddingAngle={5}
+                    stroke="none"
+                  >
+                    {statusData.map((entry) => (
+                      <Cell
+                        key={entry.name}
+                        fill={STATUS_COLORS[entry.name] || DEFAULT_STATUS_COLOR}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={tooltipStyle}
+                    labelStyle={{ color: "#ffffff" }}
+                    itemStyle={{ color: "#d4af37" }}
+                    formatter={(value) => [value, "Appointments"]}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
 
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            {hasStatusData && (
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
               <div className="text-center">
                 <p className="text-2xl font-bold text-white">
                   {totalStatusAppointments}
@@ -807,8 +1046,44 @@ function Analytics() {
                   Total
                 </p>
               </div>
-            </div>
+              </div>
+            )}
           </div>
+
+          <table className="sr-only">
+            <caption>
+              Appointment status distribution for {rangeLabel.toLowerCase()}.
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Status</th>
+                <th scope="col">Appointments</th>
+                <th scope="col">Percentage</th>
+              </tr>
+            </thead>
+            <tbody>
+              {statusData.length > 0 ? (
+                statusData.map((status) => (
+                  <tr key={status.name}>
+                    <th scope="row">{status.name}</th>
+                    <td>{status.value}</td>
+                    <td>
+                      {totalStatusAppointments > 0
+                        ? Math.round((status.value / totalStatusAppointments) * 100)
+                        : 0}
+                      %
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <th scope="row">No data</th>
+                  <td>0</td>
+                  <td>0%</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
 
           <div className="mt-2 flex flex-wrap justify-center gap-x-5 gap-y-2">
             {statusData.map((status) => (

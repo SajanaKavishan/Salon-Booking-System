@@ -3,6 +3,8 @@ import axios from 'axios';
 import { Check, Loader2, Sparkles, Star, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
+
 const getAppointmentId = (appointment) => appointment?._id || appointment?.id;
 
 const getStylistName = (appointment) => {
@@ -59,7 +61,7 @@ function AppointmentReviewModal({ appointment, user, onClose, onReviewSubmitted 
       const token = localStorage.getItem('token');
 
       const response = await axios.post(
-        `http://localhost:5000/api/appointments/${appointmentId}/review`,
+        `${API_BASE_URL}/api/appointments/${appointmentId}/review`,
         {
           rating,
           feedback,

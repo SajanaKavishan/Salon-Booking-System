@@ -778,6 +778,10 @@ const submitAppointmentReview = async (req, res) => {
             return res.status(400).json({ message: 'Only completed appointments can be reviewed.' });
         }
 
+        if (appointment.rating != null) {
+            return res.status(400).json({ message: 'This appointment has already been reviewed.' });
+        }
+
         const isFiveStarReview = numericRating === 5;
         const preferredStylist = appointment.stylist || appointment.staffId;
 
@@ -854,6 +858,10 @@ const toggleReviewApproval = async (req, res) => {
 
         if (!appointment) {
             return res.status(404).json({ message: 'Appointment not found.' });
+        }
+
+        if (appointment.rating == null) {
+            return res.status(400).json({ message: 'This appointment does not have a review to moderate.' });
         }
 
         appointment.isReviewApproved = !appointment.isReviewApproved;

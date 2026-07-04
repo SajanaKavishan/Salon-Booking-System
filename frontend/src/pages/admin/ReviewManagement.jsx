@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import { Check, Globe, Loader2, Star, Trash2 } from 'lucide-react';
+import { AlertTriangle, Check, Globe, Loader2, Star, Trash2, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
 
 const formatDateTime = (dateValue) => {
   if (!dateValue) return 'Date unavailable';
@@ -63,13 +63,14 @@ function ReviewManagement() {
   const [isLoading, setIsLoading] = useState(true);
   const [updatingReviewId, setUpdatingReviewId] = useState(null);
   const [deletingReviewId, setDeletingReviewId] = useState(null);
+  const [reviewPendingDelete, setReviewPendingDelete] = useState(null);
 
   const authConfig = useMemo(() => {
     const token = localStorage.getItem('token');
     return token ? { headers: { Authorization: `Bearer ${token}` } } : null;
   }, []);
 
-  const fetchReviews = useCallback(async () => {
+  const fetchReviews = useCallback(async (signal) => {
     if (!authConfig) {
       toast.error('Please log in again to manage reviews.');
       setIsLoading(false);
@@ -77,18 +78,31 @@ function ReviewManagement() {
     }
 
     try {
-      const response = await axios.get(`${API_BASE_URL}/appointments/reviews/all`, authConfig);
+      const response = await axios.get(`${API_BASE_URL}/api/appointments/reviews/all`, {
+        ...authConfig,
+        signal,
+      });
       setReviews(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
+      if (axios.isCancel(error) || error.name === 'CanceledError') return;
+
       console.error('Fetch Reviews Error:', error);
       toast.error(error.response?.data?.message || 'Could not load appointment reviews.');
     } finally {
-      setIsLoading(false);
+      if (!signal?.aborted) {
+        setIsLoading(false);
+      }
     }
   }, [authConfig]);
 
   useEffect(() => {
-    fetchReviews();
+    const controller = new AbortController();
+
+    fetchReviews(controller.signal);
+
+    return () => {
+      controller.abort();
+    };
   }, [fetchReviews]);
 
   const groupedReviews = useMemo(() => {
@@ -116,7 +130,7 @@ function ReviewManagement() {
 
     try {
       const response = await axios.put(
-        `${API_BASE_URL}/appointments/${reviewId}/review-approve`,
+        `${API_BASE_URL}/api/appointments/${reviewId}/review-approve`,
         {},
         authConfig
       );
@@ -127,7 +141,6 @@ function ReviewManagement() {
       )));
 
       toast.success('Review status updated!');
-      fetchReviews();
     } catch (error) {
       console.error('Toggle Review Approval Error:', error);
       toast.error(error.response?.data?.message || 'Could not update review status.');
@@ -142,11 +155,11 @@ function ReviewManagement() {
     setDeletingReviewId(reviewId);
 
     try {
-      await axios.delete(`${API_BASE_URL}/appointments/${reviewId}/review`, authConfig);
+      await axios.delete(`${API_BASE_URL}/api/appointments/${reviewId}/review`, authConfig);
 
       setReviews((currentReviews) => currentReviews.filter((review) => getReviewId(review) !== reviewId));
+      setReviewPendingDelete(null);
       toast.success('Review deleted');
-      fetchReviews();
     } catch (error) {
       console.error('Delete Review Error:', error);
       toast.error(error.response?.data?.message || 'Could not delete review.');
@@ -154,6 +167,9 @@ function ReviewManagement() {
       setDeletingReviewId(null);
     }
   };
+
+  const pendingDeleteReviewId = getReviewId(reviewPendingDelete);
+  const pendingDeleteClientName = reviewPendingDelete?.user?.name || 'this client';
 
   return (
     <div className="min-h-full bg-zinc-950 text-zinc-100">
@@ -296,7 +312,7 @@ function ReviewManagement() {
                               )}
                             </div>
 
-                            <blockquote className="mt-5 rounded-xl border-l-2 border-amber-500/45 bg-zinc-950/70 px-4 py-4 text-sm leading-6 text-zinc-300">
+                            <blockquote className="mt-5 line-clamp-3 rounded-xl border-l-2 border-amber-500/45 bg-zinc-950/70 px-4 py-4 text-sm leading-6 text-zinc-300">
                               {review?.feedback?.trim() || 'No written feedback provided.'}
                             </blockquote>
 
@@ -305,12 +321,12 @@ function ReviewManagement() {
                             </div>
                           </div>
 
-                          <div className="mt-6 flex flex-col gap-3 border-t border-zinc-800/80 pt-5 sm:flex-row">
+                          <div className="mt-6 flex flex-col gap-3 border-t border-zinc-800/80 pt-5 xl:flex-row">
                             <button
                               type="button"
                               onClick={() => handleToggleApproval(reviewId)}
                               disabled={isUpdating || isDeleting}
-                              className={`px-4 py-2 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60 ${
+                              className={`flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60 xl:flex-1 ${
                                 isApproved
                                   ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200'
                                   : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/10'
@@ -328,9 +344,9 @@ function ReviewManagement() {
 
                             <button
                               type="button"
-                              onClick={() => handleDelete(reviewId)}
+                              onClick={() => setReviewPendingDelete(review)}
                               disabled={isDeleting || isUpdating}
-                              className="px-4 py-2 rounded-xl text-sm font-semibold bg-red-500/10 hover:bg-red-600 border border-red-500/20 text-red-400 hover:text-white flex items-center justify-center gap-2 transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-60"
+                              className="flex w-full items-center justify-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-400 transition-all duration-200 hover:bg-red-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-60 xl:flex-1"
                             >
                               {isDeleting ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -350,6 +366,75 @@ function ReviewManagement() {
           </div>
         )}
       </div>
+
+      {reviewPendingDelete && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm"
+          role="presentation"
+          onClick={() => {
+            if (!deletingReviewId) setReviewPendingDelete(null);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-review-title"
+            aria-describedby="delete-review-description"
+            className="w-full max-w-md rounded-2xl border border-red-500/20 bg-zinc-950 p-5 text-zinc-100 shadow-2xl shadow-black/40 sm:p-6"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start gap-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-red-500/25 bg-red-500/10 text-red-300">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <h2 id="delete-review-title" className="text-lg font-semibold text-white">
+                  Delete review?
+                </h2>
+                <p id="delete-review-description" className="mt-2 text-sm leading-6 text-zinc-400">
+                  This will permanently remove the rating and feedback from {pendingDeleteClientName}'s appointment.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setReviewPendingDelete(null)}
+                disabled={Boolean(deletingReviewId)}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-white/5 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label="Cancel delete review"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setReviewPendingDelete(null)}
+                disabled={Boolean(deletingReviewId)}
+                className="inline-flex min-h-11 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-sm font-semibold text-zinc-200 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleDelete(pendingDeleteReviewId)}
+                disabled={Boolean(deletingReviewId)}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 text-sm font-semibold text-white shadow-lg shadow-red-950/30 transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {deletingReviewId === pendingDeleteReviewId ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+                Delete Review
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
