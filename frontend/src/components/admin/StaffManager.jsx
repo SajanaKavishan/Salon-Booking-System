@@ -5,6 +5,15 @@ import { FaEye, FaEyeSlash } from "react-icons/fa";
 import { useSearchParams } from "react-router-dom";
 import { GlassCard, GoldButton } from "./SystemUI";
 
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000").replace(/\/$/, "");
+const currentYear = new Date().getFullYear();
+const leaveYearOptions = Array.from({ length: 5 }, (_, index) => currentYear - 2 + index);
+
+const getAuthHeaders = () => {
+  const token = localStorage.getItem("token");
+  return token ? { headers: { Authorization: `Bearer ${token}` } } : undefined;
+};
+
 function StaffManager() {
   const fieldClassName = "w-full bg-black/50 border border-gray-700 rounded-lg p-3 text-white focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] outline-none transition-all";
   const minimalSelectClassName = "w-full bg-transparent text-white border-b border-zinc-700 rounded-none px-2 py-1.5 text-sm font-medium outline-none transition focus:border-[#c5a880] sm:w-auto sm:py-1";
@@ -18,7 +27,7 @@ function StaffManager() {
   const [imagePreview, setImagePreview] = useState("");
   const [isAddingStaff, setIsAddingStaff] = useState(false);
   const [stylistFilter, setStylistFilter] = useState("all");
-  const [yearFilter, setYearFilter] = useState("2026");
+  const [yearFilter, setYearFilter] = useState(String(currentYear));
   const fileInputRef = useRef(null);
   const [activeMenuId, setActiveMenuId] = useState(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -30,7 +39,7 @@ function StaffManager() {
   useEffect(() => {
     let isActive = true;
     axios
-      .get("http://localhost:5000/api/staff")
+      .get(`${API_BASE_URL}/api/staff`)
       .then((response) => {
         if (isActive) setStaffList(response.data);
       })
@@ -42,9 +51,7 @@ function StaffManager() {
     let isActive = true;
     const loadLeaveRequests = async () => {
       try {
-        const token = localStorage.getItem("token");
-        const authHeaders = token ? { headers: { Authorization: `Bearer ${token}` } } : undefined;
-        const response = await axios.get("http://localhost:5000/api/leaves", authHeaders);
+        const response = await axios.get(`${API_BASE_URL}/api/leaves`, getAuthHeaders());
         if (isActive) setLeaveRequests(Array.isArray(response.data) ? response.data : []);
       } catch (error) {
         toast.error(error.response?.data?.message || "Failed to load leave requests");
@@ -155,11 +162,10 @@ function StaffManager() {
 
     setIsAddingStaff(true);
     try {
-      const token = localStorage.getItem("token");
-      const authHeaders = token ? { headers: { Authorization: `Bearer ${token}` } } : undefined;
+      const authHeaders = getAuthHeaders();
 
       const registerResponse = await axios.post(
-        "http://localhost:5000/api/users/register-staff",
+        `${API_BASE_URL}/api/users/register-staff`,
         {
           name: formData.name,
           email: formData.email,
@@ -175,8 +181,7 @@ function StaffManager() {
       payload.append("name", formData.name);
       payload.append("specialty", formData.specialty);
       if (formData.offDays) {
-        // Convert offDays array to JSON string before appending to FormData
-        payload.append("offDays", JSON.stringify(formData.offDays));
+        payload.append("offDays", formData.offDays);
       }
 
       if (selectedImage) {
@@ -187,7 +192,7 @@ function StaffManager() {
         payload.append("workingHours", formData.workingHours);
       }
 
-      const response = await axios.post("http://localhost:5000/api/staff", payload);
+      const response = await axios.post(`${API_BASE_URL}/api/staff`, payload, authHeaders);
       setStaffList((currentStaff) => [...currentStaff, response.data]);
       setFormData({ name: "", email: "", password: "", specialty: "", offDays: "", workingHours: "" });
       clearSelectedImage();
@@ -203,7 +208,7 @@ function StaffManager() {
     if (!itemToDelete) return;
 
     try {
-      await axios.delete(`http://localhost:5000/api/staff/${itemToDelete}`);
+      await axios.delete(`${API_BASE_URL}/api/staff/${itemToDelete}`, getAuthHeaders());
       setStaffList((currentStaff) => currentStaff.filter((staff) => staff._id !== itemToDelete));
       toast.success("Staff member removed!");
       setActiveMenuId(null);
@@ -228,7 +233,7 @@ function StaffManager() {
   const handleUpdateStaff = async (e) => {
     e.preventDefault();
     try {
-      const response = await axios.put(`http://localhost:5000/api/staff/${editingId}`, editData);
+      const response = await axios.put(`${API_BASE_URL}/api/staff/${editingId}`, editData, getAuthHeaders());
       setStaffList((currentStaff) => currentStaff.map((staff) => (staff._id === editingId ? response.data : staff)));
       setIsEditModalOpen(false);
       toast.success("Staff updated successfully!");
@@ -270,46 +275,63 @@ function StaffManager() {
         <>
           <section className="rounded-2xl border border-white/10 bg-[#111111]/70 p-6 shadow-xl backdrop-blur-md">
         <form onSubmit={handleAddStaff} className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-          <input type="text" name="name" placeholder="Name" value={formData.name} onChange={handleInputChange} required className={fieldClassName} />
-          <input type="email" name="email" placeholder="Email Address" value={formData.email} onChange={handleInputChange} required className={fieldClassName} autoComplete="email" />
-          <div className="relative">
-            <input
-              type={showPassword ? "text" : "password"}
-              name="password"
-              placeholder="Temporary Password"
-              value={formData.password}
-              onChange={handleInputChange}
-              required
-              className={`${fieldClassName} pr-12`}
-              autoComplete="new-password"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword((prev) => !prev)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#d4af37] transition-colors hover:text-yellow-400"
-              aria-label={showPassword ? "Hide temporary password" : "Show temporary password"}
-            >
-              {showPassword ? <FaEyeSlash size={18} /> : <FaEye size={18} />}
-            </button>
+          <div>
+            <label htmlFor="staff-name" className="mb-1 block text-xs font-medium text-gray-400">Name</label>
+            <input id="staff-name" type="text" name="name" placeholder="Name" value={formData.name} onChange={handleInputChange} required className={fieldClassName} />
           </div>
-          <select name="specialty" value={formData.specialty} onChange={handleInputChange} required className={fieldClassName}>
-            <option value="" disabled className="bg-[#111111] text-gray-500">Select Specialty</option>
-            {specialtyOptions.map((option) => (
-              <option key={option} value={option} className="bg-[#111111]">{option}</option>
-            ))}
-          </select>
+          <div>
+            <label htmlFor="staff-email" className="mb-1 block text-xs font-medium text-gray-400">Email Address</label>
+            <input id="staff-email" type="email" name="email" placeholder="Email Address" value={formData.email} onChange={handleInputChange} required className={fieldClassName} autoComplete="email" />
+          </div>
+          <div>
+            <label htmlFor="staff-password" className="mb-1 block text-xs font-medium text-gray-400">Temporary Password</label>
+            <div className="relative">
+              <input
+                id="staff-password"
+                type={showPassword ? "text" : "password"}
+                name="password"
+                placeholder="Temporary Password"
+                value={formData.password}
+                onChange={handleInputChange}
+                required
+                className={`${fieldClassName} pr-12`}
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#d4af37] transition-colors hover:text-yellow-400"
+                aria-label={showPassword ? "Hide temporary password" : "Show temporary password"}
+              >
+                {showPassword ? <FaEyeSlash size={18} /> : <FaEye size={18} />}
+              </button>
+            </div>
+          </div>
+          <div>
+            <label htmlFor="staff-specialty" className="mb-1 block text-xs font-medium text-gray-400">Specialty</label>
+            <select id="staff-specialty" name="specialty" value={formData.specialty} onChange={handleInputChange} required className={fieldClassName}>
+              <option value="" disabled className="bg-[#111111] text-gray-500">Select Specialty</option>
+              {specialtyOptions.map((option) => (
+                <option key={option} value={option} className="bg-[#111111]">{option}</option>
+              ))}
+            </select>
+          </div>
 
-          <select name="workingHours" value={formData.workingHours} onChange={handleInputChange} required className={fieldClassName}>
-            <option value="" disabled className="bg-[#111111] text-gray-500">Select Working Hours</option>
-            <option value="09:00 AM - 05:00 PM" className="bg-[#111111]">09:00 AM - 05:00 PM</option>
-            <option value="10:00 AM - 06:00 PM" className="bg-[#111111]">10:00 AM - 06:00 PM</option>
-            <option value="11:00 AM - 07:00 PM" className="bg-[#111111]">11:00 AM - 07:00 PM</option>
-            <option value="12:00 PM - 08:00 PM" className="bg-[#111111]">12:00 PM - 08:00 PM</option>
-          </select>
+          <div>
+            <label htmlFor="staff-working-hours" className="mb-1 block text-xs font-medium text-gray-400">Working Hours</label>
+            <select id="staff-working-hours" name="workingHours" value={formData.workingHours} onChange={handleInputChange} required className={fieldClassName}>
+              <option value="" disabled className="bg-[#111111] text-gray-500">Select Working Hours</option>
+              <option value="09:00 AM - 05:00 PM" className="bg-[#111111]">09:00 AM - 05:00 PM</option>
+              <option value="10:00 AM - 06:00 PM" className="bg-[#111111]">10:00 AM - 06:00 PM</option>
+              <option value="11:00 AM - 07:00 PM" className="bg-[#111111]">11:00 AM - 07:00 PM</option>
+              <option value="12:00 PM - 08:00 PM" className="bg-[#111111]">12:00 PM - 08:00 PM</option>
+            </select>
+          </div>
 
           <div className="flex-1">
-            <label className="block text-xs font-medium text-gray-400 mb-1">Weekly Off Day (Optional)</label>
+            <label htmlFor="staff-off-day" className="block text-xs font-medium text-gray-400 mb-1">Weekly Off Day (Optional)</label>
             <select
+              id="staff-off-day"
               name="offDays"
               value={formData.offDays}
               onChange={(e) => setFormData({ ...formData, offDays: e.target.value })}
@@ -327,34 +349,25 @@ function StaffManager() {
           </div>
 
           <div className="md:col-span-2 xl:col-span-3">
-            <div
-              onClick={() => fileInputRef.current?.click()}
+            <input
+              id="staff-image"
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileInputChange}
+              className="hidden"
+            />
+            <label
+              htmlFor="staff-image"
               onDrop={handleDrop}
               onDragOver={handleDragOver}
               className="flex min-h-[180px] cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-600 bg-black/30 px-6 py-6 text-center text-sm text-gray-300 transition hover:border-[#d4af37] hover:bg-black/40"
             >
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleFileInputChange}
-                className="hidden"
-              />
               {imagePreview ? (
                 <div className="flex flex-col items-center">
                   <img src={imagePreview} alt="Staff preview" className="h-24 w-24 rounded-full border border-[#d4af37]/40 object-cover" />
                   <p className="mt-4 font-medium text-white">Image selected</p>
                   <p className="mt-1 max-w-xs truncate text-xs text-gray-400">{selectedImage?.name}</p>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      clearSelectedImage();
-                    }}
-                    className="mt-3 text-xs text-[#d4af37] hover:text-yellow-400"
-                  >
-                    Remove image
-                  </button>
                 </div>
               ) : (
                 <>
@@ -367,7 +380,16 @@ function StaffManager() {
                   <p className="mt-1 text-xs text-gray-400">or click to choose a file from your device</p>
                 </>
               )}
-            </div>
+            </label>
+            {imagePreview && (
+              <button
+                type="button"
+                onClick={clearSelectedImage}
+                className="mx-auto mt-3 block text-xs text-[#d4af37] hover:text-yellow-400"
+              >
+                Remove image
+              </button>
+            )}
           </div>
 
           <div className="md:col-span-2 xl:col-span-3">
@@ -505,7 +527,11 @@ function StaffManager() {
               <label className="flex w-full flex-col gap-1 text-xs font-bold uppercase tracking-[0.18em] text-zinc-500 sm:w-auto sm:flex-row sm:items-center sm:gap-2">
                 Year
                 <select value={yearFilter} onChange={(event) => setYearFilter(event.target.value)} className={minimalSelectClassName}>
-                  <option value="2026" className="bg-[#111111]">2026</option>
+                  {leaveYearOptions.map((year) => (
+                    <option key={year} value={String(year)} className="bg-[#111111]">
+                      {year}
+                    </option>
+                  ))}
                 </select>
               </label>
             </div>
@@ -520,8 +546,8 @@ function StaffManager() {
               <div key={leave._id} className="border-b border-zinc-800/60 pb-4 last:border-b-0">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex min-w-0 items-center gap-3">
-                    {leave.staffId?.imageUrl ? (
-                      <img src={leave.staffId.imageUrl} alt={leave.staffId.name || "Staff member"} className="h-10 w-10 rounded-full object-cover" />
+                    {leave.staffId?.profileImage ? (
+                      <img src={leave.staffId.profileImage} alt={leave.staffId.name || "Staff member"} className="h-10 w-10 rounded-full object-cover" />
                     ) : (
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-gray-300">
                         {leave.staffId?.name?.charAt(0).toUpperCase() || "?"}
@@ -569,8 +595,8 @@ function StaffManager() {
                   <tr key={leave._id} className="border-b border-zinc-800/60 transition-colors last:border-b-0 hover:bg-white/[0.025]">
                     <td className="py-4 pr-6 align-middle">
                       <div className="flex items-center gap-3">
-                        {leave.staffId?.imageUrl ? (
-                          <img src={leave.staffId.imageUrl} alt={leave.staffId.name || "Staff member"} className="h-9 w-9 rounded-full object-cover" />
+                        {leave.staffId?.profileImage ? (
+                          <img src={leave.staffId.profileImage} alt={leave.staffId.name || "Staff member"} className="h-9 w-9 rounded-full object-cover" />
                         ) : (
                           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-gray-300">
                             {leave.staffId?.name?.charAt(0).toUpperCase() || "?"}
@@ -602,18 +628,29 @@ function StaffManager() {
 
       {isEditModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 backdrop-blur-sm">
-          <GlassCard className="relative w-full max-w-md border-t-4 border-t-[#d4af37] bg-[#111111] p-8">
+          <GlassCard
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-staff-title"
+            className="relative w-full max-w-md border-t-4 border-t-[#d4af37] bg-[#111111] p-8"
+          >
             <button type="button" onClick={() => setIsEditModalOpen(false)} className="absolute right-4 top-4 text-xl text-gray-400 hover:text-white">
               x
             </button>
-            <h3 className="salon-heading mb-6 border-b border-white/10 pb-4">Edit Staff Member</h3>
+            <h3 id="edit-staff-title" className="salon-heading mb-6 border-b border-white/10 pb-4">Edit Staff Member</h3>
             <form onSubmit={handleUpdateStaff} className="flex flex-col gap-4">
-              <input type="text" name="name" placeholder="Name" value={editData.name} onChange={handleEditInputChange} required className={fieldClassName} />
-              <select name="specialty" value={editData.specialty} onChange={handleEditInputChange} required className={fieldClassName}>
-                {specialtyOptions.map((option) => (
-                  <option key={option} value={option} className="bg-[#111111]">{option}</option>
-                ))}
-              </select>
+              <div>
+                <label htmlFor="edit-staff-name" className="mb-1 block text-xs font-medium text-gray-400">Name</label>
+                <input id="edit-staff-name" type="text" name="name" placeholder="Name" value={editData.name} onChange={handleEditInputChange} required className={fieldClassName} />
+              </div>
+              <div>
+                <label htmlFor="edit-staff-specialty" className="mb-1 block text-xs font-medium text-gray-400">Specialty</label>
+                <select id="edit-staff-specialty" name="specialty" value={editData.specialty} onChange={handleEditInputChange} required className={fieldClassName}>
+                  {specialtyOptions.map((option) => (
+                    <option key={option} value={option} className="bg-[#111111]">{option}</option>
+                  ))}
+                </select>
+              </div>
               <div className="mt-4 flex justify-end gap-3">
                 <GoldButton type="button" variant="ghost" onClick={() => setIsEditModalOpen(false)} className="bg-gray-800 px-4 py-2 text-white hover:bg-gray-700 hover:text-white">
                   Cancel
@@ -629,8 +666,13 @@ function StaffManager() {
 
       {isDeleteModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm">
-          <GlassCard className="mx-4 w-full max-w-sm border-t-4 border-t-red-600 bg-[#111111] p-6">
-            <h4 className="mb-3 text-xl font-semibold text-white">Delete Staff Member</h4>
+          <GlassCard
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-staff-title"
+            className="mx-4 w-full max-w-sm border-t-4 border-t-red-600 bg-[#111111] p-6"
+          >
+            <h4 id="delete-staff-title" className="mb-3 text-xl font-semibold text-white">Delete Staff Member</h4>
             <p className="mb-6 text-gray-400">Are you sure you want to delete this? This action cannot be undone.</p>
             <div className="flex items-center justify-end gap-3">
               <GoldButton

@@ -1,4 +1,6 @@
+const mongoose = require('mongoose');
 const Staff = require('../models/Staff');
+const User = require('../models/User');
 const { aggregateStaffPerformance } = require('./analyticsController');
 const {
   normalizeOffDays,
@@ -37,6 +39,22 @@ const addStaff = async (req, res) => {
     
     if (!name || !specialty) {
       return res.status(400).json({ message: 'Please add all fields' });
+    }
+
+    if (userId) {
+      if (!mongoose.isValidObjectId(userId)) {
+        return res.status(400).json({ message: 'Please provide a valid linked user ID.' });
+      }
+
+      const linkedUser = await User.findOne({ _id: userId, role: 'staff' }).select('_id');
+      if (!linkedUser) {
+        return res.status(400).json({ message: 'Linked staff user account was not found.' });
+      }
+
+      const existingStaffProfile = await Staff.findOne({ userId }).select('_id');
+      if (existingStaffProfile) {
+        return res.status(409).json({ message: 'A staff profile already exists for this user account.' });
+      }
     }
     
     const imageUrl = req.file?.path || '';
@@ -93,14 +111,40 @@ const updateStaff = async (req, res) => {
 // @desc    Delete a staff member (Admin only)
 // @route   DELETE /api/staff/:id
 const deleteStaff = async (req, res) => {
+  const session = await mongoose.startSession();
+
   try {
-    const staff = await Staff.findByIdAndDelete(req.params.id);
-    if (!staff) {
+    let deletedStaff = null;
+    let deletedUserId = null;
+
+    await session.withTransaction(async () => {
+      deletedStaff = await Staff.findByIdAndDelete(req.params.id, { session });
+
+      if (!deletedStaff) {
+        return;
+      }
+
+      if (deletedStaff.userId) {
+        await User.findByIdAndDelete(deletedStaff.userId, { session });
+        deletedUserId = deletedStaff.userId;
+      }
+    });
+
+    if (!deletedStaff) {
       return res.status(404).json({ message: 'Staff member not found' });
     }
-    res.status(200).json({ id: req.params.id, message: 'Staff member deleted' });
+
+    res.status(200).json({
+      id: req.params.id,
+      userId: deletedUserId,
+      message: deletedUserId
+        ? 'Staff member and linked user account deleted'
+        : 'Staff member deleted',
+    });
   } catch (error) {
     res.status(500).json({ message: error.message });
+  } finally {
+    await session.endSession();
   }
 };
 

@@ -2,9 +2,10 @@ const express = require('express');
 const router = express.Router();
 const { getStaff, getStaffPerformance, addStaff, updateStaff, deleteStaff } = require('../controllers/staffController');
 const uploadStaffImage = require('../middleware/uploadStaffImage');
+const { protect, admin } = require('../middleware/authMiddleware');
 
-router.route('/').get(getStaff).post(uploadStaffImage.single('image'), addStaff);
+router.route('/').get(getStaff).post(protect, admin, uploadStaffImage.single('image'), addStaff);
 router.get('/performance', getStaffPerformance);
-router.route('/:id').put(updateStaff).delete(deleteStaff);
+router.route('/:id').put(protect, admin, updateStaff).delete(protect, admin, deleteStaff);
 
 module.exports = router;

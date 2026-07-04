@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const Staff = require('../models/Staff');
 const sendEmail = require('../utils/sendEmail');
@@ -23,6 +24,8 @@ const generateToken = (user) => {
 };
 
 const registerStaff = async (req, res) => {
+  const session = await mongoose.startSession();
+
   try {
     const { name, email, password, specialty, offDays, workingHours } = req.body;
 
@@ -38,25 +41,29 @@ const registerStaff = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    const staffUser = await User.create({
-      name,
-      email: email.toLowerCase(),
-      password: hashedPassword,
-      role: 'staff',
-      phone: req.body.phone || 'Not Provided'
-    });
-
+    let staffUser = null;
     let staffProfile = null;
-    if (specialty) {
-      staffProfile = await Staff.create({
+
+    await session.withTransaction(async () => {
+      staffUser = await User.create([{
+        name,
+        email: email.toLowerCase(),
+        password: hashedPassword,
+        role: 'staff',
+        phone: req.body.phone || 'Not Provided'
+      }], { session }).then((users) => users[0]);
+
+      if (!specialty) return;
+
+      staffProfile = await Staff.create([{
         userId: staffUser._id,
         name: staffUser.name,
         imageUrl: req.body.imageUrl || req.body.profileImage || '',
         specialty,
         offDays: normalizeOffDays(offDays),
         workingHours: normalizeWorkingHours(workingHours),
-      });
-    }
+      }], { session }).then((staffProfiles) => staffProfiles[0]);
+    });
 
     return res.status(201).json({
       _id: staffUser._id,
@@ -67,6 +74,8 @@ const registerStaff = async (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({ message: error.message });
+  } finally {
+    await session.endSession();
   }
 };
 

@@ -70,7 +70,7 @@ const getLeaveRequests = async (req, res) => {
             // For any other roles or default, match their staffId
             query.staffId = req.user._id;
         }
-        const leaves = await LeaveRequest.find(query).populate('staffId', 'name imageUrl').sort({ createdAt: -1 });
+        const leaves = await LeaveRequest.find(query).populate('staffId', 'name profileImage imageUrl').sort({ createdAt: -1 });
         res.status(200).json(leaves);
     } catch (error) {
         console.error('Error fetching leave requests:', error);
