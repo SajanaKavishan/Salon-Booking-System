@@ -46,6 +46,11 @@ const adminSidebarItems = [
     icon: 'M4 5h16v14H4V5Zm3 10 3.2-3.2a1 1 0 0 1 1.4 0L14 14.2l1.2-1.2a1 1 0 0 1 1.4 0L20 16.4M8.5 9.5h.01'
   },
   {
+    label: 'Messages',
+    to: '/admin/messages',
+    icon: 'M4 5h16v11H7l-3 3V5Z'
+  },
+  {
     label: 'Settings',
     to: '/admin/settings',
     icon: 'M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM19.4 15a1 1 0 0 0 .2 1.1l.1.1a1 1 0 0 1 0 1.4l-1.1 1.1a1 1 0 0 1-1.4 0l-.1-.1a1 1 0 0 0-1.1-.2 1 1 0 0 0-.6.9V20a1 1 0 0 1-1 1h-1.8a1 1 0 0 1-1-1v-.2a1 1 0 0 0-.6-.9 1 1 0 0 0-1.1.2l-.1.1a1 1 0 0 1-1.4 0l-1.1-1.1a1 1 0 0 1 0-1.4l.1-.1a1 1 0 0 0 .2-1.1 1 1 0 0 0-.9-.6H4a1 1 0 0 1-1-1v-1.8a1 1 0 0 1 1-1h.2a1 1 0 0 0 .9-.6 1 1 0 0 0-.2-1.1l-.1-.1a1 1 0 0 1 0-1.4l1.1-1.1a1 1 0 0 1 1.4 0l.1.1a1 1 0 0 0 1.1.2 1 1 0 0 0 .6-.9V4a1 1 0 0 1 1-1h1.8a1 1 0 0 1 1 1v.2a1 1 0 0 0 .6.9 1 1 0 0 0 1.1-.2l.1-.1a1 1 0 0 1 1.4 0l1.1 1.1a1 1 0 0 1 0 1.4l-.1.1a1 1 0 0 0-.2 1.1 1 1 0 0 0 .9.6H20a1 1 0 0 1 1 1v1.8a1 1 0 0 1-1 1h-.2a1 1 0 0 0-.9.6Z'
@@ -159,11 +164,6 @@ function Sidebar({ isOpen = false, onClose = () => { } }) {
     navigate('/');
   };
 
-  const handleNavigate = (to) => {
-    onClose();
-    navigate(to);
-  };
-
   return (
     <aside
       className={`fixed inset-y-0 left-0 z-40 w-[min(18rem,calc(100vw-2rem))] border-r border-white/10 bg-[#0d1117] text-white shadow-2xl shadow-black/30 transition-transform duration-300 ease-out md:w-80 md:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'
@@ -245,31 +245,10 @@ function Sidebar({ isOpen = false, onClose = () => { } }) {
         </div>
 
         <div className="shrink-0 border-t border-neutral-800 px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-7">
-          {userRole === 'admin' && (
-            <motion.button
-              type="button"
-              onClick={() => handleNavigate('/admin/messages')}
-              className="group flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold tracking-[0.18em] text-neutral-400 transition-colors duration-300 hover:bg-white/5 hover:text-[#D4AF37]/60 sm:gap-4 sm:px-4 sm:py-3 sm:text-base md:gap-5 md:px-5 md:py-4 md:text-lg"
-              whileHover={{ x: 2 }}
-              transition={{ duration: 0.22, ease: 'easeOut' }}
-            >
-              <motion.svg
-                className="h-4 w-4 shrink-0 md:h-5 md:w-5"
-                viewBox="0 0 24 24"
-                fill="none"
-                aria-hidden="true"
-                whileHover={{ scale: 1.12 }}
-                transition={{ duration: 0.22, ease: 'easeOut' }}
-              >
-                <path d="M4 5h16v11H7l-3 3V5Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-              </motion.svg>
-              <span className="min-w-0 truncate">Messages</span>
-            </motion.button>
-          )}
           <motion.button
             type="button"
             onClick={handleLogout}
-            className="group mt-2 flex min-h-11 w-full items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 text-left text-sm font-semibold tracking-[0.18em] text-neutral-400 transition-colors duration-300 hover:border-red-500/20 hover:bg-red-500/10 hover:text-red-300 sm:mt-3 sm:gap-4 sm:px-4 sm:py-3 sm:text-base md:gap-5 md:px-5 md:py-4 md:text-lg"
+            className="group flex min-h-11 w-full items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 text-left text-sm font-semibold tracking-[0.18em] text-neutral-400 transition-colors duration-300 hover:border-red-500/20 hover:bg-red-500/10 hover:text-red-300 sm:gap-4 sm:px-4 sm:py-3 sm:text-base md:gap-5 md:px-5 md:py-4 md:text-lg"
             whileHover={{ x: 2 }}
             transition={{ duration: 0.22, ease: 'easeOut' }}
           >

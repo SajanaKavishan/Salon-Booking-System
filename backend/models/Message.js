@@ -1,17 +1,27 @@
 const mongoose = require('mongoose');
 
-const messageSchema = new mongoose.Schema({ // Define the schema for the Message model
+const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+const messageSchema = new mongoose.Schema({
   name: {
     type: String,
-    required: true
+    required: [true, 'Name is required'],
+    trim: true,
+    maxlength: [100, 'Name cannot exceed 100 characters']
   },
   email: {
     type: String,
-    required: true
+    required: [true, 'Email is required'],
+    trim: true,
+    lowercase: true,
+    maxlength: [254, 'Email cannot exceed 254 characters'],
+    match: [emailPattern, 'Please provide a valid email address']
   },
   message: {
     type: String,
-    required: true
+    required: [true, 'Message is required'],
+    trim: true,
+    maxlength: [1000, 'Message cannot exceed 1000 characters']
   },
   isRead: {
     type: Boolean,
@@ -23,4 +33,4 @@ const messageSchema = new mongoose.Schema({ // Define the schema for the Message
   }
 });
 
-module.exports = mongoose.model('Message', messageSchema); 
+module.exports = mongoose.model('Message', messageSchema);

@@ -798,35 +798,49 @@ function Home() {
               )}
 
               <form onSubmit={handleMessageSubmit} className="mt-6 flex flex-col gap-4">
-                <input
-                  type="text"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleMessageChange}
-                  required
-                  placeholder="Your Name"
-                  className="bg-[#111111] border border-white/10 p-3 rounded text-white focus:outline-none focus:border-[#d4af37] transition"
-                />
+                <div>
+                  <label htmlFor="contact-name" className="sr-only">Your Name</label>
+                  <input
+                    id="contact-name"
+                    type="text"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleMessageChange}
+                    required
+                    autoComplete="name"
+                    placeholder="Your Name"
+                    className="w-full bg-[#111111] border border-white/10 p-3 rounded text-white focus:outline-none focus:border-[#d4af37] transition"
+                  />
+                </div>
 
-                <input
-                  type="email"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleMessageChange}
-                  required
-                  placeholder="Email Address"
-                  className="bg-[#111111] border border-white/10 p-3 rounded text-white focus:outline-none focus:border-[#d4af37] transition"
-                />
+                <div>
+                  <label htmlFor="contact-email" className="sr-only">Email Address</label>
+                  <input
+                    id="contact-email"
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleMessageChange}
+                    required
+                    autoComplete="email"
+                    placeholder="Email Address"
+                    className="w-full bg-[#111111] border border-white/10 p-3 rounded text-white focus:outline-none focus:border-[#d4af37] transition"
+                  />
+                </div>
 
-                <textarea
-                  name="message"
-                  value={formData.message}
-                  onChange={handleMessageChange}
-                  required
-                  placeholder="How can we help you?"
-                  rows="4"
-                  className="bg-[#111111] border border-white/10 p-3 rounded text-white focus:outline-none focus:border-[#d4af37] transition resize-none"
-                />
+                <div>
+                  <label htmlFor="contact-message" className="sr-only">Message</label>
+                  <textarea
+                    id="contact-message"
+                    name="message"
+                    value={formData.message}
+                    onChange={handleMessageChange}
+                    required
+                    placeholder="How can we help you?"
+                    rows="4"
+                    className="w-full bg-[#111111] border border-white/10 p-3 rounded text-white focus:outline-none focus:border-[#d4af37] transition resize-none"
+                  />
+                </div>
 
                 <motion.button
                   type="submit"

@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
-import { Mail, Search, Trash2 } from 'lucide-react';
+import { AlertTriangle, Mail, Search, Trash2, X } from 'lucide-react';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') || '';
 const systemStartYear = 2026;
 const currentYear = new Date().getFullYear();
 const latestYear = Math.max(currentYear, systemStartYear);
@@ -51,15 +51,18 @@ function AdminMessages() {
   const [hasMore, setHasMore] = useState(false);
   const [totalMessages, setTotalMessages] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
   const messagesPerPage = 6;
 
-  const getAuthConfig = () => ({
+  const getAuthConfig = useCallback(() => ({
     headers: {
       Authorization: `Bearer ${localStorage.getItem('token')}`
     }
-  });
+  }), []);
 
-  const fetchMessages = async (pageToLoad = 1) => {
+  const fetchMessages = useCallback(async (pageToLoad = 1, signal) => {
     try {
       if (pageToLoad === 1) {
         setLoading(true);
@@ -80,7 +83,12 @@ function AdminMessages() {
         params.set('month', selectedMonth);
       }
 
-      const response = await axios.get(`${API_BASE_URL}/api/messages?${params.toString()}`, getAuthConfig());
+      const response = await axios.get(`${API_BASE_URL}/api/messages?${params.toString()}`, {
+        ...getAuthConfig(),
+        signal
+      });
+
+      if (signal?.aborted) return;
 
       const fetchedMessages = Array.isArray(response.data?.messages)
         ? response.data.messages
@@ -101,16 +109,25 @@ function AdminMessages() {
       setTotalMessages(fetchedTotalMessages);
       setHasMore(currentPage < fetchedTotalPages);
     } catch (error) {
+      if (axios.isCancel(error) || error.name === 'CanceledError') return;
       console.error('Error fetching messages:', error);
     } finally {
-      setLoading(false);
-      setLoadingMore(false);
+      if (!signal?.aborted) {
+        setLoading(false);
+        setLoadingMore(false);
+      }
     }
-  };
+  }, [getAuthConfig, selectedMonth, selectedYear]);
 
   useEffect(() => {
-    fetchMessages(1);
-  }, [selectedYear, selectedMonth]);
+    const controller = new AbortController();
+
+    fetchMessages(1, controller.signal);
+
+    return () => {
+      controller.abort();
+    };
+  }, [fetchMessages]);
 
   const filteredMessages = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -153,17 +170,53 @@ function AdminMessages() {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this message?')) {
-      try {
-        await axios.delete(`${API_BASE_URL}/api/messages/${id}`, getAuthConfig());
-        setMessages((currentMessages) => currentMessages.filter((msg) => msg._id !== id));
-      } catch (error) {
-        console.error('Error deleting message:', error);
-        alert('Failed to delete message');
+  const handleDeleteClick = (message) => {
+    setDeleteTarget(message);
+    setDeleteError('');
+  };
+
+  const closeDeleteDialog = () => {
+    if (deleteLoading) return;
+    setDeleteTarget(null);
+    setDeleteError('');
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget?._id || deleteLoading) return;
+
+    try {
+      setDeleteLoading(true);
+      setDeleteError('');
+      await axios.delete(`${API_BASE_URL}/api/messages/${deleteTarget._id}`, getAuthConfig());
+      const nextMessages = messages.filter((msg) => msg._id !== deleteTarget._id);
+
+      setMessages(nextMessages);
+      setTotalMessages((currentTotal) => Math.max(currentTotal - 1, 0));
+      setDeleteTarget(null);
+
+      if (nextMessages.length === 0) {
+        fetchMessages(1);
       }
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      setDeleteError(error.response?.data?.message || 'Failed to delete message. Please try again.');
+    } finally {
+      setDeleteLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!deleteTarget) return undefined;
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        closeDeleteDialog();
+      }
+    };
+
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [deleteLoading, deleteTarget]);
 
   if (loading) {
     return (
@@ -226,6 +279,7 @@ function AdminMessages() {
                 type="search"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
+                aria-label="Search messages"
                 placeholder="Search name, email, message"
                 className="h-11 w-full rounded-xl border border-neutral-800 bg-neutral-950/70 pl-10 pr-4 text-sm text-white outline-none transition focus:border-[#d4af37]/50 focus:ring-2 focus:ring-[#d4af37]/10"
               />
@@ -237,6 +291,7 @@ function AdminMessages() {
                   key={status}
                   type="button"
                   onClick={() => setFilterStatus(status)}
+                  aria-pressed={filterStatus === status}
                   className={`rounded-lg px-4 text-sm font-semibold capitalize transition ${
                     filterStatus === status
                       ? 'bg-[#d4af37] text-neutral-950'
@@ -252,14 +307,14 @@ function AdminMessages() {
 
         {messages.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-neutral-800 bg-neutral-900/30 p-10 text-center text-neutral-400">
-            No new messages.
+            No messages for this period.
           </div>
         ) : filteredMessages.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-neutral-800 bg-neutral-900/30 p-10 text-center text-neutral-400">
             No messages match your current search or filter.
           </div>
         ) : (
-          <div className="max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar">
+          <div>
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
               {filteredMessages.map((msg) => {
                 const customerName = msg.name || 'Customer';
@@ -269,8 +324,6 @@ function AdminMessages() {
                 return (
                   <article
                     key={msg._id}
-                    onMouseEnter={() => handleMarkAsRead(msg._id)}
-                    onFocus={() => handleMarkAsRead(msg._id)}
                     className={`group relative flex min-h-[300px] flex-col bg-neutral-900/40 backdrop-blur-md border border-neutral-800 hover:border-[#d4af37]/40 rounded-2xl p-6 transition-all duration-300 ${
                       isUnread ? 'shadow-[0_0_0_1px_rgba(212,175,55,0.14)]' : ''
                     }`}
@@ -294,7 +347,7 @@ function AdminMessages() {
 
                       <button
                         type="button"
-                        onClick={() => handleDelete(msg._id)}
+                        onClick={() => handleDeleteClick(msg)}
                         className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-red-500/10 bg-red-500/5 text-red-400 transition hover:border-red-400/40 hover:bg-red-500/10 hover:text-red-300"
                         title="Delete message"
                         aria-label="Delete message"
@@ -354,6 +407,85 @@ function AdminMessages() {
           </div>
         )}
       </div>
+
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closeDeleteDialog();
+            }
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-message-title"
+            aria-describedby="delete-message-description"
+            className="w-full max-w-md rounded-2xl border border-red-500/20 bg-neutral-950 p-6 text-white shadow-2xl shadow-black/50"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-500/10 text-red-300">
+                  <AlertTriangle className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 id="delete-message-title" className="text-lg font-semibold text-white">
+                    Delete message?
+                  </h3>
+                  <p className="mt-1 text-sm text-neutral-400">
+                    This action cannot be undone.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeDeleteDialog}
+                disabled={deleteLoading}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-neutral-400 transition hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label="Close delete confirmation"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div id="delete-message-description" className="mt-5 rounded-xl border border-neutral-800 bg-neutral-900/60 p-4">
+              <p className="truncate text-sm font-semibold text-white">{deleteTarget.name || 'Customer'}</p>
+              <p className="mt-1 truncate text-sm text-[#d4af37]">{deleteTarget.email || 'No email available'}</p>
+              <p className="mt-3 line-clamp-3 text-sm leading-6 text-neutral-400">
+                {deleteTarget.message || 'No message preview available.'}
+              </p>
+            </div>
+
+            {deleteError && (
+              <p className="mt-4 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+                {deleteError}
+              </p>
+            )}
+
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={closeDeleteDialog}
+                disabled={deleteLoading}
+                className="min-h-11 rounded-xl border border-neutral-700 px-5 py-2.5 text-sm font-semibold text-neutral-300 transition hover:border-neutral-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDelete}
+                disabled={deleteLoading}
+                className="min-h-11 rounded-xl bg-red-500 px-5 py-2.5 text-sm font-bold text-white transition hover:bg-red-400 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {deleteLoading ? 'Deleting...' : 'Delete Message'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
