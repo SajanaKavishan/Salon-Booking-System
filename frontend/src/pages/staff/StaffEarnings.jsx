@@ -20,6 +20,9 @@ const RANGE_OPTIONS = [
   { value: "LAST_30_DAYS", label: "Last 30 days" },
   { value: "LAST_7_DAYS", label: "Last 7 days" },
 ];
+const ROLLING_RANGE_VALUES = ["LAST_30_DAYS", "LAST_7_DAYS"];
+const YEAR_LISTBOX_ID = "staff-earnings-year-listbox";
+const RANGE_LISTBOX_ID = "staff-earnings-range-listbox";
 
 const tooltipStyle = {
   backgroundColor: "#111",
@@ -97,6 +100,101 @@ function StaffEarnings() {
     () => RANGE_OPTIONS.find((option) => option.value === filterRange)?.label || "Year to date",
     [filterRange]
   );
+  const isRollingRange = ROLLING_RANGE_VALUES.includes(filterRange);
+
+  const selectYear = useCallback((year) => {
+    setFilterYear(String(year));
+    setIsYearOpen(false);
+  }, []);
+
+  const selectRange = useCallback((range) => {
+    setFilterRange(range);
+    setIsRangeOpen(false);
+    if (ROLLING_RANGE_VALUES.includes(range)) {
+      setIsYearOpen(false);
+    }
+  }, []);
+
+  const handleYearKeyDown = useCallback((event) => {
+    const years = availableYears.map(String);
+    if (years.length === 0 || isRollingRange) return;
+
+    const currentIndex = Math.max(0, years.indexOf(filterYear));
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setIsYearOpen(false);
+      return;
+    }
+
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      setIsYearOpen((isOpen) => !isOpen);
+      return;
+    }
+
+    if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+      event.preventDefault();
+      selectYear(years[(currentIndex + 1) % years.length]);
+      return;
+    }
+
+    if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+      event.preventDefault();
+      selectYear(years[(currentIndex - 1 + years.length) % years.length]);
+      return;
+    }
+
+    if (event.key === "Home") {
+      event.preventDefault();
+      selectYear(years[0]);
+      return;
+    }
+
+    if (event.key === "End") {
+      event.preventDefault();
+      selectYear(years[years.length - 1]);
+    }
+  }, [availableYears, filterYear, isRollingRange, selectYear]);
+
+  const handleRangeKeyDown = useCallback((event) => {
+    const currentIndex = Math.max(0, RANGE_OPTIONS.findIndex((option) => option.value === filterRange));
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setIsRangeOpen(false);
+      return;
+    }
+
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      setIsRangeOpen((isOpen) => !isOpen);
+      return;
+    }
+
+    if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+      event.preventDefault();
+      selectRange(RANGE_OPTIONS[(currentIndex + 1) % RANGE_OPTIONS.length].value);
+      return;
+    }
+
+    if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+      event.preventDefault();
+      selectRange(RANGE_OPTIONS[(currentIndex - 1 + RANGE_OPTIONS.length) % RANGE_OPTIONS.length].value);
+      return;
+    }
+
+    if (event.key === "Home") {
+      event.preventDefault();
+      selectRange(RANGE_OPTIONS[0].value);
+      return;
+    }
+
+    if (event.key === "End") {
+      event.preventDefault();
+      selectRange(RANGE_OPTIONS[RANGE_OPTIONS.length - 1].value);
+    }
+  }, [filterRange, selectRange]);
 
   const calculateYAxisWidth = useCallback((data, formatter) => {
     if (!data || data.length === 0) return 34;
@@ -135,6 +233,12 @@ function StaffEarnings() {
   }, []);
 
   useEffect(() => {
+    if (isRollingRange) {
+      setIsYearOpen(false);
+    }
+  }, [isRollingRange]);
+
+  useEffect(() => {
     let isMounted = true;
 
     const fetchEarningsSummary = async () => {
@@ -151,8 +255,8 @@ function StaffEarnings() {
             Authorization: `Bearer ${token}`,
           },
           params: {
-            year: filterYear,
             range: filterRange,
+            ...(isRollingRange ? {} : { year: filterYear }),
           },
         });
 
@@ -187,7 +291,7 @@ function StaffEarnings() {
     return () => {
       isMounted = false;
     };
-  }, [currentYear, filterRange, filterYear, rangeLabel]);
+  }, [currentYear, filterRange, filterYear, isRollingRange, rangeLabel]);
 
   const statCards = [
     {
@@ -197,15 +301,15 @@ function StaffEarnings() {
       icon: <DollarSign className="h-5 w-5" />,
     },
     {
-      label: "Completed Services",
+      label: "Completed Appointments",
       value: summary.completedServices.toLocaleString(),
       subtitle: `Closed appointments in ${summary.rangeLabel.toLowerCase()}`,
       icon: <CheckCircle2 className="h-5 w-5" />,
     },
     {
-      label: "Average Service Value",
+      label: "Average Appointment Value",
       value: formatCurrency(summary.averageServiceValue),
-      subtitle: "Revenue divided by completed services",
+      subtitle: "Revenue divided by completed appointments",
       icon: <TrendingUp className="h-5 w-5" />,
     },
   ];
@@ -221,64 +325,76 @@ function StaffEarnings() {
             Earnings
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-neutral-400 sm:text-base">
-            Track your completed service revenue with the same range controls as admin analytics.
+            Track your completed appointment revenue with the same range controls as admin analytics.
           </p>
         </div>
 
         <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center">
-          <div ref={yearRef} className="relative w-full sm:w-fit">
-            <button
-              type="button"
-              onClick={() => setIsYearOpen((isOpen) => !isOpen)}
-              className={`flex min-h-11 w-full items-center justify-center gap-2.5 rounded-full border px-4 py-2 text-sm font-semibold transition sm:w-auto ${
-                isYearOpen
-                  ? "border-[#d4af37]/40 bg-[#d4af37]/10 text-white"
-                  : "border-white/10 bg-white/[0.04] text-white hover:border-[#d4af37]/30"
-              }`}
-              aria-haspopup="listbox"
-              aria-expanded={isYearOpen}
-            >
-              <CalendarCheck size={16} className="text-[#d4af37]" />
-              {filterYear}
-              <ChevronDown size={16} className={`transition-transform ${isYearOpen ? "rotate-180" : ""}`} />
-            </button>
-
-            {isYearOpen && (
-              <div
-                className="absolute left-0 top-full z-30 mt-2 max-h-52 w-full overflow-y-auto rounded-xl border border-white/10 bg-[#111]/95 p-1.5 shadow-2xl backdrop-blur-xl sm:w-32"
-                role="listbox"
-                aria-label="Earnings year"
+          {!isRollingRange && (
+            <div ref={yearRef} className="relative w-full sm:w-fit">
+              <button
+                type="button"
+                onClick={() => setIsYearOpen((isOpen) => !isOpen)}
+                onKeyDown={handleYearKeyDown}
+                className={`flex min-h-11 w-full items-center justify-center gap-2.5 rounded-full border px-4 py-2 text-sm font-semibold transition sm:w-auto ${
+                  isYearOpen
+                    ? "border-[#d4af37]/40 bg-[#d4af37]/10 text-white"
+                    : "border-white/10 bg-white/[0.04] text-white hover:border-[#d4af37]/30"
+                }`}
+                aria-haspopup="listbox"
+                aria-expanded={isYearOpen}
+                aria-controls={YEAR_LISTBOX_ID}
               >
-                {availableYears.map((year) => (
-                  <button
-                    key={year}
-                    type="button"
-                    onClick={() => {
-                      setFilterYear(String(year));
-                      setIsYearOpen(false);
-                    }}
-                    className={`w-full rounded-lg px-3.5 py-2.5 text-left text-sm transition ${
-                      filterYear === String(year)
-                        ? "bg-[#d4af37]/10 text-[#d4af37]"
-                        : "text-neutral-400 hover:bg-white/5 hover:text-white"
-                    }`}
-                    role="option"
-                    aria-selected={filterYear === String(year)}
-                  >
-                    {year}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+                <CalendarCheck size={16} className="text-[#d4af37]" />
+                {filterYear}
+                <ChevronDown size={16} className={`transition-transform ${isYearOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              {isYearOpen && (
+                <div
+                  id={YEAR_LISTBOX_ID}
+                  className="absolute left-0 top-full z-30 mt-2 max-h-52 w-full overflow-y-auto rounded-xl border border-white/10 bg-[#111]/95 p-1.5 shadow-2xl backdrop-blur-xl sm:w-32"
+                  role="listbox"
+                  aria-label="Earnings year"
+                >
+                  {availableYears.map((year) => (
+                    <button
+                      key={year}
+                      type="button"
+                      onClick={() => selectYear(year)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          selectYear(year);
+                          return;
+                        }
+                        handleYearKeyDown(event);
+                      }}
+                      className={`w-full rounded-lg px-3.5 py-2.5 text-left text-sm transition ${
+                        filterYear === String(year)
+                          ? "bg-[#d4af37]/10 text-[#d4af37]"
+                          : "text-neutral-400 hover:bg-white/5 hover:text-white"
+                      }`}
+                      role="option"
+                      aria-selected={filterYear === String(year)}
+                    >
+                      {year}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           <div ref={rangeRef} className="relative w-full sm:w-fit">
             <button
               type="button"
               onClick={() => setIsRangeOpen((isOpen) => !isOpen)}
+              onKeyDown={handleRangeKeyDown}
               className="flex min-h-11 w-full items-center justify-center gap-2.5 rounded-full border border-[#d4af37]/20 bg-[#d4af37]/10 px-4 py-2 text-sm font-semibold text-[#d4af37] transition hover:border-[#d4af37]/40 hover:bg-[#d4af37]/15 sm:w-auto"
               aria-haspopup="listbox"
               aria-expanded={isRangeOpen}
+              aria-controls={RANGE_LISTBOX_ID}
             >
               <TrendingUp size={16} />
               {rangeLabel}
@@ -287,6 +403,7 @@ function StaffEarnings() {
 
             {isRangeOpen && (
               <div
+                id={RANGE_LISTBOX_ID}
                 className="absolute right-0 top-full z-20 mt-2 w-full overflow-hidden rounded-xl border border-white/10 bg-[#111]/95 p-1.5 shadow-2xl backdrop-blur-xl sm:w-44"
                 role="listbox"
                 aria-label="Earnings range"
@@ -295,9 +412,14 @@ function StaffEarnings() {
                   <button
                     key={option.value}
                     type="button"
-                    onClick={() => {
-                      setFilterRange(option.value);
-                      setIsRangeOpen(false);
+                    onClick={() => selectRange(option.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        selectRange(option.value);
+                        return;
+                      }
+                      handleRangeKeyDown(event);
                     }}
                     className={`w-full rounded-lg px-3.5 py-2.5 text-left text-sm transition ${
                       filterRange === option.value
@@ -355,67 +477,92 @@ function StaffEarnings() {
               <Loader2 className="h-10 w-10 animate-spin text-[#d4af37]" />
             </div>
           ) : (
-            <ResponsiveContainer
-              width="100%"
-              height="100%"
-              minWidth={1}
-              minHeight={isNarrowViewport ? 280 : 350}
-              initialDimension={{ width: 1, height: isNarrowViewport ? 280 : 350 }}
-            >
-              <AreaChart
-                data={summary.revenueTrends}
-                margin={{ top: 10, right: isNarrowViewport ? 4 : 10, left: isNarrowViewport ? -8 : 0, bottom: 0 }}
+            <>
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+                minWidth={1}
+                minHeight={isNarrowViewport ? 280 : 350}
+                initialDimension={{ width: 1, height: isNarrowViewport ? 280 : 350 }}
               >
-                <defs>
-                  <linearGradient id="staffRevenueGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#d4af37" stopOpacity={0.35} />
-                    <stop offset="95%" stopColor="#d4af37" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid stroke="rgba(255,255,255,0.05)" strokeDasharray="3 3" vertical={false} />
-                <XAxis
-                  dataKey="label"
-                  stroke="#737373"
-                  tickLine={false}
-                  axisLine={false}
-                  interval={0}
-                  minTickGap={isNarrowViewport ? 12 : 18}
-                  padding={{ left: 4, right: isNarrowViewport ? 28 : 20 }}
-                  tick={{ fill: "#a3a3a3", fontSize: isNarrowViewport ? 10 : 12 }}
-                  tickMargin={10}
-                  ticks={revenueXAxisTicks}
-                />
-                <YAxis
-                  width={revenueYAxisWidth}
-                  tickMargin={isNarrowViewport ? 2 : 4}
-                  stroke="#737373"
-                  tickLine={false}
-                  axisLine={false}
-                  tick={{ fill: "#a3a3a3", fontSize: isNarrowViewport ? 10 : 12 }}
-                  tickFormatter={formatRevenueAxis}
-                />
-                <Tooltip
-                  contentStyle={tooltipStyle}
-                  labelStyle={{ color: "#ffffff" }}
-                  itemStyle={{ color: "#d4af37" }}
-                  formatter={(value) => [formatCurrency(value), "Revenue"]}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="revenue"
-                  stroke="#d4af37"
-                  strokeWidth={2.5}
-                  fill="url(#staffRevenueGradient)"
-                  fillOpacity={1}
-                  activeDot={{
-                    r: 5,
-                    fill: "#d4af37",
-                    stroke: "#111",
-                    strokeWidth: 2,
-                  }}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+                <AreaChart
+                  data={summary.revenueTrends}
+                  margin={{ top: 10, right: isNarrowViewport ? 4 : 10, left: isNarrowViewport ? -8 : 0, bottom: 0 }}
+                >
+                  <defs>
+                    <linearGradient id="staffRevenueGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#d4af37" stopOpacity={0.35} />
+                      <stop offset="95%" stopColor="#d4af37" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="rgba(255,255,255,0.05)" strokeDasharray="3 3" vertical={false} />
+                  <XAxis
+                    dataKey="label"
+                    stroke="#737373"
+                    tickLine={false}
+                    axisLine={false}
+                    interval={0}
+                    minTickGap={isNarrowViewport ? 12 : 18}
+                    padding={{ left: 4, right: isNarrowViewport ? 28 : 20 }}
+                    tick={{ fill: "#a3a3a3", fontSize: isNarrowViewport ? 10 : 12 }}
+                    tickMargin={10}
+                    ticks={revenueXAxisTicks}
+                  />
+                  <YAxis
+                    width={revenueYAxisWidth}
+                    tickMargin={isNarrowViewport ? 2 : 4}
+                    stroke="#737373"
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fill: "#a3a3a3", fontSize: isNarrowViewport ? 10 : 12 }}
+                    tickFormatter={formatRevenueAxis}
+                  />
+                  <Tooltip
+                    contentStyle={tooltipStyle}
+                    labelStyle={{ color: "#ffffff" }}
+                    itemStyle={{ color: "#d4af37" }}
+                    formatter={(value) => [formatCurrency(value), "Revenue"]}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="revenue"
+                    stroke="#d4af37"
+                    strokeWidth={2.5}
+                    fill="url(#staffRevenueGradient)"
+                    fillOpacity={1}
+                    activeDot={{
+                      r: 5,
+                      fill: "#d4af37",
+                      stroke: "#111",
+                      strokeWidth: 2,
+                    }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+              <table className="sr-only">
+                <caption>Revenue trend data for {summary.rangeLabel.toLowerCase()}</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Period</th>
+                    <th scope="col">Revenue</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summary.revenueTrends.length > 0 ? (
+                    summary.revenueTrends.map((item) => (
+                      <tr key={item.label}>
+                        <td>{item.label}</td>
+                        <td>{formatCurrency(item.revenue)}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={2}>No revenue data available.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </>
           )}
         </div>
       </section>

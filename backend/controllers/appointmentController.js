@@ -1,4 +1,5 @@
 const Appointment = require('../models/appointmentModel');
+const mongoose = require('mongoose');
 const Service = require('../models/Service'); // Import the Service model to interact with the services collection in the database
 const Staff = require('../models/Staff'); // Import the Staff model to interact with the staff collection
 const User = require('../models/User');
@@ -355,6 +356,12 @@ const getAllAppointments = async (req, res) => {
 // @desc    Get pending appointments count
 // @route   GET /api/appointments/pending/count
 // @access  Private/Admin/Staff
+const createHttpError = (message, statusCode = 400) => {
+    const error = new Error(message);
+    error.statusCode = statusCode;
+    return error;
+};
+
 const getStaffAssignmentIdsForUser = async (user) => {
     if (!user || user.role !== 'staff') return [];
 
@@ -366,9 +373,46 @@ const getStaffAssignmentIdsForUser = async (user) => {
         ? linkedStaffMembers
         : await Staff.find({ name: user.name }).select('_id');
 
+    if (staffMembers.length === 0) {
+        throw createHttpError('Staff profile configuration incomplete. Please contact the administrator.', 409);
+    }
+
     return [
         ...(userId ? [userId] : []),
         ...staffMembers.map((staffMember) => staffMember._id)
+    ];
+};
+
+const getStaffAssignmentIdsForAdminRequest = async (staffId) => {
+    if (!staffId) {
+        throw createHttpError('staffId query parameter is required for admin staff earnings requests.', 400);
+    }
+
+    if (!mongoose.isValidObjectId(staffId)) {
+        throw createHttpError('Please provide a valid staffId.', 400);
+    }
+
+    const staffByProfileId = await Staff.findById(staffId).select('_id userId');
+    if (staffByProfileId) {
+        return [
+            ...(staffByProfileId.userId ? [staffByProfileId.userId] : []),
+            staffByProfileId._id,
+        ];
+    }
+
+    const staffUser = await User.findOne({ _id: staffId, role: 'staff' }).select('_id');
+    if (!staffUser) {
+        throw createHttpError('Staff member not found.', 404);
+    }
+
+    const linkedStaffMembers = await Staff.find({ userId: staffUser._id }).select('_id');
+    if (linkedStaffMembers.length === 0) {
+        throw createHttpError('Staff profile configuration incomplete. Please contact the administrator.', 409);
+    }
+
+    return [
+        staffUser._id,
+        ...linkedStaffMembers.map((staffMember) => staffMember._id),
     ];
 };
 
@@ -395,7 +439,11 @@ const getPendingAppointmentsCount = async (req, res) => {
         res.status(200).json({ count });
     } catch (error) {
         console.error('Get Pending Appointments Count Error:', error);
-        res.status(500).json({ message: 'Server Error: Could not fetch pending appointments count.' });
+        res.status(error.statusCode || 500).json({
+            message: error.statusCode
+                ? error.message
+                : 'Server Error: Could not fetch pending appointments count.'
+        });
     }
 };
 
@@ -405,6 +453,18 @@ const getStaffAppointmentQuery = async (user) => {
     const staffIds = await getStaffAssignmentIdsForUser(user);
 
     return buildStaffAssignmentQuery(staffIds);
+};
+
+const getStaffEarningsScopeQuery = async (req) => {
+    if (req.user.role === 'staff') {
+        return buildStaffAssignmentQuery(await getStaffAssignmentIdsForUser(req.user));
+    }
+
+    if (req.user.role === 'admin') {
+        return buildStaffAssignmentQuery(await getStaffAssignmentIdsForAdminRequest(req.query.staffId));
+    }
+
+    throw createHttpError('Unauthorized', 401);
 };
 
 const formatDateKey = (date) => {
@@ -581,7 +641,11 @@ const getStaffAppointments = async (req, res) => {
         res.status(200).json(appointments);
     } catch (error) {
         console.error('Get Staff Appointments Error:', error);
-        res.status(500).json({ message: 'Server Error: Could not fetch staff appointments.' });
+        res.status(error.statusCode || 500).json({
+            message: error.statusCode
+                ? error.message
+                : 'Server Error: Could not fetch staff appointments.'
+        });
     }
 };
 
@@ -595,7 +659,7 @@ const getStaffEarningsSummary = async (req, res) => {
         }
 
         const window = getStaffEarningsWindow(req.query);
-        const staffQuery = await getStaffAppointmentQuery(req.user);
+        const staffQuery = await getStaffEarningsScopeQuery(req);
         const currentYear = new Date().getFullYear();
         const [appointments, availableYears] = await Promise.all([
             Appointment.find({
