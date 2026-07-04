@@ -15,6 +15,14 @@ const app = express();
 
 mongoose.set("bufferCommands", false);
 
+const defaultClientUrl = process.env.NODE_ENV === "production"
+    ? ""
+    : "http://localhost:5173";
+const allowedOrigins = (process.env.CLIENT_URL || defaultClientUrl)
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
 const mongoOptions = { 
     family: 4,
     serverSelectionTimeoutMS: 30000,
@@ -34,7 +42,13 @@ mongoose.connection.on("disconnected", () => { // This event is emitted when Mon
 });
 
 app.use(cors({
-    origin: "http://localhost:5173",
+    origin(origin, callback) {
+        if (!origin || allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+
+        return callback(new Error("Not allowed by CORS"));
+    },
     credentials: true,
 }));
 

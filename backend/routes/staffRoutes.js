@@ -5,7 +5,7 @@ const uploadStaffImage = require('../middleware/uploadStaffImage');
 const { protect, admin } = require('../middleware/authMiddleware');
 
 router.route('/').get(getStaff).post(protect, admin, uploadStaffImage.single('image'), addStaff);
-router.get('/performance', getStaffPerformance);
+router.get('/performance', protect, admin, getStaffPerformance);
 router.route('/:id').put(protect, admin, updateStaff).delete(protect, admin, deleteStaff);
 
 module.exports = router;
