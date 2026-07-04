@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 
 import axios from 'axios';
 
-import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -286,6 +286,8 @@ function BookAppointment({ userProfile, customerData }) {
   const [timeSlot, setTimeSlot] = useState('');
 
   const [selectedServices, setSelectedServices] = useState([]);
+
+  const [serviceSearch, setServiceSearch] = useState('');
 
   const [stylist, setStylist] = useState('');
 
@@ -986,6 +988,20 @@ function BookAppointment({ userProfile, customerData }) {
 
     }, [date, stylist, stylistsList, totalDuration, isSelectedDateFullyClosed]);
 
+    const filteredServices = useMemo(() => {
+
+      const query = serviceSearch.trim().toLowerCase();
+
+      if (!query) return servicesList;
+
+      return servicesList.filter((serviceItem) => [
+        serviceItem.name,
+        serviceItem.price,
+        serviceItem.duration
+      ].some((value) => String(value || '').toLowerCase().includes(query)));
+
+    }, [serviceSearch, servicesList]);
+
 
 
     const stylistOptions = stylistsList;
@@ -1601,25 +1617,79 @@ function BookAppointment({ userProfile, customerData }) {
 
 
 
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
 
-              <h1 className="font-brand text-2xl leading-tight text-white sm:text-4xl lg:text-5xl">
+              <div className="flex flex-col gap-2">
 
-                Step {step}: {currentStepLabel}
+                <h1 className="font-brand text-2xl leading-tight text-white sm:text-4xl lg:text-5xl">
 
-              </h1>
+                  Step {step}: {currentStepLabel}
 
-              <p className="max-w-2xl text-sm leading-6 text-white/58 sm:text-base sm:leading-7">
+                </h1>
 
-                {step === 1 && 'Select one or more services to compose the booking.'}
+                <p className="max-w-2xl text-sm leading-6 text-white/58 sm:text-base sm:leading-7">
 
-                {step === 2 && 'Choose your artist, with your preferred stylist already highlighted.'}
+                  {step === 1 && 'Select one or more services to compose the booking.'}
 
-                {step === 3 && 'Pick a date and a precise time from the curated schedule.'}
+                  {step === 2 && 'Choose your artist, with your preferred stylist already highlighted.'}
 
-                {step === 4 && 'Confirm the final composition before we lock it into the salon calendar.'}
+                  {step === 3 && 'Pick a date and a precise time from the curated schedule.'}
 
-              </p>
+                  {step === 4 && 'Confirm the final composition before we lock it into the salon calendar.'}
+
+                </p>
+
+              </div>
+
+              {step === 1 && (
+
+                <div className="w-full md:max-w-sm">
+
+                  <div className="relative mt-2">
+
+                    <Search className="pointer-events-none absolute left-0 top-1/2 h-4 w-4 -translate-y-1/2 text-white/60" />
+
+                    <input
+
+                      type="text"
+
+                      value={serviceSearch}
+
+                      onChange={(event) => setServiceSearch(event.target.value)}
+
+                      placeholder="Search services"
+
+                      className="w-full border-b border-white/15 bg-transparent py-3 pl-7 pr-8 text-sm text-white placeholder:text-white/40 focus:border-[#D4AF37] focus:outline-none"
+
+                      aria-label="Search services"
+
+                    />
+
+                    {serviceSearch && (
+
+                      <button
+
+                        type="button"
+
+                        onClick={() => setServiceSearch('')}
+
+                        className="absolute right-0 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full text-lg leading-none text-white/45 transition hover:bg-white/5 hover:text-[#D4AF37]"
+
+                        aria-label="Clear service search"
+
+                      >
+
+                        &times;
+
+                      </button>
+
+                    )}
+
+                  </div>
+
+                </div>
+
+              )}
 
             </div>
 
@@ -1657,9 +1727,11 @@ function BookAppointment({ userProfile, customerData }) {
 
                     {step === 1 && (
 
-                      <motion.ul variants={serviceListVariants} initial="hidden" animate="show" className="space-y-3">
+                      filteredServices.length > 0 ? (
 
-                        {servicesList.map((serviceItem) => {
+                        <motion.ul variants={serviceListVariants} initial="hidden" animate="show" className="space-y-3">
+
+                        {filteredServices.map((serviceItem) => {
 
                           const isSelected = selectedServices.includes(serviceItem._id);
 
@@ -1732,6 +1804,18 @@ function BookAppointment({ userProfile, customerData }) {
                         })}
 
                       </motion.ul>
+
+                      ) : (
+
+                        <div className="rounded-[1.5rem] border border-white/8 bg-white/[0.02] px-5 py-8 text-center">
+
+                          <p className="font-brand text-xl text-white">No services found</p>
+
+                          <p className="mt-2 text-sm leading-6 text-white/45">Try another service name, price, or duration.</p>
+
+                        </div>
+
+                      )
 
                     )}
 
