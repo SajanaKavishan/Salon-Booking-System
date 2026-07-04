@@ -21,7 +21,9 @@ function CustomerRoute({ children }) {
   }
 
   if (!token || !userRole) {
-    return <Navigate to="/login" replace />;
+    const nextPath = `${location.pathname}${location.search}`;
+
+    return <Navigate to={`/login?next=${encodeURIComponent(nextPath)}`} replace />;
   }
 
   if (userRole !== 'customer') {

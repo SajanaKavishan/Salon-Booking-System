@@ -67,7 +67,7 @@ function Login() {
     const next = searchParams.get('next');
     if (next?.startsWith('/') && !next.startsWith('//')) return next;
 
-    return '/booking';
+    return '/dashboard';
   };
 
   const redirectAfterLogin = (role, isFirstLogin = false) => {
