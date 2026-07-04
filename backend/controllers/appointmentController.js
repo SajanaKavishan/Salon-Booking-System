@@ -48,6 +48,13 @@ const minutesToTime = (mins) => {
     return `${hours < 10 ? '0' : ''}${hours}:${String(minutes).padStart(2, '0')} ${modifier}`;
 };
 
+const getLocalDateKey = (date = new Date()) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
 // @desc    Get available time slots for a staff member
 // @route   GET /api/appointments/availability
 // @access  Public
@@ -102,6 +109,7 @@ const createAppointment = async (req, res) => {
             startTime: legacyStartTime,
             services,
             customerMobile,
+            customerId,
             bypassBuffer = false,
         } = req.body;
         const stylist = staffId || legacyStylist;
@@ -127,6 +135,26 @@ const createAppointment = async (req, res) => {
             return res.status(400).json({ message: "Please fill in all required fields." });
         }
 
+        if (!Array.isArray(services)) {
+            return res.status(400).json({ message: 'Please provide at least one valid service.' });
+        }
+
+        let bookingUser = req.user;
+        if (req.user?.role === 'admin') {
+            if (!customerId) {
+                return res.status(400).json({ message: 'customerId is required when an admin creates an appointment.' });
+            }
+
+            if (!mongoose.isValidObjectId(customerId)) {
+                return res.status(400).json({ message: 'Please provide a valid customerId.' });
+            }
+
+            bookingUser = await User.findOne({ _id: customerId, role: 'customer' }).select('_id name email phone');
+            if (!bookingUser) {
+                return res.status(400).json({ message: 'Selected customer was not found.' });
+            }
+        }
+
         const appointmentDate = new Date(`${date}T00:00:00.000Z`);
         if (Number.isNaN(appointmentDate.getTime())) {
             return res.status(400).json({ message: 'Invalid appointment date.' });
@@ -146,7 +174,16 @@ const createAppointment = async (req, res) => {
             return res.status(400).json({ message: 'Weekend bookings are currently unavailable.' });
         }
 
-        const selectedServices = await Service.find({ _id: { $in: services } });
+        const requestedServiceIds = services.map((serviceId) => String(serviceId));
+        if (requestedServiceIds.some((serviceId) => !mongoose.isValidObjectId(serviceId))) {
+            return res.status(400).json({ message: 'One or more selected services are invalid.' });
+        }
+
+        const selectedServices = await Service.find({ _id: { $in: requestedServiceIds } });
+        if (selectedServices.length !== requestedServiceIds.length) {
+            return res.status(400).json({ message: 'One or more selected services are invalid.' });
+        }
+
         let totalDuration = 0;
         let totalAmount = 0;
         selectedServices.forEach(service => {
@@ -251,8 +288,16 @@ const createAppointment = async (req, res) => {
             }
         }
 
+        if (!stylistId || !mongoose.isValidObjectId(stylistId)) {
+            return res.status(400).json({ message: 'Please select a valid stylist.' });
+        }
+
         const finalStylist = await Staff.findById(stylistId);
-        const stylistName = finalStylist ? finalStylist.name : 'Any Available Stylist';
+        if (!finalStylist) {
+            return res.status(400).json({ message: 'Selected stylist was not found.' });
+        }
+
+        const stylistName = finalStylist.name;
 
         if (!isAdminBypass && await isStaffOnApprovedLeave(finalStylist, appointmentDate, nextAppointmentDate)) {
             return res.status(400).json({ message: 'This stylist is on approved leave for the selected date.' });
@@ -261,7 +306,7 @@ const createAppointment = async (req, res) => {
         let appointmentStatus = 'pending';
         if (settings.autoConfirmVip) {
             const completedAppointments = await Appointment.countDocuments({
-                user: req.user._id,
+                user: bookingUser._id,
                 status: { $in: ['completed', 'Completed'] }
             });
 
@@ -270,11 +315,9 @@ const createAppointment = async (req, res) => {
             }
         }
 
-        // Add the user ID to the appointment data. The user ID is obtained from the protect middleware, which adds the logged-in user's information to the req.user object. This way, we can associate the appointment with the user who created it.
-        // req.user._id means the ID of the currently logged-in user, which is added to the appointment data when creating a new appointment. This allows us to keep track of which user made which appointment in the database.
         const appointment = await Appointment.create({
-            user: req.user._id, 
-            services: services,
+            user: bookingUser._id,
+            services: requestedServiceIds,
             date: date,
             startTime: formattedStartTime,
             endTime: formattedEndTime,
@@ -297,7 +340,7 @@ const createAppointment = async (req, res) => {
                 message: `
                     <div style="font-family: Arial, sans-serif; padding: 20px; background: #111111; color: #f5f5f5; border-radius: 10px;">
                         <h2 style="color: #d4af37; margin-top: 0;">New appointment received</h2>
-                        <p><strong>Client:</strong> ${req.user.name || req.user.email}</p>
+                        <p><strong>Client:</strong> ${bookingUser.name || bookingUser.email}</p>
                         <p><strong>Services:</strong> ${serviceNames}</p>
                         <p><strong>Date:</strong> ${date}</p>
                         <p><strong>Time:</strong> ${formattedStartTime} - ${formattedEndTime}</p>
@@ -1185,35 +1228,66 @@ const shiftUpcomingAppointments = async (req, res) => {
         const { stylistId, date } = req.body;
         const shiftMinutes = req.body.shiftMinutes === undefined
             ? 15
-            : Number.parseInt(req.body.shiftMinutes, 10);
+            : Number(req.body.shiftMinutes);
 
         if (!stylistId || !date) {
             return res.status(400).json({ message: 'stylistId and date are required.' });
         }
 
-        if (!Number.isFinite(shiftMinutes)) {
-            return res.status(400).json({ message: 'shiftMinutes must be a valid number.' });
+        if (!mongoose.Types.ObjectId.isValid(stylistId)) {
+            return res.status(400).json({ message: 'Invalid stylistId.' });
         }
 
-        const bookingDate = new Date(`${String(date).slice(0, 10)}T00:00:00.000Z`);
+        if (
+            !Number.isFinite(shiftMinutes)
+            || !Number.isInteger(shiftMinutes)
+            || shiftMinutes < 5
+            || shiftMinutes > 120
+        ) {
+            return res.status(400).json({ message: 'shiftMinutes must be a whole number between 5 and 120.' });
+        }
+
+        const dateKey = String(date).slice(0, 10);
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+            return res.status(400).json({ message: 'Invalid date. Use YYYY-MM-DD format.' });
+        }
+
+        const bookingDate = new Date(`${dateKey}T00:00:00.000Z`);
         if (Number.isNaN(bookingDate.getTime())) {
             return res.status(400).json({ message: 'Invalid date. Use YYYY-MM-DD format.' });
         }
 
+        const todayKey = getLocalDateKey();
+        if (dateKey < todayKey) {
+            return res.status(200).json({
+                message: 'No future appointment slots found to shift.',
+                count: 0,
+                appointments: [],
+            });
+        }
+
         const appointments = await Appointment.find({
-            stylist: stylistId,
+            $or: [
+                { stylist: stylistId },
+                { staffId: stylistId },
+            ],
             bookingDate,
             status: { $in: ['pending', 'confirmed'] },
         });
 
+        const currentMinutes = timeToMinutes(new Date());
+        const remainingAppointments = appointments.filter((appointment) => (
+            dateKey > todayKey || timeToMinutes(appointment.startTime) > currentMinutes
+        ));
+
         // AM/PM strings do not sort safely in MongoDB, so sort by converted minutes.
-        appointments.sort((firstAppointment, secondAppointment) => (
+        remainingAppointments.sort((firstAppointment, secondAppointment) => (
             timeToMinutes(firstAppointment.startTime) - timeToMinutes(secondAppointment.startTime)
         ));
 
         const shiftedAppointments = [];
 
-        for (const appointment of appointments) {
+        for (const appointment of remainingAppointments) {
             const shiftedStartTime = minutesToTime(timeToMinutes(appointment.startTime) + shiftMinutes);
             const shiftedEndTime = minutesToTime(timeToMinutes(appointment.endTime) + shiftMinutes);
 

@@ -41,6 +41,8 @@ const getEmergencyRescheduleMessage = (message) => (
     .trim()
 );
 
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
+
 function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -62,7 +64,7 @@ function Layout() {
   const fetchNotifications = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:5000/api/notifications', {
+      const res = await fetch(`${API_BASE_URL}/api/notifications`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
@@ -80,7 +82,7 @@ function Layout() {
     const loadNotifications = async () => {
       try {
         const token = localStorage.getItem('token');
-        const res = await fetch('http://localhost:5000/api/notifications', {
+        const res = await fetch(`${API_BASE_URL}/api/notifications`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
 
@@ -136,7 +138,7 @@ function Layout() {
     if (!notification?._id || notification.isRead) return;
     try {
       const token = localStorage.getItem('token');
-      await fetch(`http://localhost:5000/api/notifications/${notification._id}/read`, {
+      await fetch(`${API_BASE_URL}/api/notifications/${notification._id}/read`, {
         method: 'PUT',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -179,7 +181,7 @@ function Layout() {
 
     await Promise.allSettled(
       unreadNotifications.map((notification) => (
-        fetch(`http://localhost:5000/api/notifications/${notification._id}/read`, {
+        fetch(`${API_BASE_URL}/api/notifications/${notification._id}/read`, {
           method: 'PUT',
           headers: { 'Authorization': `Bearer ${token}` }
         })

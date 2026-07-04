@@ -14,6 +14,7 @@ import { GoldButton } from './SystemUI';
 
 const BUFFER_MINUTES = 15;
 const BLOCKED_STATUSES = ['cancelled', 'rejected', 'completed', 'no-show'];
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
 
 const initialForm = {
   staffId: '',
@@ -101,27 +102,43 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
   const [conflictDetails, setConflictDetails] = useState(null);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) return undefined;
+
+    const controller = new AbortController();
+    let isMounted = true;
 
     const loadOptions = async () => {
       try {
         setIsLoadingOptions(true);
         const [servicesResponse, staffResponse] = await Promise.all([
-          axios.get('http://localhost:5000/api/services'),
-          axios.get('http://localhost:5000/api/staff')
+          axios.get(`${API_BASE_URL}/api/services`, { signal: controller.signal }),
+          axios.get(`${API_BASE_URL}/api/staff`, { signal: controller.signal })
         ]);
+
+        if (!isMounted) return;
 
         setServices(servicesResponse.data || []);
         setStaff(staffResponse.data || []);
       } catch (error) {
+        if (axios.isCancel(error) || error.name === 'CanceledError' || controller.signal.aborted) {
+          return;
+        }
+
         console.error('Force book option load error:', error);
         toast.error('Could not load booking options.');
       } finally {
-        setIsLoadingOptions(false);
+        if (isMounted) {
+          setIsLoadingOptions(false);
+        }
       }
     };
 
     loadOptions();
+
+    return () => {
+      isMounted = false;
+      controller.abort();
+    };
   }, [isOpen]);
 
   useEffect(() => {
@@ -243,7 +260,7 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
       const endTime = minutesToDisplayTime(toMinutes(form.startTime) + totalDuration);
 
       const response = await axios.post(
-        'http://localhost:5000/api/appointments',
+        `${API_BASE_URL}/api/appointments`,
         {
           staffId: form.staffId,
           stylist: form.staffId,
@@ -271,7 +288,12 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 backdrop-blur-sm sm:p-4">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 backdrop-blur-sm sm:p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="quick-book-appointment-title"
+    >
       <form
         onSubmit={handleSubmit}
         className="relative h-fit max-h-[92vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-[#070707] text-white shadow-[0_0_0_1px_rgba(212,175,55,0.18),0_28px_90px_rgba(0,0,0,0.7)] sm:max-h-[90vh] sm:rounded-[28px]"
@@ -293,7 +315,7 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
               <CalendarPlus className="h-5 w-5" />
             </span>
             <div>
-              <h2 className="font-serif text-2xl font-semibold tracking-tight sm:text-3xl">Rebook Appointment</h2>
+              <h2 id="quick-book-appointment-title" className="font-serif text-2xl font-semibold tracking-tight sm:text-3xl">Quick Book Appointment</h2>
               <p className="mt-1 text-sm leading-6 text-neutral-400">Pick a stylist, time, and services in one quick pass.</p>
             </div>
           </div>
@@ -310,11 +332,11 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
                 <select
                   value={form.staffId}
                   onChange={(event) => setForm((current) => ({ ...current, staffId: event.target.value }))}
-                  disabled={isLoadingOptions}
+                  disabled={isLoadingOptions || staff.length === 0}
                   className="w-full border-b border-[#D4AF37]/30 bg-transparent px-0 py-3 text-sm text-white outline-none transition [color-scheme:dark] focus:border-[#D4AF37]"
                   required
                 >
-                  <option value="">Select stylist</option>
+                  <option value="">{staff.length === 0 ? 'No available staff' : 'Select stylist'}</option>
                   {staff.map((member) => (
                     <option key={member._id} value={member._id}>
                       {member.name}
@@ -368,36 +390,43 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
                 </div>
               ) : (
                 <div className="mt-5 grid gap-x-8 gap-y-5 border-t border-[#D4AF37]/10 pt-5 sm:grid-cols-2">
-                  {services.map((service) => {
-                    const selected = form.services.includes(service._id);
+                  {services.length === 0 ? (
+                    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm text-neutral-400 sm:col-span-2">
+                      No active services found.
+                    </div>
+                  ) : (
+                    services.map((service) => {
+                      const selected = form.services.includes(service._id);
 
-                    return (
-                      <button
-                        key={service._id}
-                        type="button"
-                        onClick={() => handleServiceToggle(service._id)}
-                        className="group text-left"
-                      >
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="min-w-0">
-                            <p className="text-base font-semibold text-white transition group-hover:text-[#f3d77a]">{service.name}</p>
-                            <p className="mt-1 text-xs text-neutral-500">{service.duration} min</p>
+                      return (
+                        <button
+                          key={service._id}
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() => handleServiceToggle(service._id)}
+                          className="group text-left"
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0">
+                              <p className="text-base font-semibold text-white transition group-hover:text-[#f3d77a]">{service.name}</p>
+                              <p className="mt-1 text-xs text-neutral-500">{service.duration} min</p>
+                            </div>
+                            <span
+                              className={`mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition ${
+                                selected
+                                  ? 'border-[#D4AF37] bg-[#D4AF37] text-black'
+                                  : 'border-[#D4AF37]/35 text-transparent group-hover:border-[#D4AF37]'
+                              }`}
+                            >
+                              <Check className="h-4 w-4" />
+                            </span>
                           </div>
-                          <span
-                            className={`mt-0.5 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition ${
-                              selected
-                                ? 'border-[#D4AF37] bg-[#D4AF37] text-black'
-                                : 'border-[#D4AF37]/35 text-transparent group-hover:border-[#D4AF37]'
-                            }`}
-                          >
-                            <Check className="h-4 w-4" />
-                          </span>
-                        </div>
-                        <p className="mt-3 text-sm font-semibold text-[#D4AF37]">{formatCurrency(service.price)}</p>
-                        <div className={`mt-4 h-px transition ${selected ? 'bg-[#D4AF37]/60' : 'bg-white/10 group-hover:bg-[#D4AF37]/30'}`} />
-                      </button>
-                    );
-                  })}
+                          <p className="mt-3 text-sm font-semibold text-[#D4AF37]">{formatCurrency(service.price)}</p>
+                          <div className={`mt-4 h-px transition ${selected ? 'bg-[#D4AF37]/60' : 'bg-white/10 group-hover:bg-[#D4AF37]/30'}`} />
+                        </button>
+                      );
+                    })
+                  )}
                 </div>
               )}
             </div>
@@ -454,6 +483,7 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
                         type="button"
                         role="switch"
                         aria-checked={isOverriding}
+                        aria-label="Force override scheduling conflicts"
                         onClick={() => setIsOverriding((current) => !current)}
                         className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                           isOverriding ? 'bg-amber-500' : 'bg-zinc-700'

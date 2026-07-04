@@ -154,7 +154,7 @@ const approveLeave = async (req, res) => {
                         $lte: toDateKey(leaveRequest.endDate)
                     }
                 })
-                    .select('_id user services date startTime endTime')
+                    .select('_id user services staffId stylist date startTime endTime')
                     .populate('user', 'name email')
                     .populate('services', 'name')
                     .session(session)
@@ -172,17 +172,21 @@ const approveLeave = async (req, res) => {
                 );
 
                 await Notification.insertMany(
-                    conflictingAppointments.map((appointment) => ({
-                        user: appointment.user?._id || appointment.user,
-                        type: 'RESCHEDULE_REQUIRED',
-                        message: `We're sorry! Your stylist had an emergency leave on ${formatLeaveDate(appointment.date)}. Please reschedule your booking.`,
-                        meta: {
-                            actionUrl: '/book',
-                            staffId: appointment.staffId?.toString(),
-                            stylistId: appointment.staffId?.toString(),
-                            originalServices: appointment.services.map((service) => service?._id?.toString() || service?.toString()).filter(Boolean)
-                        }
-                    })),
+                    conflictingAppointments.map((appointment) => {
+                        const appointmentStaffId = appointment.staffId || appointment.stylist || staffProfile?._id;
+
+                        return {
+                            user: appointment.user?._id || appointment.user,
+                            type: 'RESCHEDULE_REQUIRED',
+                            message: `We're sorry! Your stylist had an emergency leave on ${formatLeaveDate(appointment.date)}. Please reschedule your booking.`,
+                            meta: {
+                                actionUrl: '/book',
+                                staffId: appointmentStaffId?.toString(),
+                                stylistId: appointmentStaffId?.toString(),
+                                originalServices: appointment.services.map((service) => service?._id?.toString() || service?.toString()).filter(Boolean)
+                            }
+                        };
+                    }),
                     { session }
                 );
 
