@@ -3,6 +3,22 @@ const router = express.Router();
 const { registerUser, googleLogin, getMe, updateUserProfile, completeOnboarding, getDashboardBanner } = require('../controllers/userController');
 const { registerStaff, login, forgotPassword, resetPassword } = require('../controllers/authController');
 const { protect, admin } = require('../middleware/authMiddleware'); // Import the protect middleware to secure the /me route   
+const uploadProfileImage = require('../middleware/uploadProfileImage');
+
+const handleProfileImageUpload = (req, res, next) => {
+  uploadProfileImage.single('profileImage')(req, res, (error) => {
+    if (!error) {
+      return next();
+    }
+
+    const statusCode = error.statusCode || (error.code === 'LIMIT_FILE_SIZE' ? 413 : 400);
+    const message = error.code === 'LIMIT_FILE_SIZE'
+      ? 'Profile image must be 2MB or smaller.'
+      : error.message;
+
+    return res.status(statusCode).json({ message });
+  });
+};
 
 // Routes
 router.post('/register', registerUser); // Route for user registration, handled by the registerUser controller function
@@ -16,7 +32,7 @@ router.post('/google-login', googleLogin); // New route for handling Google logi
 router.get('/me', protect, getMe);
 router.get('/profile', protect, getMe); // Alias for legacy frontend calls to GET /api/users/profile
 router.get('/dashboard-banner', protect, getDashboardBanner);
-router.put('/profile', protect, updateUserProfile); // New route for updating user profile, also protected by the protect middleware. The updateUserProfile function will handle the logic for updating the user's profile information.
+router.put('/profile', protect, handleProfileImageUpload, updateUserProfile); // New route for updating user profile, also protected by the protect middleware. The updateUserProfile function will handle the logic for updating the user's profile information.
 router.patch('/complete-onboarding', protect, completeOnboarding);
 
 module.exports = router;

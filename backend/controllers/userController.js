@@ -178,6 +178,10 @@ const isValidPhoneNumber = (phoneValue) => {
   return /^[+()\-\s\d]+$/.test(trimmedPhone) && digitsOnly.length >= 7 && digitsOnly.length <= 15;
 };
 
+const isValidEmail = (emailValue) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(emailValue || '').trim());
+
+const isBase64Image = (value) => /^data:image\/[a-zA-Z0-9.+-]+;base64,/.test(String(value || '').trim());
+
 const registerUser = async (req, res) => { // Register a new user
     try {
     const { name, email, password, phone, preferredStylist } = req.body;
@@ -353,27 +357,91 @@ const getMe = async (req, res) => {
 // Update user profile function
 const updateUserProfile = async (req, res) => {
   try {
-    const { name, email, phone, preferredStylist, profileImage, password, specialty, workingHours, offDays } = req.body;
-    const user = await User.findById(req.user._id);
+    const {
+      name,
+      email,
+      phone,
+      preferredStylist,
+      profileImage: requestedProfileImage,
+      password,
+      newPassword,
+      currentPassword,
+      specialty,
+      workingHours,
+      offDays
+    } = req.body;
+    const user = await User.findById(req.user._id).select('+password');
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
+    if (requestedProfileImage !== undefined && !req.file) {
+      const message = isBase64Image(requestedProfileImage)
+        ? 'Base64 profile images are no longer accepted. Please upload an image file.'
+        : 'Please upload profileImage as an image file.';
+
+      return res.status(400).json({ message });
+    }
+
+    const normalizedName = name !== undefined ? String(name).trim() : undefined;
+    const normalizedEmail = email !== undefined ? String(email).trim().toLowerCase() : undefined;
+    const normalizedPhone = phone !== undefined ? String(phone).trim() : undefined;
+    const nextPassword = newPassword || password;
+    const uploadedProfileImage = req.file?.path;
+
+    if (normalizedName !== undefined && !normalizedName) {
+      return res.status(400).json({ message: 'Name is required.' });
+    }
+
+    if (normalizedEmail !== undefined) {
+      if (!isValidEmail(normalizedEmail)) {
+        return res.status(400).json({ message: 'Please enter a valid email address.' });
+      }
+
+      const emailOwner = await User.findOne({
+        email: normalizedEmail,
+        _id: { $ne: user._id }
+      }).select('_id');
+
+      if (emailOwner) {
+        return res.status(409).json({ message: 'An account with this email already exists.' });
+      }
+    }
+
+    if (normalizedPhone !== undefined && normalizedPhone && !isValidPhoneNumber(normalizedPhone)) {
+      return res.status(400).json({ message: 'Please enter a valid phone number.' });
+    }
+
+    if (nextPassword) {
+      if (!currentPassword) {
+        return res.status(401).json({ message: 'Current password is required to update your password.' });
+      }
+
+      const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
+      if (!isCurrentPasswordValid) {
+        return res.status(401).json({ message: 'Current password is incorrect.' });
+      }
+
+      if (String(nextPassword).length < 6) {
+        return res.status(400).json({ message: 'Password must be at least 6 characters long.' });
+      }
+    }
+
     const previousPreferredStylist = user.preferredStylist?.toString() || null;
     const resolvedPreferredStylist = await resolvePreferredStylistId(preferredStylist);
 
-    user.name = name || user.name;
-    user.email = email || user.email;
-    user.phone = phone !== undefined ? phone : user.phone;
+    user.name = normalizedName !== undefined ? normalizedName : user.name;
+    user.email = normalizedEmail !== undefined ? normalizedEmail : user.email;
+    user.phone = normalizedPhone !== undefined ? normalizedPhone : user.phone;
     user.preferredStylist = resolvedPreferredStylist !== undefined
       ? resolvedPreferredStylist
       : user.preferredStylist;
-    user.profileImage = profileImage !== undefined ? profileImage : user.profileImage;
+    user.profileImage = uploadedProfileImage || user.profileImage;
 
-    if (password) {
+    if (nextPassword) {
       const salt = await bcrypt.genSalt(10);
-      user.password = await bcrypt.hash(password, salt);
+      user.password = await bcrypt.hash(nextPassword, salt);
     }
 
     const updatedUser = await user.save();
@@ -409,14 +477,14 @@ const updateUserProfile = async (req, res) => {
         staffDetails = await Staff.create({
           userId: updatedUser._id,
           name: updatedUser.name,
-          imageUrl: profileImage || '',
+          imageUrl: uploadedProfileImage || '',
           specialty: specialty || '',
           workingHours: normalizeWorkingHours(workingHours),
           offDays: normalizedOffDays || [],
         });
       } else {
         staffDetails.name = updatedUser.name || staffDetails.name;
-        staffDetails.imageUrl = profileImage ? profileImage : staffDetails.imageUrl;
+        staffDetails.imageUrl = uploadedProfileImage || staffDetails.imageUrl;
         staffDetails.specialty = specialty !== undefined ? specialty : staffDetails.specialty;
         if (workingHours !== undefined) {
           staffDetails.workingHours = normalizeWorkingHours(workingHours);
@@ -437,13 +505,6 @@ const updateUserProfile = async (req, res) => {
       phone: updatedUser.phone || '',
       preferredStylist: updatedUser.preferredStylist || '',
       profileImage: mergedProfileImage,
-      _id: updatedUser._id,
-      id: updatedUser._id,
-      name: updatedUser.name,
-      email: updatedUser.email,
-      phone: updatedUser.phone || '',
-      preferredStylist: updatedUser.preferredStylist || '',
-      profileImage,
       role: updatedUser.role,
       token: req.headers.authorization ? req.headers.authorization.split(' ')[1] : '',
       staffDetails,
@@ -455,6 +516,15 @@ const updateUserProfile = async (req, res) => {
 
     res.json(mergedResponse);
   } catch (error) {
+    if (error?.code === 11000 && error?.keyPattern?.email) {
+      return res.status(409).json({ message: 'An account with this email already exists.' });
+    }
+
+    if (error?.name === 'ValidationError') {
+      const message = Object.values(error.errors || {})[0]?.message || 'Please check your profile details.';
+      return res.status(400).json({ message });
+    }
+
     res.status(error.statusCode || 500).json({ message: error.message });
   }
 };

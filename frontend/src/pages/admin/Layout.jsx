@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Menu } from 'lucide-react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
@@ -46,6 +46,8 @@ const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:500
 function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
+  const profileDialogRef = useRef(null);
+  const previouslyFocusedElementRef = useRef(null);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
@@ -203,11 +205,75 @@ function Layout() {
   useEffect(() => {
     if (!isProfileOpen) return undefined;
     const previousOverflow = document.body.style.overflow;
+    previouslyFocusedElementRef.current = document.activeElement;
     document.body.style.overflow = 'hidden';
+
+    window.setTimeout(() => {
+      const dialog = profileDialogRef.current;
+      if (!dialog) return;
+
+      const firstFocusable = dialog.querySelector(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+
+      (firstFocusable || dialog).focus();
+    }, 0);
 
     return () => {
       document.body.style.overflow = previousOverflow;
+      previouslyFocusedElementRef.current?.focus?.();
     };
+  }, [isProfileOpen]);
+
+  useEffect(() => {
+    if (!isProfileOpen) return undefined;
+
+    const getFocusableElements = () => {
+      const dialog = profileDialogRef.current;
+      if (!dialog) return [];
+
+      return Array.from(dialog.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      )).filter((element) => (
+        !element.disabled
+        && element.getAttribute('aria-hidden') !== 'true'
+        && element.offsetParent !== null
+      ));
+    };
+
+    const handleDialogKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeProfile();
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+
+      const focusableElements = getFocusableElements();
+      if (focusableElements.length === 0) {
+        event.preventDefault();
+        profileDialogRef.current?.focus();
+        return;
+      }
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+
+      if (event.shiftKey && document.activeElement === firstElement) {
+        event.preventDefault();
+        lastElement.focus();
+        return;
+      }
+
+      if (!event.shiftKey && document.activeElement === lastElement) {
+        event.preventDefault();
+        firstElement.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleDialogKeyDown);
+    return () => document.removeEventListener('keydown', handleDialogKeyDown);
   }, [isProfileOpen]);
 
   const role = localStorage.getItem('userRole') || user?.role;
@@ -441,11 +507,15 @@ function Layout() {
           onClick={closeProfile}
           role="dialog"
           aria-modal="true"
+          aria-labelledby="profile-dialog-title"
         >
           <div
+            ref={profileDialogRef}
+            tabIndex={-1}
             className="no-scrollbar relative h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-white/10 bg-[#070707] shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
+            <h2 id="profile-dialog-title" className="sr-only">Profile dialog</h2>
             <RoleProfile onClose={closeProfile} />
           </div>
         </div>
