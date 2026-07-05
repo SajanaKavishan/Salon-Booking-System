@@ -1202,10 +1202,45 @@ const markAppointmentRunningLate = async (req, res) => {
             return res.status(404).json({ message: 'Appointment not found.' });
         }
 
-        // Convert the client-provided delay into a number before saving it.
-        const lateMinutes = Number.parseInt(req.body.minutes, 10);
-        if (!Number.isFinite(lateMinutes) || lateMinutes < 0) {
-            return res.status(400).json({ message: 'A valid late minutes value is required.' });
+        if (appointment.user.toString() !== req.user.id.toString()) {
+            return res.status(401).json({ message: 'You are not authorized to update this appointment.' });
+        }
+
+        const allowedLateMinutes = [10, 15, 20];
+        const rawLateMinutes = req.body.minutes;
+        const lateMinutes = typeof rawLateMinutes === 'number'
+            ? rawLateMinutes
+            : typeof rawLateMinutes === 'string' && rawLateMinutes.trim() !== ''
+                ? Number(rawLateMinutes)
+                : NaN;
+
+        if (!allowedLateMinutes.includes(lateMinutes)) {
+            return res.status(400).json({ message: 'Late minutes must be one of: 10, 15, 20.' });
+        }
+
+        const normalizedStatus = Appointment.normalizeStatus(appointment.status);
+        if (!['pending', 'confirmed'].includes(normalizedStatus)) {
+            return res.status(400).json({ message: 'Only pending or confirmed appointments can be marked as running late.' });
+        }
+
+        if (appointment.isLate) {
+            return res.status(400).json({ message: 'This appointment is already marked as running late.' });
+        }
+
+        const appointmentDateValue = appointment.bookingDate || appointment.date;
+        const appointmentDateKey = appointmentDateValue instanceof Date
+            ? appointmentDateValue.toISOString().slice(0, 10)
+            : String(appointmentDateValue || '').slice(0, 10);
+        const startMinutes = timeToMinutes(appointment.startTime);
+        const [year, month, day] = appointmentDateKey.split('-').map(Number);
+
+        if (!appointmentDateKey || [year, month, day].some(Number.isNaN) || !appointment.startTime) {
+            return res.status(400).json({ message: 'Appointment date and start time are required to report a delay.' });
+        }
+
+        const appointmentStart = new Date(year, month - 1, day, Math.floor(startMinutes / 60), startMinutes % 60);
+        if (appointmentStart.getTime() < Date.now()) {
+            return res.status(400).json({ message: 'Past appointments cannot be marked as running late.' });
         }
 
         // Shift the stored appointment end time by the delay and keep the original endTime unchanged.

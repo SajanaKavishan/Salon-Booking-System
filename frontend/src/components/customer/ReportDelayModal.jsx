@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Clock, Loader2, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const DELAY_OPTIONS = [10, 15, 20];
 
 function ReportDelayModal({ appointment, onClose, onSuccess }) {
@@ -10,6 +11,17 @@ function ReportDelayModal({ appointment, onClose, onSuccess }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const appointmentId = appointment?._id || appointment?.id;
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape' && !isSubmitting) {
+        onClose?.();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isSubmitting, onClose]);
 
   const handleConfirmDelay = async () => {
     if (!appointmentId || isSubmitting) return;
@@ -19,7 +31,7 @@ function ReportDelayModal({ appointment, onClose, onSuccess }) {
     try {
       const token = localStorage.getItem('token');
       const response = await axios.post(
-        `http://localhost:5000/api/appointments/${appointmentId}/running-late`,
+        `${API_BASE_URL}/api/appointments/${appointmentId}/running-late`,
         { minutes: selectedValue },
         {
           headers: {
@@ -85,6 +97,7 @@ function ReportDelayModal({ appointment, onClose, onSuccess }) {
                 type="button"
                 onClick={() => setSelectedValue(minutes)}
                 disabled={isSubmitting}
+                aria-pressed={isSelected}
                 className={`rounded-full border px-3 py-2.5 text-xs font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
                   isSelected
                     ? 'border-amber-500 bg-amber-500/5 text-amber-400 shadow-[0_0_18px_rgba(245,158,11,0.18)]'

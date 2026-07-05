@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { motion } from 'framer-motion';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const HERO_IMAGE_URL = '/heroBg.jpg';
 const FALLBACK_AVAILABILITY_MESSAGE = 'Ready to elevate your aesthetic? Explore our master stylists and reserve your luxury grooming experience today.';
 
@@ -103,7 +103,7 @@ function DashboardHeader({ firstName, nextAppointment, formatDate, onBook }) {
             transition={isAvailabilityLoading ? { duration: 1.7, repeat: Infinity, ease: 'easeInOut' } : { duration: 0.3 }}
             aria-live="polite"
           >
-            {isAvailabilityLoading ? 'Checking today’s exclusive availability...' : availability.message}
+            {isAvailabilityLoading ? "Checking today's exclusive availability..." : availability.message}
           </motion.p>
 
           <div className="mt-6 text-sm text-neutral-400 sm:mt-7">

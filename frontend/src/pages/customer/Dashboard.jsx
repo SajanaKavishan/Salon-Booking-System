@@ -12,6 +12,7 @@ import DashboardHeader from '../../components/customer/DashboardHeader';
 const HISTORY_STATUSES = ['completed', 'rejected', 'cancelled', 'canceled', 'no-show'];
 const UPCOMING_STATUSES = ['pending', 'approved', 'confirmed'];
 const REVIEW_PROMPT_STORAGE_PREFIX = 'salonDismissedReviewPrompts';
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const MotionDiv = motion.div;
 
 const formatServices = (services, fallback = 'Service not available') => {
@@ -130,6 +131,7 @@ function Dashboard() {
   const [appointmentToCancel, setAppointmentToCancel] = useState(null);
   const [isCancelling, setIsCancelling] = useState(false);
   const [dismissedReviewAppointmentIds, setDismissedReviewAppointmentIds] = useState([]);
+  const [temporarilyClosedReviewAppointmentIds, setTemporarilyClosedReviewAppointmentIds] = useState([]);
 
   const fetchAppointments = useCallback(async () => {
     const token = localStorage.getItem('token');
@@ -140,7 +142,7 @@ function Dashboard() {
     }
 
     try {
-      const response = await axios.get('http://localhost:5000/api/appointments', {
+      const response = await axios.get(`${API_BASE_URL}/api/appointments`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
@@ -215,9 +217,10 @@ function Dashboard() {
 
       return normalizedStatus === 'completed'
         && appointment?.rating == null
-        && !dismissedReviewAppointmentIds.includes(appointmentId);
+        && !dismissedReviewAppointmentIds.includes(appointmentId)
+        && !temporarilyClosedReviewAppointmentIds.includes(appointmentId);
     }),
-    [dismissedReviewAppointmentIds, pastAppointments]
+    [dismissedReviewAppointmentIds, pastAppointments, temporarilyClosedReviewAppointmentIds]
   );
 
   // Only sum prices of COMPLETED appointments for Total Spend metric
@@ -248,7 +251,7 @@ function Dashboard() {
       const token = localStorage.getItem('token');
       const appointmentId = appointmentToCancel._id || appointmentToCancel.id;
 
-      const response = await axios.delete(`http://localhost:5000/api/appointments/${appointmentId}`, {
+      const response = await axios.delete(`${API_BASE_URL}/api/appointments/${appointmentId}`, {
         headers: {
           Authorization: `Bearer ${token}`
         }
@@ -289,6 +292,14 @@ function Dashboard() {
       return nextIds;
     });
   }, [user]);
+
+  const temporarilyCloseReviewPrompt = useCallback((appointmentId) => {
+    if (!appointmentId) return;
+
+    setTemporarilyClosedReviewAppointmentIds((currentIds) => (
+      Array.from(new Set([...currentIds, appointmentId]))
+    ));
+  }, []);
 
   return (
     <div className="mx-auto min-h-screen w-full max-w-7xl overflow-hidden bg-[#070707] text-white">
@@ -470,7 +481,8 @@ function Dashboard() {
         <AppointmentReviewModal
           appointment={pendingReviewAppointment}
           user={user}
-          onClose={() => markReviewPromptSeen(pendingReviewAppointment._id || pendingReviewAppointment.id)}
+          onClose={() => temporarilyCloseReviewPrompt(pendingReviewAppointment._id || pendingReviewAppointment.id)}
+          onDismissPermanently={() => markReviewPromptSeen(pendingReviewAppointment._id || pendingReviewAppointment.id)}
           onReviewSubmitted={(updatedAppointment) => {
             markReviewPromptSeen(pendingReviewAppointment._id || pendingReviewAppointment.id);
             handleAppointmentUpdated(updatedAppointment);

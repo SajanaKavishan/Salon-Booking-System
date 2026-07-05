@@ -1,9 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { Check, Loader2, Sparkles, Star, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 
 const getAppointmentId = (appointment) => appointment?._id || appointment?.id;
 
@@ -25,7 +25,7 @@ const getStoredUser = () => {
   }
 };
 
-function AppointmentReviewModal({ appointment, user, onClose, onReviewSubmitted }) {
+function AppointmentReviewModal({ appointment, user, onClose, onReviewSubmitted, onDismissPermanently }) {
   const [rating, setRating] = useState(0);
   const [hoveredRating, setHoveredRating] = useState(0);
   const [feedback, setFeedback] = useState('');
@@ -46,10 +46,27 @@ function AppointmentReviewModal({ appointment, user, onClose, onReviewSubmitted 
     setMakePreferred(false);
   };
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     if (isSubmitting) return;
     setIsClosed(true);
     onClose?.();
+  }, [isSubmitting, onClose]);
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        handleClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleClose]);
+
+  const handleDismissPermanently = () => {
+    if (isSubmitting) return;
+    setIsClosed(true);
+    onDismissPermanently?.(appointmentId);
   };
 
   const handleSubmitReview = async () => {
@@ -80,7 +97,6 @@ function AppointmentReviewModal({ appointment, user, onClose, onReviewSubmitted 
         setIsSubmitting(false);
         onReviewSubmitted?.(response.data?.appointment);
         setIsClosed(true);
-        onClose?.();
       }, 500);
     } catch (error) {
       console.error('Submit Review Error:', error);
@@ -123,7 +139,12 @@ function AppointmentReviewModal({ appointment, user, onClose, onReviewSubmitted 
           Your feedback helps us keep every appointment polished, personal, and worth coming back for.
         </p>
 
-        <div className="mt-6 flex items-center justify-center gap-2" onMouseLeave={() => setHoveredRating(0)}>
+        <div
+          className="mt-6 flex items-center justify-center gap-2"
+          role="radiogroup"
+          aria-label="Appointment rating"
+          onMouseLeave={() => setHoveredRating(0)}
+        >
           {[1, 2, 3, 4, 5].map((starValue) => {
             const isSelected = starValue <= displayedRating;
 
@@ -137,6 +158,8 @@ function AppointmentReviewModal({ appointment, user, onClose, onReviewSubmitted 
                 onClick={() => setRating(starValue)}
                 disabled={isSubmitting}
                 className="rounded-lg p-1.5 transition hover:scale-110 focus:outline-none focus:ring-2 focus:ring-amber-500/40 disabled:cursor-not-allowed disabled:opacity-60"
+                role="radio"
+                aria-checked={rating === starValue}
                 aria-label={`Rate ${starValue} star${starValue > 1 ? 's' : ''}`}
               >
                 <Star
@@ -210,6 +233,15 @@ function AppointmentReviewModal({ appointment, user, onClose, onReviewSubmitted 
         >
           {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
           {isSubmitting ? 'Submitting...' : 'Submit Review'}
+        </button>
+
+        <button
+          type="button"
+          onClick={handleDismissPermanently}
+          disabled={isSubmitting || !appointmentId}
+          className="mt-3 w-full rounded-lg border border-zinc-800 px-4 py-2.5 text-sm font-semibold text-zinc-400 transition hover:border-zinc-700 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          Don't show again
         </button>
       </div>
     </div>
