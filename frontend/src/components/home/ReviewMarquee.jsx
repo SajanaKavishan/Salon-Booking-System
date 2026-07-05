@@ -1,8 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
+import React, { useMemo } from 'react';
 import { Star } from 'lucide-react';
-
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
 
 const getClientName = (review) => review?.user?.name || 'Valued Client';
 
@@ -53,6 +50,7 @@ function StaticStars({ rating }) {
         return (
           <Star
             key={starValue}
+            aria-hidden="true"
             className={`h-4 w-4 ${
               isFilled ? 'text-amber-400 fill-amber-400' : 'text-zinc-700'
             }`}
@@ -88,39 +86,7 @@ function ReviewCard({ review }) {
   );
 }
 
-function ReviewMarquee({ reviews: providedReviews }) {
-  const [fetchedReviews, setFetchedReviews] = useState([]);
-  const hasProvidedReviews = Array.isArray(providedReviews);
-  const reviews = hasProvidedReviews ? providedReviews : fetchedReviews;
-
-  useEffect(() => {
-    if (hasProvidedReviews) return undefined;
-
-    let isMounted = true;
-
-    const fetchPublicReviews = async () => {
-      try {
-        const response = await axios.get(`${API_BASE_URL}/api/appointments/reviews/public`);
-        const publicReviews = Array.isArray(response.data) ? response.data : [];
-
-        if (isMounted) {
-          setFetchedReviews(publicReviews);
-        }
-      } catch (error) {
-        console.error('Fetch Public Reviews Error:', error);
-        if (isMounted) {
-          setFetchedReviews([]);
-        }
-      }
-    };
-
-    fetchPublicReviews();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [hasProvidedReviews]);
-
+function ReviewMarquee({ reviews = [] }) {
   const marqueeReviews = useMemo(() => [...reviews, ...reviews], [reviews]);
 
   if (reviews.length < 3) {
@@ -143,9 +109,17 @@ function ReviewMarquee({ reviews: providedReviews }) {
           <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-10 bg-gradient-to-r from-zinc-950 to-transparent sm:w-20"></div>
           <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-gradient-to-l from-zinc-950 to-transparent sm:w-20"></div>
 
-          <div className="flex w-max animate-marquee gap-4 whitespace-nowrap hover:[animation-play-state:paused] sm:gap-6">
+          <div className="flex w-max animate-marquee gap-4 whitespace-nowrap hover:[animation-play-state:paused] motion-reduce:hidden sm:gap-6">
             {marqueeReviews.map((review, index) => (
               <ReviewCard key={`${review?._id || review?.id || 'review'}-${index}`} review={review} />
+            ))}
+          </div>
+
+          <div className="no-scrollbar hidden snap-x gap-4 overflow-x-auto pb-1 motion-reduce:flex sm:gap-6">
+            {reviews.map((review, index) => (
+              <div key={`${review?._id || review?.id || 'review'}-static-${index}`} className="snap-start">
+                <ReviewCard review={review} />
+              </div>
             ))}
           </div>
         </div>

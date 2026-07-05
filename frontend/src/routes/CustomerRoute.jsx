@@ -31,7 +31,7 @@ function CustomerRoute({ children }) {
   }
 
   if (isFirstLogin && location.pathname !== '/onboarding') {
-    return <Navigate to="/onboarding" replace state={{ from: location }} />;
+    return <Navigate to="/onboarding" replace state={{ ...location.state, from: location }} />;
   }
 
   return children;

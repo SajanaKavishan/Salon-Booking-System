@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import axiosInstance from 'axios'; 
 import { AnimatePresence, motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import {
   Award,
@@ -12,7 +12,7 @@ import {
   Star,
 } from 'lucide-react';
 
-const BACKEND_BASE_URL = 'http://localhost:5000';
+const BACKEND_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const FALLBACK_STAFF_IMAGE = '/Owner.jpg';
 
 const onboardingImages = {
@@ -256,6 +256,7 @@ function StylistCard({
 
 function Onboarding() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [currentStep, setCurrentStep] = useState(1);
   const [selectedStylistId, setSelectedStylistId] = useState(null);
   const [hoveredStylistId, setHoveredStylistId] = useState(null);
@@ -269,12 +270,24 @@ function Onboarding() {
   const selectedRealStylistId = stylists.some((staff) => getStaffId(staff) === selectedStylistId)
     ? selectedStylistId
     : null;
+  const { redirectAfterOnboarding, redirectState } = useMemo(() => {
+    const redirectFrom = location.state?.from;
+    const nextState = { ...(redirectFrom?.state || {}), ...(location.state || {}) };
+    delete nextState.from;
+
+    return {
+      redirectAfterOnboarding: redirectFrom?.pathname
+        ? `${redirectFrom.pathname}${redirectFrom.search || ''}`
+        : '/dashboard',
+      redirectState: nextState,
+    };
+  }, [location.state]);
 
   useEffect(() => {
     if (storedUser?.isFirstLogin === false) {
-      navigate('/dashboard', { replace: true });
+      navigate(redirectAfterOnboarding, { replace: true, state: redirectState });
     }
-  }, [navigate, storedUser]);
+  }, [navigate, redirectAfterOnboarding, redirectState, storedUser]);
 
   useEffect(() => {
     let isActive = true;
@@ -330,7 +343,7 @@ function Onboarding() {
       localStorage.setItem('user', JSON.stringify(nextUser));
       window.dispatchEvent(new CustomEvent('profileUpdated', { detail: nextUser }));
       toast.success('Your SalonDEES suite is ready.');
-      navigate('/dashboard', { replace: true });
+      navigate(redirectAfterOnboarding, { replace: true, state: redirectState });
     } catch (error) {
       toast.error(error.response?.data?.message || 'Unable to complete onboarding. Please try again.');
     } finally {

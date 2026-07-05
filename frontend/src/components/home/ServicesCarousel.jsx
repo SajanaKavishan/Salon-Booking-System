@@ -32,7 +32,7 @@ function ServiceSkeleton({ index }) {
   return (
     <SwiperSlide className="services-carousel-slide">
       <div
-        className="flex h-[240px] flex-col rounded-2xl border border-white/[0.04] bg-white/[0.01] p-6 backdrop-blur-lg animate-pulse sm:h-[260px] sm:rounded-3xl sm:p-8"
+        className="flex min-h-[240px] flex-col rounded-2xl border border-white/[0.04] bg-white/[0.01] p-6 backdrop-blur-lg animate-pulse sm:min-h-[260px] sm:rounded-3xl sm:p-8"
         aria-hidden="true"
       >
         <div className="h-3 w-20 rounded-full bg-white/10" />
@@ -88,7 +88,7 @@ function ServicesCarousel({ services, loading, onBook }) {
             {!loading && services.map((service, index) => (
               <SwiperSlide key={service._id} className="services-carousel-slide">
                 <motion.article
-                  className="group flex h-[240px] flex-col rounded-2xl border border-white/[0.04] bg-white/[0.01] p-6 backdrop-blur-lg transition-all duration-500 ease-out hover:scale-[1.03] hover:border-[#d4af37]/20 hover:shadow-[0_20px_50px_-15px_rgba(212,175,55,0.25)] sm:h-[260px] sm:rounded-3xl sm:p-8"
+                  className="group flex min-h-[240px] flex-col rounded-2xl border border-white/[0.04] bg-white/[0.01] p-6 backdrop-blur-lg transition-all duration-500 ease-out hover:scale-[1.03] hover:border-[#d4af37]/20 hover:shadow-[0_20px_50px_-15px_rgba(212,175,55,0.25)] sm:min-h-[260px] sm:rounded-3xl sm:p-8"
                   custom={index}
                   initial="hidden"
                   whileInView="visible"
@@ -99,7 +99,7 @@ function ServicesCarousel({ services, loading, onBook }) {
                     {service.duration} mins
                   </p>
 
-                  <h3 className="mt-5 break-words font-brand text-2xl leading-tight text-white sm:text-3xl">
+                  <h3 className="mt-5 line-clamp-3 break-words font-brand text-2xl leading-tight text-white sm:line-clamp-2 sm:text-3xl">
                     {service.name}
                   </h3>
 

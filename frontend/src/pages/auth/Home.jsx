@@ -2,13 +2,13 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { motion } from 'framer-motion';
-import { ArrowRight, Clock, MapPin, Star } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight, Clock, MapPin, Star } from 'lucide-react';
 import { WEEKLY_OPENING_HOURS, defaultOpeningHours, useSalonSettings } from '../../hooks/useSalonSettings';
 import ServicesCarousel from '../../components/home/ServicesCarousel';
 import ReviewMarquee from '../../components/home/ReviewMarquee';
 import ChatWidget from '../../components/public/ChatWidget';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 const formatTime = (timeValue) => {
   if (!timeValue) return '';
@@ -82,6 +82,8 @@ function Home() {
   // Contact Form State
   const [formData, setFormData] = useState({ name: '', email: '', message: '' });
   const [submitStatus, setSubmitStatus] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const submitLockRef = useRef(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -263,12 +265,28 @@ function Home() {
     }
   };
 
+  const scrollGallery = (direction) => {
+    const scroller = galleryScrollerRef.current;
+    if (!scroller) return;
+
+    const scrollDistance = Math.max(scroller.clientWidth * 0.85, 220);
+    scroller.scrollBy({
+      left: direction === 'next' ? scrollDistance : -scrollDistance,
+      behavior: 'smooth',
+    });
+  };
+
   const handleMessageChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
   const handleMessageSubmit = async (e) => {
     e.preventDefault();
+
+    if (submitLockRef.current) return;
+
+    submitLockRef.current = true;
+    setIsSubmitting(true);
     setSubmitStatus('Sending...');
 
     try {
@@ -280,6 +298,9 @@ function Home() {
     } catch (error) {
       console.error('Error sending message:', error);
       setSubmitStatus('Failed to send. Please try again.');
+    } finally {
+      submitLockRef.current = false;
+      setIsSubmitting(false);
     }
   };
 
@@ -688,6 +709,30 @@ function Home() {
               />
             )}
 
+            {!galleryLoading && galleryImages.length > 0 && (
+              <div className="pointer-events-none absolute inset-y-0 left-0 right-0 z-20 hidden items-center justify-between px-1 md:flex">
+                <button
+                  type="button"
+                  onClick={() => scrollGallery('previous')}
+                  disabled={!galleryFade.left}
+                  aria-label="Show previous gallery images"
+                  className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-black/70 text-white shadow-xl backdrop-blur transition hover:border-primary/50 hover:text-primary disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-white/10 disabled:hover:text-white"
+                >
+                  <ChevronLeft className="h-5 w-5" aria-hidden="true" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => scrollGallery('next')}
+                  disabled={!galleryFade.right}
+                  aria-label="Show next gallery images"
+                  className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-black/70 text-white shadow-xl backdrop-blur transition hover:border-primary/50 hover:text-primary disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-white/10 disabled:hover:text-white"
+                >
+                  <ChevronRight className="h-5 w-5" aria-hidden="true" />
+                </button>
+              </div>
+            )}
+
             <motion.div
               ref={galleryScrollerRef}
               className="no-scrollbar flex touch-pan-x snap-x gap-3 overflow-x-auto scroll-smooth pb-1 sm:gap-4"
@@ -807,6 +852,7 @@ function Home() {
                     value={formData.name}
                     onChange={handleMessageChange}
                     required
+                    maxLength={100}
                     autoComplete="name"
                     placeholder="Your Name"
                     className="w-full bg-[#111111] border border-white/10 p-3 rounded text-white focus:outline-none focus:border-[#d4af37] transition"
@@ -822,6 +868,7 @@ function Home() {
                     value={formData.email}
                     onChange={handleMessageChange}
                     required
+                    maxLength={254}
                     autoComplete="email"
                     placeholder="Email Address"
                     className="w-full bg-[#111111] border border-white/10 p-3 rounded text-white focus:outline-none focus:border-[#d4af37] transition"
@@ -836,6 +883,7 @@ function Home() {
                     value={formData.message}
                     onChange={handleMessageChange}
                     required
+                    maxLength={1000}
                     placeholder="How can we help you?"
                     rows="4"
                     className="w-full bg-[#111111] border border-white/10 p-3 rounded text-white focus:outline-none focus:border-[#d4af37] transition resize-none"
@@ -844,11 +892,11 @@ function Home() {
 
                 <motion.button
                   type="submit"
-                  disabled={submitStatus === 'Sending...'}
+                  disabled={isSubmitting}
                   className="rounded-full bg-[#d4af37] px-8 py-3 text-black font-semibold shadow-[0_18px_40px_rgba(255,255,255,0.18)] transition duration-300 ease-out hover:scale-[1.02] hover:bg-yellow-400 disabled:opacity-50 disabled:cursor-not-allowed"
                   whileHover={{ y: -4, transition: { duration: 0.2 } }}
                 >
-                  {submitStatus === 'Sending...' ? 'Sending...' : 'Send Message'}
+                  {isSubmitting ? 'Sending...' : 'Send Message'}
                 </motion.button>
               </form>
             </div>
