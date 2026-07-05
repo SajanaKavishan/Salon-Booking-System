@@ -6,6 +6,8 @@ import { FaEye, FaEyeSlash } from 'react-icons/fa';
 import { motion } from 'framer-motion';
 import { Check, Scissors } from 'lucide-react';
 import Spinner from '../../components/common/Spinner';
+import { AuthShell } from '../../components/admin/SystemUI';
+import { apiUrl } from '../../utils/apiConfig';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -20,7 +22,6 @@ const itemVariants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: 'easeOut' } }
 };
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 const MIN_PASSWORD_LENGTH = 6;
 
 const getRoleRedirectPath = (role, isFirstLogin = false) => {
@@ -91,7 +92,7 @@ function Register() {
     setIsLoading(true);
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/users/register`, {
+      const response = await axios.post(apiUrl('/api/users/register'), {
         name: name.trim(),
         email: email.trim(),
         phone: phone.trim(),
@@ -125,13 +126,17 @@ function Register() {
   };
 
   return (
-    <div
-      className="relative min-h-screen w-full bg-cover bg-center bg-no-repeat bg-fixed flex flex-col lg:flex-row items-center justify-center p-4 lg:p-8"
-      style={{ backgroundImage: "url('/registerBg.jpg')" }}
+    <AuthShell
+      backgroundStyle={{
+        backgroundImage: "url('/registerBg.jpg')",
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat'
+      }}
     >
-      <div className="salon-page-overlay fixed inset-0" aria-hidden="true" />
+      <div className="mx-auto flex w-full max-w-6xl items-center justify-center lg:justify-between lg:gap-12">
       <motion.div
-        className="relative z-10 hidden lg:flex flex-col max-w-xl pr-8"
+        className="hidden w-full max-w-xl flex-col lg:flex lg:pr-8"
         variants={containerVariants}
         initial="hidden"
         animate="visible"
@@ -183,7 +188,7 @@ function Register() {
       </motion.div>
 
       <motion.div
-        className="relative z-10 w-full max-w-md"
+        className="w-full max-w-md"
         initial={{ opacity: 0, y: 30 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8, delay: 0.2, ease: 'easeOut' }}
@@ -302,7 +307,8 @@ function Register() {
           </p>
         </div>
       </motion.div>
-    </div>
+      </div>
+    </AuthShell>
   );
 }
 

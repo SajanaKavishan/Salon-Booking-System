@@ -1,5 +1,5 @@
 import React from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 
 const getRoleHome = (role) => {
   if (role === 'admin') return '/admin';
@@ -8,11 +8,13 @@ const getRoleHome = (role) => {
 };
 
 function ProtectedRoute({ children, allowedRoles = [] }) {
+  const location = useLocation();
   const token = localStorage.getItem('token');
   const userRole = localStorage.getItem('userRole');
 
   if (!token || !userRole) {
-    return <Navigate to="/login" replace />;
+    const nextPath = `${location.pathname}${location.search}${location.hash}`;
+    return <Navigate to={`/login?next=${encodeURIComponent(nextPath)}`} replace />;
   }
 
   if (allowedRoles.length > 0 && !allowedRoles.includes(userRole)) {

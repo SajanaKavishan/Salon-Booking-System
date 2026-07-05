@@ -178,6 +178,8 @@ const isValidPhoneNumber = (phoneValue) => {
   return /^[+()\-\s\d]+$/.test(trimmedPhone) && digitsOnly.length >= 7 && digitsOnly.length <= 15;
 };
 
+const OAUTH_PHONE_FALLBACK = '0000000000';
+
 const isValidEmail = (emailValue) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(emailValue || '').trim());
 
 const isBase64Image = (value) => /^data:image\/[a-zA-Z0-9.+-]+;base64,/.test(String(value || '').trim());
@@ -297,10 +299,11 @@ const googleLogin = async (req, res) => {
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(randomPassword, salt);
       const resolvedPreferredStylist = await resolvePreferredStylistId(req.body.preferredStylist);
+      const normalizedPhone = String(req.body.phone || '').trim();
       user = await User.create({
         name,
         email,
-        phone: req.body.phone || 'Not Provided',
+        phone: isValidPhoneNumber(normalizedPhone) ? normalizedPhone : OAUTH_PHONE_FALLBACK,
         preferredStylist: resolvedPreferredStylist || null,
         profileImage: req.body.profileImage || '',
         password: hashedPassword,

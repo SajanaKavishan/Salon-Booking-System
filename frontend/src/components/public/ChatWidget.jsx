@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { Bot, ChevronDown, Loader2, Send } from 'lucide-react';
-
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
+import { apiUrl } from '../../utils/apiConfig';
 
 const initialMessages = [
   {
@@ -131,7 +130,7 @@ function ChatWidget({ mode = 'desktop-floating' }) {
     setIsSending(true);
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/chatbot`, {
+      const response = await axios.post(apiUrl('/api/chatbot'), {
         message: trimmedInput,
         history: messages,
       });

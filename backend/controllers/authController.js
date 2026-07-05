@@ -10,6 +10,15 @@ const {
   normalizeWorkingHours,
 } = require('../utils/staffSchedule');
 
+const DEFAULT_PHONE_FALLBACK = '0000000000';
+
+const isValidPhoneNumber = (phoneValue) => {
+  const trimmedPhone = String(phoneValue || '').trim();
+  const digitsOnly = trimmedPhone.replace(/\D/g, '');
+
+  return /^[+()\-\s\d]+$/.test(trimmedPhone) && digitsOnly.length >= 7 && digitsOnly.length <= 15;
+};
+
 const generateToken = (user) => {
   return jwt.sign(
     {
@@ -40,6 +49,7 @@ const registerStaff = async (req, res) => {
 
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
+    const normalizedPhone = String(req.body.phone || '').trim();
 
     let staffUser = null;
     let staffProfile = null;
@@ -50,7 +60,7 @@ const registerStaff = async (req, res) => {
         email: email.toLowerCase(),
         password: hashedPassword,
         role: 'staff',
-        phone: req.body.phone || 'Not Provided'
+        phone: isValidPhoneNumber(normalizedPhone) ? normalizedPhone : DEFAULT_PHONE_FALLBACK
       }], { session }).then((users) => users[0]);
 
       if (!specialty) return;
@@ -152,6 +162,12 @@ const forgotPassword = async (req, res) => {
       return res.status(200).json({ success: true, message: genericSuccessMessage });
     }
 
+    if (!process.env.FRONTEND_URL) {
+      return res.status(500).json({
+        message: 'Password reset is not configured. Please set FRONTEND_URL.',
+      });
+    }
+
     const resetToken = crypto.randomBytes(32).toString('hex');
     user.resetPasswordToken = crypto
       .createHash('sha256')
@@ -161,8 +177,7 @@ const forgotPassword = async (req, res) => {
 
     await user.save();
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const resetUrl = `${frontendUrl.replace(/\/$/, '')}/reset-password/${resetToken}`;
+    const resetUrl = `${process.env.FRONTEND_URL.replace(/\/$/, '')}/reset-password/${resetToken}`;
 
     const message = `
       <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111827;">

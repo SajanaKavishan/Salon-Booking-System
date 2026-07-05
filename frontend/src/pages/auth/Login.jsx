@@ -8,6 +8,7 @@ import { motion } from 'framer-motion';
 import { Check, Scissors } from 'lucide-react';
 import Spinner from '../../components/common/Spinner';
 import { AuthShell } from '../../components/admin/SystemUI';
+import { apiUrl } from '../../utils/apiConfig';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -21,8 +22,6 @@ const itemVariants = {
   hidden: { opacity: 0, y: 25 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: 'easeOut' } }
 };
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 const getRoleRedirectPath = (role, isFirstLogin = false) => {
   if (role === 'admin') return '/admin';
@@ -42,6 +41,8 @@ function Login() {
   const [isLoading, setIsLoading] = useState(false);
 
   const { email, password } = formData;
+  const next = searchParams.get('next');
+  const safeNextPath = next?.startsWith('/') && !next.startsWith('//') ? next : null;
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -56,16 +57,15 @@ function Login() {
       isFirstLogin = false;
     }
 
-    navigate(getRoleRedirectPath(userRole, isFirstLogin), { replace: true });
-  }, [navigate]);
+    navigate(safeNextPath || getRoleRedirectPath(userRole, isFirstLogin), { replace: true });
+  }, [navigate, safeNextPath]);
 
   const getRedirectPath = (role, isFirstLogin = false) => {
+    if (safeNextPath) return safeNextPath;
+
     if (role === 'admin') return '/admin';
     if (role === 'staff') return '/staff/dashboard';
     if (isFirstLogin) return '/onboarding';
-
-    const next = searchParams.get('next');
-    if (next?.startsWith('/') && !next.startsWith('//')) return next;
 
     return '/dashboard';
   };
@@ -97,7 +97,7 @@ function Login() {
     setIsLoading(true);
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/users/login`, {
+      const response = await axios.post(apiUrl('/api/users/login'), {
         email: email.trim(),
         password,
       });
@@ -133,7 +133,7 @@ function Login() {
     onSuccess: async (tokenResponse) => {
       try {
         setIsLoading(true);
-        const response = await axios.post(`${API_BASE_URL}/api/users/google-login`, {
+        const response = await axios.post(apiUrl('/api/users/google-login'), {
           token: tokenResponse.access_token
         });
 
@@ -173,8 +173,7 @@ function Login() {
         backgroundImage: "url('/loginBg.jpg')",
         backgroundSize: 'cover',
         backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-        backgroundAttachment: 'fixed'
+        backgroundRepeat: 'no-repeat'
       }}
     >
       <div className="mx-auto flex w-full max-w-7xl items-center justify-center lg:flex-row lg:justify-between lg:gap-16">
@@ -272,6 +271,7 @@ function Login() {
                     onChange={onChange}
                     placeholder="you@email.com"
                     required
+                    autoComplete="email"
                     className="w-full rounded-md bg-[#edf2ff] px-4 py-3 text-sm text-gray-900 placeholder:text-gray-500 shadow-inner transition-all duration-300 focus:border-[#D4AF37] focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/40"
                   />
                 </div>
@@ -295,6 +295,7 @@ function Login() {
                       onChange={onChange}
                       placeholder="Enter your password"
                       required
+                      autoComplete="current-password"
                       className="w-full rounded-md bg-[#edf2ff] px-4 py-3 text-sm text-gray-900 placeholder:text-gray-500 shadow-inner transition-all duration-300 focus:border-[#D4AF37] focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/40"
                     />
                     <button

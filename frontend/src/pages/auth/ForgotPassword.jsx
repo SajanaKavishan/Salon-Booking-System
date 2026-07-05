@@ -6,8 +6,8 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, Mail, Scissors } from 'lucide-react';
 import Spinner from '../../components/common/Spinner';
 import { AuthShell } from '../../components/admin/SystemUI';
+import { apiUrl } from '../../utils/apiConfig';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 const GENERIC_RECOVERY_MESSAGE = 'If an account exists with that email, a password reset link has been sent.';
 
 function ForgotPassword() {
@@ -23,7 +23,7 @@ function ForgotPassword() {
     setError('');
 
     try {
-      await axios.post(`${API_BASE_URL}/api/users/forgot-password`, {
+      await axios.post(apiUrl('/api/users/forgot-password'), {
         email: email.trim(),
       });
 
@@ -50,8 +50,7 @@ function ForgotPassword() {
         backgroundImage: "url('/loginBg.jpg')",
         backgroundSize: 'cover',
         backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-        backgroundAttachment: 'fixed'
+        backgroundRepeat: 'no-repeat'
       }}
     >
       <div className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-6xl items-center justify-center px-4 py-10">

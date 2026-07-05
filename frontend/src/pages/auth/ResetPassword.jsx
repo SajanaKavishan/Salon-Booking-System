@@ -7,8 +7,7 @@ import { ArrowLeft, Lock, Scissors } from 'lucide-react';
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
 import Spinner from '../../components/common/Spinner';
 import { AuthShell } from '../../components/admin/SystemUI';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+import { apiUrl } from '../../utils/apiConfig';
 
 function ResetPassword() {
   const { token } = useParams();
@@ -52,7 +51,7 @@ function ResetPassword() {
     setIsLoading(true);
 
     try {
-      const response = await axios.put(`${API_BASE_URL}/api/users/reset-password/${token}`, {
+      const response = await axios.put(apiUrl(`/api/users/reset-password/${token}`), {
         password: formData.password,
       });
 
@@ -79,8 +78,7 @@ function ResetPassword() {
         backgroundImage: "url('/loginBg.jpg')",
         backgroundSize: 'cover',
         backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-        backgroundAttachment: 'fixed'
+        backgroundRepeat: 'no-repeat'
       }}
     >
       <div className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-6xl items-center justify-center px-4 py-10">
@@ -113,6 +111,7 @@ function ResetPassword() {
                   onChange={onChange}
                   placeholder="Enter new password"
                   required
+                  autoComplete="new-password"
                   className="w-full rounded-md bg-[#edf2ff] px-4 py-3 pl-11 pr-11 text-sm text-gray-900 placeholder:text-gray-500 shadow-inner transition-all duration-300 focus:border-[#D4AF37] focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/40"
                 />
                 <Lock className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
@@ -138,6 +137,7 @@ function ResetPassword() {
                   onChange={onChange}
                   placeholder="Confirm new password"
                   required
+                  autoComplete="new-password"
                   className="w-full rounded-md bg-[#edf2ff] px-4 py-3 pl-11 pr-11 text-sm text-gray-900 placeholder:text-gray-500 shadow-inner transition-all duration-300 focus:border-[#D4AF37] focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/40"
                 />
                 <Lock className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />

@@ -4,9 +4,6 @@ const dns = require("dns");
 const path = require("path");
 const dotenv = require("dotenv");
 const cors = require("cors");
-const User = require("./models/userModel");
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
 const { startHolidaySyncScheduler } = require("./services/holidaySyncService");
 
 dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
@@ -84,46 +81,6 @@ app.use("/api/roster", ensureMongoConnection, require("./routes/rosterRoutes"));
 app.use("/api/leaves", ensureMongoConnection, require("./routes/leaveRoutes")); // Leave management routes
 app.use("/api/dashboard", ensureMongoConnection, require("./routes/dashboardRoutes")); // Admin dashboard summary routes
 app.use("/api/chatbot", ensureMongoConnection, require("./routes/chatRoutes")); // Public AI chatbot route
-app.post("/api/login", async (req, res) => { // Basic login route for testing purposes, should be replaced by the more robust authentication routes in authRoutes.js
-    try {
-        const { email, password } = req.body; 
-        const user = await User.findOne({ email: email });
-
-        if (!user) {
-            return res.status(404).json({ message: "No user found with this email." });
-        }
-       
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (isMatch) {
-            const token = jwt.sign(
-                { id: user._id, email: user.email },
-                process.env.JWT_SECRET,
-                { expiresIn: "1d" }
-            );
-
-            // Return the token and user info (excluding password) in the response
-            res.status(200).json({ 
-                message: "Login successful!", 
-                token: token,
-                user: { 
-                    id: user._id, 
-                    email: user.email, 
-                    name: user.name,
-                    phone: user.phone || '', 
-                    preferredStylist: user.preferredStylist || '', 
-                    profileImage: user.profileImage || '',
-                    isFirstLogin: user.isFirstLogin,
-                } 
-            });
-        } else {
-            res.status(401).json({ message: "Invalid password!" });
-        }
-
-    } catch (error) {
-        console.error("Login Error:", error);
-        res.status(500).json({ message: "Server Error!" });
-    }
-});
 
 async function connectMongo() { // Function to establish a connection to MongoDB with error handling and DNS fallback
     if (!process.env.MONGO_URI) {

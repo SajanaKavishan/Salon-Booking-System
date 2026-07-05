@@ -7,8 +7,7 @@ import { WEEKLY_OPENING_HOURS, defaultOpeningHours, useSalonSettings } from '../
 import ServicesCarousel from '../../components/home/ServicesCarousel';
 import ReviewMarquee from '../../components/home/ReviewMarquee';
 import ChatWidget from '../../components/public/ChatWidget';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+import { apiUrl } from '../../utils/apiConfig';
 
 const formatTime = (timeValue) => {
   if (!timeValue) return '';
@@ -90,7 +89,7 @@ function Home() {
 
     const fetchServices = async () => {
       try {
-        const response = await axios.get(`${API_BASE_URL}/api/services`);
+        const response = await axios.get(apiUrl('/api/services'));
         const fetchedServices = Array.isArray(response.data?.data)
           ? response.data.data
           : Array.isArray(response.data)
@@ -152,7 +151,7 @@ function Home() {
 
     const fetchGalleryImages = async () => {
       try {
-        const response = await axios.get(`${API_BASE_URL}/api/gallery`);
+        const response = await axios.get(apiUrl('/api/gallery'));
         const fetchedImages = Array.isArray(response.data) ? response.data : [];
 
         if (isMounted) {
@@ -182,7 +181,7 @@ function Home() {
 
     const fetchPublicReviews = async () => {
       try {
-        const response = await axios.get(`${API_BASE_URL}/api/appointments/reviews/public`);
+        const response = await axios.get(apiUrl('/api/appointments/reviews/public'));
         const approvedReviews = Array.isArray(response.data) ? response.data : [];
 
         if (isMounted) {
@@ -290,7 +289,7 @@ function Home() {
     setSubmitStatus('Sending...');
 
     try {
-      await axios.post(`${API_BASE_URL}/api/messages`, formData);
+      await axios.post(apiUrl('/api/messages'), formData);
       setSubmitStatus('Success! We will get back to you soon.');
       setFormData({ name: '', email: '', message: '' });
 
