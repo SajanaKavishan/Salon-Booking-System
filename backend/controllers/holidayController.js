@@ -186,6 +186,36 @@ const findConflictingAppointmentDates = async (dates = []) => {
   return conflictResults.filter((result) => result.appointmentCount > 0);
 };
 
+const cancelAppointmentsForHolidayClosure = async (appointments = [], payload) => {
+  if (appointments.length === 0) return;
+
+  const appointmentIds = appointments.map((appointment) => appointment._id);
+
+  await Appointment.updateMany(
+    { _id: { $in: appointmentIds } },
+    { $set: { status: 'cancelled' } }
+  );
+
+  await Notification.insertMany(
+    appointments.map((appointment) => ({
+      user: appointment.user?._id || appointment.user,
+      type: 'HOLIDAY_CLOSURE',
+      message: `We're sorry, but your appointment on ${payload.date} has been cancelled because the salon is closed for ${payload.name}. Please choose another date that works for you.`,
+      meta: {
+        actionUrl: '/book',
+        holidayDate: payload.date,
+        holidayName: payload.name,
+        appointmentId: appointment._id?.toString(),
+        originalServices: (appointment.services || [])
+          .map((service) => service?._id?.toString() || service?.toString())
+          .filter(Boolean),
+        staffId: appointment.staffId?._id?.toString() || appointment.staffId?.toString(),
+        stylistId: appointment.staffId?._id?.toString() || appointment.staffId?.toString(),
+      },
+    }))
+  );
+};
+
 const shouldCheckHolidayUpdateConflicts = (existingHoliday, payload) => {
   if (!existingHoliday) return false;
   if (existingHoliday.date !== payload.date) return true;
@@ -361,31 +391,7 @@ const forceCreateHoliday = async (req, res) => {
     );
 
     if (conflictingAppointments.length > 0) {
-      const appointmentIds = conflictingAppointments.map((appointment) => appointment._id);
-
-      await Appointment.updateMany(
-        { _id: { $in: appointmentIds } },
-        { $set: { status: 'cancelled' } }
-      );
-
-      await Notification.insertMany(
-        conflictingAppointments.map((appointment) => ({
-          user: appointment.user?._id || appointment.user,
-          type: 'HOLIDAY_CLOSURE',
-          message: `We're sorry, but your appointment on ${payload.date} has been cancelled because the salon is closed for ${payload.name}. Please choose another date that works for you.`,
-          meta: {
-            actionUrl: '/book',
-            holidayDate: payload.date,
-            holidayName: payload.name,
-            appointmentId: appointment._id?.toString(),
-            originalServices: (appointment.services || [])
-              .map((service) => service?._id?.toString() || service?.toString())
-              .filter(Boolean),
-            staffId: appointment.staffId?._id?.toString() || appointment.staffId?.toString(),
-            stylistId: appointment.staffId?._id?.toString() || appointment.staffId?.toString(),
-          },
-        }))
-      );
+      await cancelAppointmentsForHolidayClosure(conflictingAppointments, payload);
     }
 
     return res.status(201).json({
@@ -418,10 +424,13 @@ const updateHoliday = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Holiday not found.' });
     }
 
-    if (shouldCheckHolidayUpdateConflicts(existingHoliday, payload)) {
-      const conflictingAppointments = await findConflictingAppointmentsForPayload(payload);
+    const shouldCheckConflicts = shouldCheckHolidayUpdateConflicts(existingHoliday, payload);
+    const conflictingAppointments = shouldCheckConflicts
+      ? await findConflictingAppointmentsForPayload(payload)
+      : [];
 
-      if (conflictingAppointments.length > 0) {
+    if (conflictingAppointments.length > 0) {
+      if (req.body?.force !== true) {
         return res.status(400).json({
           success: false,
           conflict: true,
@@ -442,9 +451,15 @@ const updateHoliday = async (req, res) => {
       { new: true, runValidators: true }
     );
 
+    if (conflictingAppointments.length > 0) {
+      await cancelAppointmentsForHolidayClosure(conflictingAppointments, payload);
+    }
+
     return res.status(200).json({
       success: true,
       holiday,
+      cancelledAppointments: conflictingAppointments.length,
+      notificationsSent: conflictingAppointments.length,
     });
   } catch (error) {
     if (error?.code === 11000) {

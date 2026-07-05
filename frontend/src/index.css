@@ -63,7 +63,7 @@
     }
 
     .salon-glass {
-        @apply rounded-2xl border shadow-xl;
+        @apply rounded-lg border shadow-xl;
         background: var(--salon-card);
         border-color: var(--salon-border);
         backdrop-filter: blur(16px);
@@ -75,14 +75,14 @@
     }
 
     .salon-section {
-        @apply rounded-2xl border p-6 shadow-xl;
+        @apply rounded-lg border p-6 shadow-xl;
         background: var(--salon-card);
         border-color: var(--salon-border);
         backdrop-filter: blur(16px);
     }
 
     .salon-section-accent {
-        @apply rounded-2xl border border-t-2 p-6 shadow-xl;
+        @apply rounded-lg border border-t-2 p-6 shadow-xl;
         border-color: var(--salon-border);
         border-top-color: var(--salon-accent);
         background: var(--salon-card);
@@ -106,7 +106,7 @@
         box-shadow: 0 12px 30px rgba(214, 179, 106, 0.25);
     }
 
-    .salon-button:hover {
+    .salon-button:not(:disabled):hover {
         transform: translateY(-1px);
         box-shadow: 0 18px 38px rgba(214, 179, 106, 0.28);
     }

@@ -1,30 +1,65 @@
 const mergeClasses = (...classes) => classes.filter(Boolean).join(' ');
 
-const statusClassMap = {
-  Scheduled: 'salon-status-scheduled',
-  Pending: 'salon-status-pending',
-  Confirmed: 'salon-status-approved',
-  Approved: 'salon-status-approved',
-  'In Progress': 'salon-status-progress',
-  Completed: 'salon-status-completed',
-  Rejected: 'salon-status-danger',
-  Cancelled: 'salon-status-danger',
-  'No-Show': 'salon-status-danger'
+const statusConfigMap = {
+  scheduled: {
+    label: 'Scheduled',
+    className: 'salon-status-scheduled'
+  },
+  pending: {
+    label: 'Pending',
+    className: 'salon-status-pending'
+  },
+  confirmed: {
+    label: 'Approved',
+    className: 'salon-status-approved'
+  },
+  approved: {
+    label: 'Approved',
+    className: 'salon-status-approved'
+  },
+  'in progress': {
+    label: 'In Progress',
+    className: 'salon-status-progress'
+  },
+  completed: {
+    label: 'Completed',
+    className: 'salon-status-completed'
+  },
+  rejected: {
+    label: 'Rejected',
+    className: 'salon-status-danger'
+  },
+  cancelled: {
+    label: 'Cancelled',
+    className: 'salon-status-danger'
+  },
+  canceled: {
+    label: 'Cancelled',
+    className: 'salon-status-danger'
+  },
+  'no-show': {
+    label: 'No-Show',
+    className: 'salon-status-danger'
+  },
+  noshow: {
+    label: 'No-Show',
+    className: 'salon-status-danger'
+  }
 };
 
-export function GlassCard({ className = '', children, ...props }) {
+export function GlassCard({ as: Component = 'div', className = '', children, ...props }) {
   return (
-    <div className={mergeClasses('salon-glass salon-glass-hover', className)} {...props}>
+    <Component className={mergeClasses('salon-glass salon-glass-hover', className)} {...props}>
       {children}
-    </div>
+    </Component>
   );
 }
 
-export function SectionPanel({ className = '', accent = false, children, ...props }) {
+export function SectionPanel({ as: Component = 'section', className = '', accent = false, children, ...props }) {
   return (
-    <section className={mergeClasses(accent ? 'salon-section-accent' : 'salon-section', className)} {...props}>
+    <Component className={mergeClasses(accent ? 'salon-section-accent' : 'salon-section', className)} {...props}>
       {children}
-    </section>
+    </Component>
   );
 }
 
@@ -36,7 +71,15 @@ export function GoldButton({ className = '', variant = 'solid', type = 'button',
   }[variant] || 'salon-button';
 
   return (
-    <button type={type} className={mergeClasses(variantClass, className)} {...props}>
+    <button
+      type={type}
+      className={mergeClasses(
+        variantClass,
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#d6b36a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#08080a]',
+        className
+      )}
+      {...props}
+    >
       {children}
     </button>
   );
@@ -62,13 +105,12 @@ export function AuthShell({ backgroundImage = '', backgroundStyle, children }) {
     backgroundSize: 'cover',
     backgroundPosition: 'center',
     backgroundRepeat: 'no-repeat',
-    backgroundAttachment: 'fixed',
     ...backgroundStyle
   };
 
   return (
     <div
-      className={`salon-page relative flex min-h-screen w-full flex-col items-center justify-center bg-cover bg-center bg-no-repeat bg-fixed p-4 lg:flex-row lg:p-8 ${backgroundImage}`}
+      className={`salon-page relative flex min-h-screen w-full flex-col items-center justify-center bg-cover bg-center bg-no-repeat bg-scroll p-4 md:bg-fixed lg:flex-row lg:p-8 ${backgroundImage}`}
       style={resolvedStyle}
     >
       <div className="salon-page-overlay fixed inset-0"></div>
@@ -90,9 +132,15 @@ export function DarkSelect({ className = '', children, ...props }) {
 }
 
 export function StatusBadge({ status, className = '' }) {
+  const normalizedStatus = String(status || '').trim().toLowerCase();
+  const statusConfig = statusConfigMap[normalizedStatus] || {
+    label: status || 'Unknown',
+    className: 'salon-status-danger'
+  };
+
   return (
-    <span className={mergeClasses('salon-status', statusClassMap[status] || 'salon-status-danger', className)}>
-      {status}
+    <span className={mergeClasses('salon-status', statusConfig.className, className)}>
+      {statusConfig.label}
     </span>
   );
 }

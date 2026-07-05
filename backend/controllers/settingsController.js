@@ -86,21 +86,24 @@ const getSettings = async (_req, res) => {
 const updateSettings = async (req, res) => {
   try {
     const settings = await ensureSettingsDocument();
+    const settingsBody = { ...(req.body || {}) };
+    delete settingsBody.salonInteriorImage;
+    delete settingsBody.ownerImage;
+    delete settingsBody.salonInteriorPublicId;
+    delete settingsBody.ownerPublicId;
 
     Object.assign(settings, {
-      salonName: req.body.salonName ?? settings.salonName,
-      supportEmail: req.body.supportEmail ?? settings.supportEmail,
-      contactNumber: req.body.contactNumber ?? settings.contactNumber,
-      address: req.body.address ?? settings.address,
-      salonInteriorImage: req.body.salonInteriorImage ?? settings.salonInteriorImage,
-      ownerImage: req.body.ownerImage ?? settings.ownerImage,
-      openingHours: normalizeOpeningHours(req.body.openingHours, settings.openingHours),
-      bookingAlerts: req.body.bookingAlerts ?? settings.bookingAlerts,
-      customerEmails: req.body.customerEmails ?? settings.customerEmails,
-      weekendBookings: req.body.weekendBookings ?? settings.weekendBookings,
-      darkReceipts: req.body.darkReceipts ?? settings.darkReceipts,
-      defaultBufferTime: parseMinutes(req.body.defaultBufferTime, settings.defaultBufferTime),
-      gracePeriod: parseMinutes(req.body.gracePeriod, settings.gracePeriod),
+      salonName: settingsBody.salonName ?? settings.salonName,
+      supportEmail: settingsBody.supportEmail ?? settings.supportEmail,
+      contactNumber: settingsBody.contactNumber ?? settings.contactNumber,
+      address: settingsBody.address ?? settings.address,
+      openingHours: normalizeOpeningHours(settingsBody.openingHours, settings.openingHours),
+      bookingAlerts: settingsBody.bookingAlerts ?? settings.bookingAlerts,
+      customerEmails: settingsBody.customerEmails ?? settings.customerEmails,
+      weekendBookings: settingsBody.weekendBookings ?? settings.weekendBookings,
+      darkReceipts: settingsBody.darkReceipts ?? settings.darkReceipts,
+      defaultBufferTime: parseMinutes(settingsBody.defaultBufferTime, settings.defaultBufferTime),
+      gracePeriod: parseMinutes(settingsBody.gracePeriod, settings.gracePeriod),
     });
 
     const updatedSettings = await settings.save();

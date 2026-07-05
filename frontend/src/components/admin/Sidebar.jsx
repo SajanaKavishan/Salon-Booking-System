@@ -5,7 +5,7 @@ import { Scissors } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { clearAuthStorage } from '../../utils/auth';
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const PENDING_APPOINTMENTS_REFRESH_EVENT = 'appointments:pending-count-refresh';
 
 const adminSidebarItems = [

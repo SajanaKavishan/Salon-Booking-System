@@ -999,17 +999,24 @@ function SettingsPage() {
 
       isHolidaySavingRef.current = true;
       setIsHolidaySaving(true);
-      const response = await axios.post(
-        `${API_BASE_URL}/api/holidays/force`,
-        {
-          date: holidayConflict.date,
-          name: holidayConflict.name,
-          type: 'custom',
-          isFullDay: holidayConflict.isFullDay,
-          hours: holidayConflict.hours
-        },
-        authConfig
-      );
+      const payload = {
+        date: holidayConflict.date,
+        name: holidayConflict.name,
+        type: 'custom',
+        isFullDay: holidayConflict.isFullDay,
+        hours: holidayConflict.hours
+      };
+      const response = editingHolidayId
+        ? await axios.put(
+            `${API_BASE_URL}/api/holidays/${editingHolidayId}`,
+            { ...payload, force: true },
+            authConfig
+          )
+        : await axios.post(
+            `${API_BASE_URL}/api/holidays/force`,
+            payload,
+            authConfig
+          );
 
       toast.success(`Date closed. ${response.data?.cancelledAppointments || 0} appointment(s) cancelled.`);
       setHolidayConflict(null);
