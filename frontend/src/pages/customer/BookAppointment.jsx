@@ -16,7 +16,7 @@ import { useSalonSettings } from '../../hooks/useSalonSettings';
 
 import { useAppointments } from '../../context/AppointmentsContext';
 
-const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/$/, '');
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 
 const SRI_LANKAN_MOBILE_REGEX = /^(?:\+94|0)[7][0-9]{8}$/;
 const TEN_DIGIT_PHONE_REGEX = /^[0-9]{10}$/;
@@ -341,7 +341,7 @@ function BookAppointment({ userProfile, customerData }) {
 
   const location = useLocation();
 
-  const { addAppointment } = useAppointments();
+  const { upsertAppointment } = useAppointments();
 
 
 
@@ -1281,7 +1281,7 @@ function BookAppointment({ userProfile, customerData }) {
 
         // Add appointment to global context
 
-        addAppointment(appointmentToAdd);
+        upsertAppointment(appointmentToAdd);
 
 
 

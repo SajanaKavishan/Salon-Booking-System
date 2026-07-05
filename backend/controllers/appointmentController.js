@@ -303,18 +303,6 @@ const createAppointment = async (req, res) => {
             return res.status(400).json({ message: 'This stylist is on approved leave for the selected date.' });
         }
 
-        let appointmentStatus = 'pending';
-        if (settings.autoConfirmVip) {
-            const completedAppointments = await Appointment.countDocuments({
-                user: bookingUser._id,
-                status: { $in: ['completed', 'Completed'] }
-            });
-
-            if (completedAppointments >= 3) {
-                appointmentStatus = 'confirmed';
-            }
-        }
-
         const appointment = await Appointment.create({
             user: bookingUser._id,
             services: requestedServiceIds,
@@ -328,7 +316,7 @@ const createAppointment = async (req, res) => {
             bookingDate: appointmentDate,
             timeSlot: `${formattedStartTime} - ${formattedEndTime}`,
             stylist: stylistId,
-            status: appointmentStatus
+            status: 'pending'
         });
 
         if (settings.bookingAlerts && supportEmail) {
@@ -345,7 +333,7 @@ const createAppointment = async (req, res) => {
                         <p><strong>Date:</strong> ${date}</p>
                         <p><strong>Time:</strong> ${formattedStartTime} - ${formattedEndTime}</p>
                         <p><strong>Stylist:</strong> ${stylistName}</p>
-                        <p><strong>Status:</strong> ${appointmentStatus}</p>
+                        <p><strong>Status:</strong> pending</p>
                         <p style="margin-top: 16px; color: #bbbbbb;">For assistance, contact ${supportEmail} or ${contactNumber}</p>
                     </div>
                 `

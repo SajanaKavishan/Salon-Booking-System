@@ -41,27 +41,35 @@ const defaultSettings = {
 export function useSalonSettings() {
   const [settings, setSettings] = useState(defaultSettings);
   const [isLoading, setIsLoading] = useState(true);
+  const [settingsError, setSettingsError] = useState(null);
 
   useEffect(() => {
-    let isMounted = true;
+    const controller = new AbortController();
 
     const fetchSettings = async () => {
       try {
-        const response = await axios.get(`${API_BASE_URL}/api/settings`);
-        if (isMounted) {
-          setSettings((current) => ({
-            ...current,
-            ...response.data,
-            openingHours: {
-              ...defaultOpeningHours,
-              ...(response.data?.openingHours || {})
-            }
-          }));
-        }
+        setSettingsError(null);
+        const response = await axios.get(`${API_BASE_URL}/api/settings`, {
+          signal: controller.signal
+        });
+
+        setSettings((current) => ({
+          ...current,
+          ...response.data,
+          openingHours: {
+            ...defaultOpeningHours,
+            ...(response.data?.openingHours || {})
+          }
+        }));
       } catch (error) {
+        if (axios.isCancel(error) || error.name === 'CanceledError' || controller.signal.aborted) {
+          return;
+        }
+
         console.error('Error fetching salon settings:', error);
+        setSettingsError(error.response?.data?.message || 'Could not load salon settings.');
       } finally {
-        if (isMounted) {
+        if (!controller.signal.aborted) {
           setIsLoading(false);
         }
       }
@@ -70,9 +78,9 @@ export function useSalonSettings() {
     fetchSettings();
 
     return () => {
-      isMounted = false;
+      controller.abort();
     };
   }, []);
 
-  return { settings, setSettings, isLoading };
+  return { settings, setSettings, isLoading, settingsError };
 }

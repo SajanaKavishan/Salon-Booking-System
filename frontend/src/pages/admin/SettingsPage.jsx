@@ -57,6 +57,7 @@ function SmartNumberField({ label, description, name, value, onChange }) {
         type="number"
         name={name}
         value={value}
+        inputMode="numeric"
         min="0"
         step="1"
         onChange={onChange}
@@ -712,7 +713,7 @@ function HolidaySelectedDateChips({ selectedDates = [], onRemove, disabled = fal
 }
 
 function SettingsPage() {
-  const { settings, setSettings, isLoading } = useSalonSettings();
+  const { settings, setSettings, isLoading, settingsError } = useSalonSettings();
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
   const [savedSettingsSignature, setSavedSettingsSignature] = useState('');
@@ -1143,6 +1144,11 @@ function SettingsPage() {
       {isLoading ? (
         <GlassCard className="p-5 sm:p-8">
           <p className="text-sm text-gray-400">Loading settings...</p>
+        </GlassCard>
+      ) : settingsError ? (
+        <GlassCard className="border border-red-400/20 bg-red-950/20 p-5 sm:p-8">
+          <p className="text-sm font-semibold text-red-200">Settings could not be loaded.</p>
+          <p className="mt-2 text-sm text-red-100/70">{settingsError}</p>
         </GlassCard>
       ) : (
         <section className="grid gap-5 sm:gap-8 xl:grid-cols-[1.05fr_0.95fr]">

@@ -125,7 +125,7 @@ const saveDismissedReviewPromptIds = (currentUser, appointmentIds) => {
 
 function Dashboard() {
   const navigate = useNavigate();
-  const { appointments, setAppointments } = useAppointments();
+  const { appointments, replaceAppointments, upsertAppointment } = useAppointments();
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [appointmentToCancel, setAppointmentToCancel] = useState(null);
@@ -149,19 +149,14 @@ function Dashboard() {
       });
       const apiAppointments = Array.isArray(response.data) ? response.data : [];
 
-      setAppointments((currentAppointments) => {
-        const appointmentIds = new Set(apiAppointments.map((a) => a._id || a.id));
-        const contextOnlyAppointments = currentAppointments.filter((a) => !appointmentIds.has(a._id || a.id));
-
-        return [...apiAppointments, ...contextOnlyAppointments];
-      });
+      replaceAppointments(apiAppointments);
     } catch (error) {
       console.error('Error fetching appointments:', error);
       toast.error('Failed to load your appointments.');
     } finally {
       setIsLoading(false);
     }
-  }, [setAppointments]);
+  }, [replaceAppointments]);
 
   useEffect(() => {
     const storedUser = localStorage.getItem('user');
@@ -257,11 +252,12 @@ function Dashboard() {
         }
       });
 
-      setAppointments((currentAppointments) => currentAppointments.map((appointment) => (
-        (appointment._id || appointment.id) === appointmentId
-          ? { ...appointment, ...(response.data?.appointment || {}), status: 'Cancelled' }
-          : appointment
-      )));
+      upsertAppointment({
+        _id: appointmentId,
+        id: appointmentId,
+        ...(response.data?.appointment || {}),
+        status: 'Cancelled'
+      });
       setAppointmentToCancel(null);
       toast.success('Your premium session has been cancelled.');
     } catch (error) {
@@ -275,12 +271,7 @@ function Dashboard() {
   const handleAppointmentUpdated = (updatedAppointment) => {
     if (!updatedAppointment?._id && !updatedAppointment?.id) return;
 
-    const updatedAppointmentId = updatedAppointment._id || updatedAppointment.id;
-    setAppointments((currentAppointments) => currentAppointments.map((appointment) => (
-      (appointment._id || appointment.id) === updatedAppointmentId
-        ? { ...appointment, ...updatedAppointment }
-        : appointment
-    )));
+    upsertAppointment(updatedAppointment);
   };
 
   const markReviewPromptSeen = useCallback((appointmentId) => {

@@ -4,6 +4,8 @@ import { DollarSign, RefreshCw } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { GoldButton, StatusBadge } from '../../components/admin/SystemUI';
 
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+
 const timeToMinutes = (timeStr) => {
   if (!timeStr || typeof timeStr !== 'string') return 0;
 
@@ -265,11 +267,11 @@ function StaffDashboard() {
         }
       };
       const [appointmentsResponse, profileResponse, leavesResponse, metricsResponse, holidaysResponse] = await Promise.all([
-        axios.get('http://localhost:5000/api/appointments/staff', config),
-        axios.get('http://localhost:5000/api/users/me', config),
-        axios.get('http://localhost:5000/api/leaves', config),
-        axios.get('http://localhost:5000/api/roster/metrics', config),
-        axios.get('http://localhost:5000/api/holidays').catch((holidayError) => {
+        axios.get(`${API_BASE_URL}/api/appointments/staff`, config),
+        axios.get(`${API_BASE_URL}/api/users/me`, config),
+        axios.get(`${API_BASE_URL}/api/leaves`, config),
+        axios.get(`${API_BASE_URL}/api/roster/metrics`, config),
+        axios.get(`${API_BASE_URL}/api/holidays`).catch((holidayError) => {
           console.error('Error loading salon closures:', holidayError);
           return { data: { holidays: [] } };
         }),
@@ -513,7 +515,7 @@ function StaffDashboard() {
       const token = localStorage.getItem('token');
       setActionKey(`${appointmentId}-${status}`);
 
-      const endpoint = `http://localhost:5000/api/appointments/${appointmentId}/staff-status`;
+      const endpoint = `${API_BASE_URL}/api/appointments/${appointmentId}/staff-status`;
 
       const response = await axios.put(
         endpoint,

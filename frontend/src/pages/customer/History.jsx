@@ -4,7 +4,7 @@ import { CalendarCheck, ChevronDown } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useAppointments } from '../../context/AppointmentsContext';
 
-const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/$/, '');
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const HISTORY_STATUSES = ['completed', 'rejected', 'cancelled', 'canceled', 'no-show'];
 const HERO_IMAGE_URL = '/heroBg.jpg';
 
@@ -62,7 +62,7 @@ const filterCountClassName = (isActive) => (
 );
 
 function History() {
-  const { appointments, setAppointments } = useAppointments();
+  const { appointments, replaceAppointments } = useAppointments();
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [activeFilter, setActiveFilter] = useState('');
@@ -87,22 +87,17 @@ function History() {
         });
         const apiAppointments = Array.isArray(response.data) ? response.data : [];
 
-        setAppointments((currentAppointments) => {
-          const appointmentIds = new Set(apiAppointments.map((a) => a._id || a.id));
-          const contextOnlyAppointments = currentAppointments.filter((a) => !appointmentIds.has(a._id || a.id));
-          return [...apiAppointments, ...contextOnlyAppointments];
-        });
+        replaceAppointments(apiAppointments);
       } catch (error) {
         console.error('Error fetching history:', error);
         toast.error('Failed to load your history.');
-        // If API fails, we still have context appointments available.
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchAppointments();
-  }, [setAppointments]);
+  }, [replaceAppointments]);
 
   const historyAppointments = useMemo(() => (
     appointments
