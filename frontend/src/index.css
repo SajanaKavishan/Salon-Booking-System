@@ -34,7 +34,7 @@
         background: radial-gradient(140% 140% at 20% 10%, rgba(124, 92, 252, 0.12) 0%, rgba(15, 17, 21, 0) 55%),
             radial-gradient(120% 120% at 85% 20%, rgba(214, 179, 106, 0.12) 0%, rgba(15, 17, 21, 0) 50%),
             #0f1115;
-        overflow: hidden;
+        overflow-x: hidden;
     }
 
     .salon-page-overlay {

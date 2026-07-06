@@ -125,6 +125,8 @@ const createAppointment = async (req, res) => {
             ? timeSlot.split(/\s+-\s+/)
             : [];
         const startTime = legacyStartTime || slotStartTime;
+        const requestedCustomerMobile = typeof customerMobile === 'string' ? customerMobile.trim() : '';
+        const customerMobileRegex = /^(?:\+94|0)7[0-9]{8}$/;
         const settings = await ensureSettingsDocument();
         const salonName = settings?.salonName || defaultSettings.salonName;
         const supportEmail = settings?.supportEmail || defaultSettings.supportEmail;
@@ -153,6 +155,11 @@ const createAppointment = async (req, res) => {
             if (!bookingUser) {
                 return res.status(400).json({ message: 'Selected customer was not found.' });
             }
+        }
+
+        const normalizedCustomerMobile = requestedCustomerMobile || String(bookingUser?.phone || '').trim();
+        if (!normalizedCustomerMobile || !customerMobileRegex.test(normalizedCustomerMobile)) {
+            return res.status(400).json({ message: 'Please provide a valid Sri Lankan mobile number.' });
         }
 
         const appointmentDate = new Date(`${date}T00:00:00.000Z`);
@@ -311,7 +318,7 @@ const createAppointment = async (req, res) => {
             endTime: formattedEndTime,
             totalDuration: totalDuration,
             totalAmount: totalAmount,
-            customerMobile: typeof customerMobile === 'string' ? customerMobile.trim() : '',
+            customerMobile: normalizedCustomerMobile,
             staffId: stylistId,
             bookingDate: appointmentDate,
             timeSlot: `${formattedStartTime} - ${formattedEndTime}`,

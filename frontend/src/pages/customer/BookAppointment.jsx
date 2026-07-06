@@ -76,7 +76,7 @@ const formatDisplayDate = (dateKey) => {
   });
 };
 
-function BookingCalendarPicker({ value, onChange, holidays = [], minDate, weekendBookings }) {
+function BookingCalendarPicker({ id, value, onChange, holidays = [], minDate, weekendBookings }) {
   const pickerRef = useRef(null);
   const selectedDate = parseDateKey(value);
   const minimumDate = parseDateKey(minDate);
@@ -177,10 +177,12 @@ function BookingCalendarPicker({ value, onChange, holidays = [], minDate, weeken
   return (
     <div ref={pickerRef} className="relative mt-3">
       <button
+        id={id}
         type="button"
         onClick={handleToggleCalendar}
         className="flex w-full cursor-pointer items-center justify-between rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-2.5 text-left text-zinc-300 transition hover:border-[#c5a880]/50 hover:text-white focus:outline-none focus:ring-2 focus:ring-[#c5a880]/30"
         aria-expanded={isOpen}
+        aria-label="Select appointment date"
       >
         <span className={value ? 'text-sm font-medium text-zinc-200' : 'text-sm text-zinc-500'}>
           {formatDisplayDate(value)}
@@ -1824,9 +1826,11 @@ function BookAppointment({ userProfile, customerData }) {
 
                           <div className="relative">
 
-                            <label className="text-[0.65rem] uppercase tracking-[0.35em] text-white/40">Search Artist</label>
+                            <label htmlFor="stylist-search" className="text-[0.65rem] uppercase tracking-[0.35em] text-white/40">Search Artist</label>
 
                             <input
+
+                              id="stylist-search"
 
                               type="text"
 
@@ -2003,9 +2007,10 @@ function BookAppointment({ userProfile, customerData }) {
 
                           <div>
 
-                            <label className="text-[0.65rem] uppercase tracking-[0.35em] text-white/40">Select Date</label>
+                            <label htmlFor="appointment-date-picker" className="text-[0.65rem] uppercase tracking-[0.35em] text-white/40">Select Date</label>
 
                             <BookingCalendarPicker
+                              id="appointment-date-picker"
                               value={date}
                               onChange={setDate}
                               holidays={holidays}
@@ -2479,9 +2484,19 @@ function BookAppointment({ userProfile, customerData }) {
 
 
 
+                  <label htmlFor="phone-verification-input" className="sr-only">
+                    Mobile number
+                  </label>
+
                   <input
 
+                    id="phone-verification-input"
+
                     type="tel"
+
+                    autoComplete="tel"
+
+                    inputMode="tel"
 
                     value={phoneVerificationInput}
 
