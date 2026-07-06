@@ -110,9 +110,14 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
     const loadOptions = async () => {
       try {
         setIsLoadingOptions(true);
+        const token = localStorage.getItem('token');
+        const requestConfig = {
+          signal: controller.signal,
+          ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {})
+        };
         const [servicesResponse, staffResponse] = await Promise.all([
           axios.get(`${API_BASE_URL}/api/services`, { signal: controller.signal }),
-          axios.get(`${API_BASE_URL}/api/staff`, { signal: controller.signal })
+          axios.get(`${API_BASE_URL}/api/staff`, requestConfig)
         ]);
 
         if (!isMounted) return;

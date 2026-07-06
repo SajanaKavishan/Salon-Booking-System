@@ -424,7 +424,7 @@ function BookAppointment({ userProfile, customerData }) {
 
             axios.get(`${API_BASE_URL}/api/services`),
 
-            axios.get(`${API_BASE_URL}/api/staff`)
+            axios.get(`${API_BASE_URL}/api/staff/public-list`)
 
           ]);
 

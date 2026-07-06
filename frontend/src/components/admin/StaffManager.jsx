@@ -222,7 +222,7 @@ function StaffManager() {
   useEffect(() => {
     let isActive = true;
     axios
-      .get(`${API_BASE_URL}/api/staff`)
+      .get(`${API_BASE_URL}/api/staff`, getAuthHeaders())
       .then((response) => {
         if (isActive) setStaffList(response.data);
       })

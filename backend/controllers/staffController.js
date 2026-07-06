@@ -74,16 +74,17 @@ const getStaff = async (req, res) => {
 const getPublicStaffList = async (req, res) => {
   try {
     const staff = await Staff.find({})
-      .select('_id userId name imageUrl specialty')
+      .select('_id name imageUrl specialty workingHours offDays')
       .sort({ name: 1 })
       .lean();
 
     res.status(200).json(staff.map((stylist) => ({
       _id: stylist._id,
-      userId: stylist.userId,
       name: stylist.name,
       imageUrl: stylist.imageUrl || '',
       specialty: stylist.specialty || 'Luxury Artist',
+      workingHours: stylist.workingHours,
+      offDays: stylist.offDays || [],
       experience: 'Expert Stylist',
     })));
   } catch (error) {
@@ -208,6 +209,11 @@ const updateStaff = async (req, res) => {
       return res.status(400).json({ message: 'Please provide a valid staff profile ID.' });
     }
 
+    const existingStaff = await Staff.findById(req.params.id);
+    if (!existingStaff) {
+      return res.status(404).json({ message: 'Staff member not found' });
+    }
+
     const updates = {};
     const allowedFields = ['name', 'specialty'];
 
@@ -227,20 +233,12 @@ const updateStaff = async (req, res) => {
       updates.workingHours = normalizeWorkingHours(req.body.workingHours);
     }
 
-    if (req.file?.path) {
-      updates.imageUrl = req.file.path;
-    } else if (req.body.imageUrl !== undefined) {
-      updates.imageUrl = req.body.imageUrl;
-    }
+    updates.imageUrl = req.file?.path || req.body.imageUrl || existingStaff.imageUrl;
 
     const updatedStaff = await Staff.findByIdAndUpdate(req.params.id, updates, {
       new: true,
       runValidators: true,
     });
-
-    if (!updatedStaff) {
-      return res.status(404).json({ message: 'Staff member not found' });
-    }
 
     res.status(200).json(updatedStaff);
   } catch (error) {

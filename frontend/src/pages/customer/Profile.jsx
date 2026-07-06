@@ -48,7 +48,7 @@ function Profile({ onClose }) {
 
     const loadStylists = async () => {
       try {
-        const response = await fetch(`${BACKEND_BASE_URL}/api/staff`);
+        const response = await fetch(`${BACKEND_BASE_URL}/api/staff/public-list`);
         if (!response.ok) return;
         const data = await response.json();
         const availableStylists = Array.isArray(data)

@@ -13,7 +13,7 @@ const uploadStaffImage = require('../middleware/uploadStaffImage');
 const { protect, admin } = require('../middleware/authMiddleware');
 const validateObjectId = require('../middleware/validateObjectId');
 
-router.route('/').get(getStaff).post(protect, admin, uploadStaffImage.single('image'), addStaff);
+router.route('/').get(protect, admin, getStaff).post(protect, admin, uploadStaffImage.single('image'), addStaff);
 router.post('/register', protect, admin, uploadStaffImage.single('image'), registerStaffProfile);
 router.get('/public-list', getPublicStaffList);
 router.get('/performance', protect, admin, getStaffPerformance);
