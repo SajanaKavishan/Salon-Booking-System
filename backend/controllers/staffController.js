@@ -249,6 +249,10 @@ const updateStaff = async (req, res) => {
 // @desc    Delete a staff member (Admin only)
 // @route   DELETE /api/staff/:id
 const deleteStaff = async (req, res) => {
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    return res.status(400).json({ message: 'Please provide a valid staff profile ID.' });
+  }
+
   const session = await mongoose.startSession();
 
   try {

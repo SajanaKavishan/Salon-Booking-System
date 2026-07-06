@@ -357,6 +357,31 @@ const getMe = async (req, res) => {
   }
 };
 
+const getUsers = async (req, res) => {
+  try {
+    const allowedRoles = ['customer', 'staff', 'admin'];
+    const role = typeof req.query.role === 'string' ? req.query.role.trim().toLowerCase() : '';
+    const query = {};
+
+    if (role) {
+      if (!allowedRoles.includes(role)) {
+        return res.status(400).json({ message: 'Invalid role filter.' });
+      }
+
+      query.role = role;
+    }
+
+    const users = await User.find(query)
+      .select('_id name email phone role preferredStylist profileImage createdAt')
+      .sort({ name: 1, createdAt: -1 })
+      .lean();
+
+    return res.status(200).json(users);
+  } catch (error) {
+    return res.status(500).json({ message: 'Server Error: Could not fetch users.' });
+  }
+};
+
 // Update user profile function
 const updateUserProfile = async (req, res) => {
   try {
@@ -666,6 +691,7 @@ module.exports = { // Export all the controller functions to be used in the rout
     registerUser,
     loginUser,
     googleLogin, 
+    getUsers,
     getMe,
     updateUserProfile,
     completeOnboarding,

@@ -1,6 +1,22 @@
 const mongoose = require('mongoose');
 const Service = require('../models/Service');
 
+const getValidationMessage = (error) => (
+  Object.values(error.errors || {})
+    .map((validationError) => validationError.message)
+    .filter(Boolean)
+    .join(' ')
+  || 'Please check the service details.'
+);
+
+const sendServiceError = (res, error, fallbackMessage = 'Server Error') => {
+  if (error?.name === 'ValidationError') {
+    return res.status(400).json({ message: getValidationMessage(error) });
+  }
+
+  return res.status(500).json({ message: fallbackMessage, error: error.message });
+};
+
 // @desc    Get all services
 // @route   GET /api/services
 const getServices = async (req, res) => {
@@ -17,7 +33,7 @@ const getServices = async (req, res) => {
 const createService = async (req, res) => {
   try {
     const { name, price, duration, image } = req.body;
-    if (!name || !price || !duration) {
+    if (!name || price === undefined || price === '' || duration === undefined || duration === '') {
       return res.status(400).json({ message: 'Please add all fields' });
     }
 
@@ -30,7 +46,7 @@ const createService = async (req, res) => {
 
     res.status(201).json(service);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendServiceError(res, error, 'Error creating service');
   }
 };
 
@@ -42,9 +58,20 @@ const updateService = async (req, res) => {
       return res.status(400).json({ message: 'Invalid service ID' });
     }
 
-    const updateData = {
-      ...req.body,
-    };
+    const updateData = {};
+    const allowedFields = ['name', 'price', 'duration'];
+
+    allowedFields.forEach((field) => {
+      if (req.body[field] !== undefined) {
+        updateData[field] = req.body[field];
+      }
+    });
+
+    if (req.body.imageUrl !== undefined) {
+      updateData.image = req.body.imageUrl;
+    } else if (req.body.image !== undefined) {
+      updateData.image = req.body.image;
+    }
 
     if (req.file?.path) {
       updateData.image = req.file.path;
@@ -62,7 +89,7 @@ const updateService = async (req, res) => {
 
     res.status(200).json(updatedService);
   } catch (error) {
-    res.status(500).json({ message: 'Error updating service', error });
+    sendServiceError(res, error, 'Error updating service');
   }
 };
 

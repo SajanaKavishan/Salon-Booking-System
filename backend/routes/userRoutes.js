@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { registerUser, googleLogin, getMe, updateUserProfile, completeOnboarding, getDashboardBanner } = require('../controllers/userController');
+const { registerUser, googleLogin, getUsers, getMe, updateUserProfile, completeOnboarding, getDashboardBanner } = require('../controllers/userController');
 const { registerStaff, login, forgotPassword, resetPassword } = require('../controllers/authController');
 const { protect, admin } = require('../middleware/authMiddleware'); // Import the protect middleware to secure the /me route   
 const uploadProfileImage = require('../middleware/uploadProfileImage');
@@ -29,6 +29,7 @@ router.post('/register-staff', protect, admin, registerStaff); // Admin-only rou
 router.post('/google-login', googleLogin); // New route for handling Google login requests
 
 // This route is protected by the protect middleware, which means that only authenticated users can access it. The getMe function will return the profile information of the logged-in user.
+router.get('/', protect, admin, getUsers);
 router.get('/me', protect, getMe);
 router.get('/profile', protect, getMe); // Alias for legacy frontend calls to GET /api/users/profile
 router.get('/dashboard-banner', protect, getDashboardBanner);

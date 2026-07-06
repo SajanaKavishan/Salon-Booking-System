@@ -17,6 +17,7 @@ const BUFFER_MINUTES = 15;
 const BLOCKED_STATUSES = ['cancelled', 'rejected', 'completed', 'no-show'];
 
 const initialForm = {
+  customerId: '',
   staffId: '',
   bookingDate: '',
   startTime: '',
@@ -95,6 +96,7 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
   const [form, setForm] = useState(initialForm);
   const [services, setServices] = useState([]);
   const [staff, setStaff] = useState([]);
+  const [customers, setCustomers] = useState([]);
   const [isLoadingOptions, setIsLoadingOptions] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasConflict, setHasConflict] = useState(false);
@@ -115,15 +117,17 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
           signal: controller.signal,
           ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {})
         };
-        const [servicesResponse, staffResponse] = await Promise.all([
+        const [servicesResponse, staffResponse, customersResponse] = await Promise.all([
           axios.get(`${API_BASE_URL}/api/services`, { signal: controller.signal }),
-          axios.get(`${API_BASE_URL}/api/staff`, requestConfig)
+          axios.get(`${API_BASE_URL}/api/staff`, requestConfig),
+          axios.get(`${API_BASE_URL}/api/users?role=customer`, requestConfig)
         ]);
 
         if (!isMounted) return;
 
         setServices(servicesResponse.data || []);
         setStaff(staffResponse.data || []);
+        setCustomers(customersResponse.data || []);
       } catch (error) {
         if (axios.isCancel(error) || error.name === 'CanceledError' || controller.signal.aborted) {
           return;
@@ -166,6 +170,11 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
     [form.staffId, staff]
   );
 
+  const selectedCustomer = useMemo(
+    () => customers.find((customer) => customer._id === form.customerId),
+    [customers, form.customerId]
+  );
+
   const totalDuration = useMemo(
     () => selectedServices.reduce((sum, service) => sum + (Number(service.duration) || 0), 0),
     [selectedServices]
@@ -187,6 +196,8 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
   }, [form.startTime, totalDuration]);
 
   const canSubmit = Boolean(
+    form.customerId &&
+    selectedCustomer?.phone &&
     form.staffId &&
     form.bookingDate &&
     form.startTime &&
@@ -269,6 +280,8 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
         {
           staffId: form.staffId,
           stylist: form.staffId,
+          customerId: selectedCustomer._id,
+          customerMobile: selectedCustomer.phone,
           bookingDate: form.bookingDate,
           date: form.bookingDate,
           startTime,
@@ -328,7 +341,31 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
 
         <div className="relative grid gap-6 px-4 pb-6 sm:gap-8 sm:px-8 sm:pb-8 lg:grid-cols-[1.45fr_0.85fr]">
           <section>
-            <div className="grid gap-4 sm:gap-5 md:grid-cols-3">
+            <div className="grid gap-4 sm:gap-5 md:grid-cols-4">
+              <label>
+                <span className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-widest text-[#D4AF37]">
+                  <UserRound className="h-3.5 w-3.5" />
+                  Customer
+                </span>
+                <select
+                  value={form.customerId}
+                  onChange={(event) => setForm((current) => ({ ...current, customerId: event.target.value }))}
+                  disabled={isLoadingOptions || customers.length === 0}
+                  className="w-full border-b border-[#D4AF37]/30 bg-transparent px-0 py-3 text-sm text-white outline-none transition [color-scheme:dark] focus:border-[#D4AF37]"
+                  required
+                >
+                  <option value="">{customers.length === 0 ? 'No customers found' : 'Select customer'}</option>
+                  {customers.map((customer) => (
+                    <option key={customer._id} value={customer._id}>
+                      {customer.name} {customer.phone ? `- ${customer.phone}` : '- no phone'}
+                    </option>
+                  ))}
+                </select>
+                {form.customerId && !selectedCustomer?.phone && (
+                  <p className="mt-2 text-xs text-red-300">Selected customer needs a mobile number before booking.</p>
+                )}
+              </label>
+
               <label>
                 <span className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-widest text-[#D4AF37]">
                   <UserRound className="h-3.5 w-3.5" />
@@ -441,6 +478,11 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
             <div className="rounded-2xl bg-[#0d0d0d] p-4 shadow-[inset_0_0_0_1px_rgba(212,175,55,0.14)] sm:rounded-3xl sm:p-6">
               <p className="text-[10px] font-semibold uppercase tracking-widest text-[#D4AF37]/80">Booking Preview</p>
               <div className="mt-6 space-y-5">
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-neutral-500">Customer</p>
+                  <p className="mt-2 text-sm font-semibold text-white">{selectedCustomer?.name || 'No customer selected'}</p>
+                  {selectedCustomer?.phone && <p className="mt-1 text-xs text-neutral-400">{selectedCustomer.phone}</p>}
+                </div>
                 <div>
                   <p className="text-[10px] uppercase tracking-widest text-neutral-500">Stylist</p>
                   <p className="mt-2 text-sm font-semibold text-white">{selectedStaff?.name || 'No stylist selected'}</p>

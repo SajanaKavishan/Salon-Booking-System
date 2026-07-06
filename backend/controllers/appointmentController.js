@@ -196,6 +196,14 @@ const createAppointment = async (req, res) => {
                 return res.status(400).json({ message: 'Please provide a valid customerId.' });
             }
 
+            if (!requestedCustomerMobile) {
+                return res.status(400).json({ message: 'customerMobile is required when an admin creates an appointment.' });
+            }
+
+            if (!customerMobileRegex.test(requestedCustomerMobile)) {
+                return res.status(400).json({ message: 'Please provide a valid Sri Lankan mobile number for the selected customer.' });
+            }
+
             bookingUser = await User.findOne({ _id: customerId, role: 'customer' }).select('_id name email phone');
             if (!bookingUser) {
                 return res.status(400).json({ message: 'Selected customer was not found.' });

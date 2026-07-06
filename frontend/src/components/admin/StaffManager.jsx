@@ -203,6 +203,7 @@ function StaffManager() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
+  const [isDeletingStaff, setIsDeletingStaff] = useState(false);
   const [editData, setEditData] = useState({ name: "", specialty: "", workingHours: "", offDays: "", imageUrl: "" });
   const [originalEditData, setOriginalEditData] = useState({ name: "", specialty: "", workingHours: "", offDays: "", imageUrl: "" });
   const [selectedEditImage, setSelectedEditImage] = useState(null);
@@ -410,8 +411,9 @@ function StaffManager() {
   };
 
   const confirmDelete = async () => {
-    if (!itemToDelete) return;
+    if (!itemToDelete || isDeletingStaff) return;
 
+    setIsDeletingStaff(true);
     try {
       await axios.delete(`${API_BASE_URL}/api/staff/${itemToDelete}`, getAuthHeaders());
       setStaffList((currentStaff) => currentStaff.filter((staff) => staff._id !== itemToDelete));
@@ -420,6 +422,7 @@ function StaffManager() {
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to remove staff");
     } finally {
+      setIsDeletingStaff(false);
       setIsDeleteModalOpen(false);
       setItemToDelete(null);
     }
@@ -861,6 +864,7 @@ function StaffManager() {
                 setIsEditModalOpen(false);
                 clearSelectedEditImage();
               }}
+              aria-label="Close dialog"
               className="absolute right-4 top-4 text-xl text-gray-400 hover:text-white"
             >
               x
@@ -989,6 +993,7 @@ function StaffManager() {
                   setIsDeleteModalOpen(false);
                   setItemToDelete(null);
                 }}
+                disabled={isDeletingStaff}
                 className="border border-white/20 bg-transparent px-4 py-2 text-white hover:bg-white/10 hover:text-white"
               >
                 Cancel
@@ -996,9 +1001,10 @@ function StaffManager() {
               <button
                 type="button"
                 onClick={confirmDelete}
-                className="inline-flex items-center justify-center rounded-md bg-red-600/90 px-4 py-2 font-semibold text-white shadow-[0_0_15px_rgba(220,38,38,0.4)] transition-colors hover:bg-red-700"
+                disabled={isDeletingStaff}
+                className="inline-flex items-center justify-center rounded-md bg-red-600/90 px-4 py-2 font-semibold text-white shadow-[0_0_15px_rgba(220,38,38,0.4)] transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-70"
               >
-                Yes, Delete
+                {isDeletingStaff ? "Deleting..." : "Yes, Delete"}
               </button>
             </div>
           </GlassCard>
