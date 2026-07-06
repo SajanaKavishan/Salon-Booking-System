@@ -39,7 +39,9 @@ function Profile({ onClose }) {
 
   // State for password change modal
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [isPasswordSaving, setIsPasswordSaving] = useState(false);
   const [passwordValues, setPasswordValues] = useState({
+    currentPassword: '',
     newPassword: '',
     confirmPassword: ''
   });
@@ -117,6 +119,7 @@ function Profile({ onClose }) {
   const displayStylist = stylists.find(
     (stylist) => stylist.userId === user?.preferredStylist || stylist.name === user?.preferredStylist
   )?.name || user?.preferredStylist || 'Not Specified';
+  const canSubmitPassword = passwordValues.currentPassword.trim() && passwordValues.newPassword.trim() && passwordValues.confirmPassword.trim();
 
   const handleClose = () => {
     if (typeof onClose === 'function') {
@@ -274,7 +277,9 @@ function Profile({ onClose }) {
 
   // Function to handle password update
   const handlePasswordUpdate = async () => {
-    if (!passwordValues.newPassword || !passwordValues.confirmPassword) {
+    if (isPasswordSaving) return;
+
+    if (!passwordValues.currentPassword || !passwordValues.newPassword || !passwordValues.confirmPassword) {
       alert("Please fill in all password fields.");
       return;
     }
@@ -285,6 +290,7 @@ function Profile({ onClose }) {
     }
 
     try {
+      setIsPasswordSaving(true);
       const token = localStorage.getItem('token');
       if (!token) {
         alert("Please log in again.");
@@ -293,18 +299,23 @@ function Profile({ onClose }) {
 
       const response = await axios.put(
         `${BACKEND_BASE_URL}/api/users/profile`,
-        { password: passwordValues.newPassword },
+        {
+          currentPassword: passwordValues.currentPassword,
+          newPassword: passwordValues.newPassword
+        },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
       if (response.data) {
         alert("Password updated successfully!");
         setIsPasswordModalOpen(false);
-        setPasswordValues({ newPassword: '', confirmPassword: '' });
+        setPasswordValues({ currentPassword: '', newPassword: '', confirmPassword: '' });
       }
     } catch (error) {
       console.error('Password update error:', error.response?.data?.message || error.message);
       alert('Failed to update password: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setIsPasswordSaving(false);
     }
   };
 
@@ -599,6 +610,18 @@ function Profile({ onClose }) {
             
             <div className="space-y-5">
               <div>
+                <label htmlFor="customer-profile-current-password" className="mb-2 block text-[10px] uppercase tracking-widest text-gray-500">Current Password</label>
+                <input
+                  id="customer-profile-current-password"
+                  type="password"
+                  value={passwordValues.currentPassword}
+                  onChange={(e) => setPasswordValues({...passwordValues, currentPassword: e.target.value})}
+                  className="w-full rounded-xl border border-[#D4AF37]/40 bg-transparent px-4 py-3 text-sm text-white outline-none transition focus:border-[#D4AF37]"
+                  placeholder="Enter current password"
+                  autoComplete="current-password"
+                />
+              </div>
+              <div>
                 <label htmlFor="customer-profile-new-password" className="mb-2 block text-[10px] uppercase tracking-widest text-gray-500">New Password</label>
                 <input
                   id="customer-profile-new-password"
@@ -629,7 +652,7 @@ function Profile({ onClose }) {
                 type="button"
                 onClick={() => {
                   setIsPasswordModalOpen(false);
-                  setPasswordValues({ newPassword: '', confirmPassword: '' });
+                  setPasswordValues({ currentPassword: '', newPassword: '', confirmPassword: '' });
                 }}
                 className="text-neutral-400 transition hover:text-white"
               >
@@ -638,9 +661,10 @@ function Profile({ onClose }) {
               <button
                 type="button"
                 onClick={handlePasswordUpdate}
-                className="rounded-full bg-[#D4AF37] px-6 py-2.5 font-bold text-black transition hover:bg-[#f3d77a]"
+                disabled={!canSubmitPassword || isPasswordSaving}
+                className="rounded-full bg-[#D4AF37] px-6 py-2.5 font-bold text-black transition hover:bg-[#f3d77a] disabled:cursor-not-allowed disabled:bg-[#D4AF37]/40 disabled:text-black/50"
               >
-                Update Password
+                {isPasswordSaving ? 'Updating...' : 'Update Password'}
               </button>
             </div>
           </div>

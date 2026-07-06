@@ -2,8 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { Check, Loader2, Sparkles, Star, X } from 'lucide-react';
 import { toast } from 'react-toastify';
-
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+import API_BASE_URL from '../../utils/apiConfig';
 
 const getAppointmentId = (appointment) => appointment?._id || appointment?.id;
 

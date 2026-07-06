@@ -14,8 +14,7 @@ import {
 import { toast } from 'react-toastify';
 import { GlassCard, GoldButton, SectionPanel } from '../../components/admin/SystemUI';
 import { WEEKLY_OPENING_HOURS, defaultOpeningHours, useSalonSettings } from '../../hooks/useSalonSettings';
-
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+import API_BASE_URL from '../../utils/apiConfig';
 
 function SettingsToggle({ label, description, checked, onChange, disabled = false }) {
   return (

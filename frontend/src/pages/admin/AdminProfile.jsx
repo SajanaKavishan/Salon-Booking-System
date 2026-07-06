@@ -35,6 +35,7 @@ function AdminProfile({ onClose }) {
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [isPasswordSaving, setIsPasswordSaving] = useState(false);
   const [passwordValues, setPasswordValues] = useState({
+    currentPassword: '',
     newPassword: '',
     confirmPassword: ''
   });
@@ -75,7 +76,7 @@ function AdminProfile({ onClose }) {
   const displayEmail = user?.email || 'admin@salondees.com';
   const displayPhone = user?.phone || 'Not Provided';
   const roleDescription = user?.role || 'Administrator';
-  const canSubmitPassword = passwordValues.newPassword.trim() && passwordValues.confirmPassword.trim();
+  const canSubmitPassword = passwordValues.currentPassword.trim() && passwordValues.newPassword.trim() && passwordValues.confirmPassword.trim();
 
   const handleClose = () => {
     if (typeof onClose === 'function') onClose();
@@ -195,7 +196,7 @@ function AdminProfile({ onClose }) {
   const handlePasswordUpdate = async () => {
     if (isPasswordSaving) return;
 
-    if (!passwordValues.newPassword || !passwordValues.confirmPassword) {
+    if (!passwordValues.currentPassword || !passwordValues.newPassword || !passwordValues.confirmPassword) {
       toast.warning("Please fill in all password fields.");
       return;
     }
@@ -209,13 +210,16 @@ function AdminProfile({ onClose }) {
       const token = localStorage.getItem('token');
       const response = await axios.put(
         `${BACKEND_BASE_URL}/api/users/profile`,
-        { password: passwordValues.newPassword },
+        {
+          currentPassword: passwordValues.currentPassword,
+          newPassword: passwordValues.newPassword
+        },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       if (response.data) {
         toast.success("Password updated successfully!");
         setIsPasswordModalOpen(false);
-        setPasswordValues({ newPassword: '', confirmPassword: '' });
+        setPasswordValues({ currentPassword: '', newPassword: '', confirmPassword: '' });
       }
     } catch {
       toast.error('Failed to update password.');
@@ -388,6 +392,18 @@ function AdminProfile({ onClose }) {
             <p className="text-sm text-gray-400 mb-6">Ensure your admin account is secure.</p>
             <div className="space-y-5">
               <div>
+                <label htmlFor="admin-profile-current-password" className="mb-2 block text-[10px] uppercase tracking-widest text-gray-500">Current Password</label>
+                <input
+                  id="admin-profile-current-password"
+                  type="password"
+                  value={passwordValues.currentPassword}
+                  onChange={(e) => setPasswordValues({...passwordValues, currentPassword: e.target.value})}
+                  className="w-full rounded-xl border border-[#D4AF37]/40 bg-transparent px-4 py-3 text-sm text-white outline-none focus:border-[#D4AF37]"
+                  placeholder="Enter current password"
+                  autoComplete="current-password"
+                />
+              </div>
+              <div>
                 <label htmlFor="admin-profile-new-password" className="mb-2 block text-[10px] uppercase tracking-widest text-gray-500">New Password</label>
                 <input
                   id="admin-profile-new-password"
@@ -413,7 +429,7 @@ function AdminProfile({ onClose }) {
               </div>
             </div>
             <div className="mt-8 flex flex-col-reverse items-stretch gap-3 text-[10px] uppercase tracking-widest sm:flex-row sm:items-center sm:justify-end">
-              <button type="button" onClick={() => { setIsPasswordModalOpen(false); setPasswordValues({ newPassword: '', confirmPassword: '' }); }} className="min-h-11 px-4 text-neutral-400 hover:text-white">Cancel</button>
+              <button type="button" onClick={() => { setIsPasswordModalOpen(false); setPasswordValues({ currentPassword: '', newPassword: '', confirmPassword: '' }); }} className="min-h-11 px-4 text-neutral-400 hover:text-white">Cancel</button>
               <button
                 type="button"
                 onClick={handlePasswordUpdate}

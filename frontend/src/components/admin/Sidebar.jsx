@@ -4,8 +4,8 @@ import { motion } from 'framer-motion';
 import { Scissors } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { clearAuthStorage } from '../../utils/auth';
+import API_BASE_URL from '../../utils/apiConfig';
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const PENDING_APPOINTMENTS_REFRESH_EVENT = 'appointments:pending-count-refresh';
 
 const adminSidebarItems = [

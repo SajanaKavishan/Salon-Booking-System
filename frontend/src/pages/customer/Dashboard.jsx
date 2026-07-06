@@ -8,11 +8,11 @@ import { useAppointments } from '../../context/AppointmentsContext';
 import ActiveBookingCard from '../../components/customer/ActiveBookingCard';
 import AppointmentReviewModal from '../../components/customer/AppointmentReviewModal';
 import DashboardHeader from '../../components/customer/DashboardHeader';
+import API_BASE_URL from '../../utils/apiConfig';
 
 const HISTORY_STATUSES = ['completed', 'rejected', 'cancelled', 'canceled', 'no-show'];
 const UPCOMING_STATUSES = ['pending', 'approved', 'confirmed'];
 const REVIEW_PROMPT_STORAGE_PREFIX = 'salonDismissedReviewPrompts';
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const MotionDiv = motion.div;
 
 const formatServices = (services, fallback = 'Service not available') => {

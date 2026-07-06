@@ -4,6 +4,7 @@ import { Menu } from 'lucide-react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from '../../components/admin/Sidebar';
 import RoleProfile from '../shared/RoleProfile';
+import API_BASE_URL from '../../utils/apiConfig';
 
 const formatRelativeTime = (dateValue) => {
   if (!dateValue) return 'Just now';
@@ -40,8 +41,6 @@ const getEmergencyRescheduleMessage = (message) => (
     .replace(/\s*Please reschedule your booking\.?\s*$/i, '')
     .trim()
 );
-
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 
 function Layout() {
   const location = useLocation();

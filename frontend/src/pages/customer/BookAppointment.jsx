@@ -15,8 +15,7 @@ import Spinner from '../../components/common/Spinner';
 import { useSalonSettings } from '../../hooks/useSalonSettings';
 
 import { useAppointments } from '../../context/AppointmentsContext';
-
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+import API_BASE_URL from '../../utils/apiConfig';
 
 const SRI_LANKAN_MOBILE_REGEX = /^(?:\+94|0)[7][0-9]{8}$/;
 const TEN_DIGIT_PHONE_REGEX = /^[0-9]{10}$/;

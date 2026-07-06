@@ -3,8 +3,7 @@ import axios from 'axios';
 import { DollarSign, RefreshCw } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { GoldButton, StatusBadge } from '../../components/admin/SystemUI';
-
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+import API_BASE_URL from '../../utils/apiConfig';
 
 const timeToMinutes = (timeStr) => {
   if (!timeStr || typeof timeStr !== 'string') return 0;

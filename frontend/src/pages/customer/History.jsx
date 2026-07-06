@@ -3,8 +3,8 @@ import axios from 'axios';
 import { CalendarCheck, ChevronDown } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useAppointments } from '../../context/AppointmentsContext';
+import API_BASE_URL from '../../utils/apiConfig';
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const HISTORY_STATUSES = ['completed', 'rejected', 'cancelled', 'canceled', 'no-show'];
 const HERO_IMAGE_URL = '/heroBg.jpg';
 

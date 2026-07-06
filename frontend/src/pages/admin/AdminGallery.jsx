@@ -3,8 +3,7 @@ import axios from 'axios';
 import { AlertTriangle, ImagePlus, Trash2, Upload, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { GoldButton } from '../../components/admin/SystemUI';
-
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+import API_BASE_URL from '../../utils/apiConfig';
 
 const isRequestCanceled = (error) => error.code === 'ERR_CANCELED' || axios.isCancel(error);
 const uploadHelperText = 'Max size: 5MB. Formats: JPG, PNG, WEBP, GIF.';

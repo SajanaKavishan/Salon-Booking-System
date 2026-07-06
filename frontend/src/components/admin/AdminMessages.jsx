@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { AlertTriangle, Mail, Search, Trash2, X } from 'lucide-react';
+import API_BASE_URL from '../../utils/apiConfig';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') || '';
 const systemStartYear = 2026;
 const currentYear = new Date().getFullYear();
 const latestYear = Math.max(currentYear, systemStartYear);

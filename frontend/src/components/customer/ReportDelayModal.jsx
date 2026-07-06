@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Clock, Loader2, X } from 'lucide-react';
 import { toast } from 'react-toastify';
+import API_BASE_URL from '../../utils/apiConfig';
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const DELAY_OPTIONS = [10, 15, 20];
 
 function ReportDelayModal({ appointment, onClose, onSuccess }) {

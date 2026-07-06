@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { motion } from 'framer-motion';
+import API_BASE_URL from '../../utils/apiConfig';
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const HERO_IMAGE_URL = '/heroBg.jpg';
 const FALLBACK_AVAILABILITY_MESSAGE = 'Ready to elevate your aesthetic? Explore our master stylists and reserve your luxury grooming experience today.';
 
