@@ -15,7 +15,7 @@ const serviceSchema = new mongoose.Schema(
     duration: {
       type: Number,
       required: [true, 'Please add estimated duration in minutes'],
-      min: [0, 'Duration cannot be negative'],
+      min: [15, 'Service duration must be at least 15 minutes.'],
     },
     image: {
       type: String,

@@ -865,7 +865,23 @@ const submitAppointmentReview = async (req, res) => {
         }
 
         const isFiveStarReview = numericRating === 5;
-        const preferredStylist = appointment.stylist || appointment.staffId;
+        const preferredStylistProfileId = appointment.stylist || appointment.staffId;
+        let preferredStylistUserId = null;
+
+        if (makePreferred) {
+            if (!preferredStylistProfileId) {
+                return res.status(400).json({ message: 'This appointment does not have an assigned stylist.' });
+            }
+
+            const preferredStylistProfile = await Staff.findById(preferredStylistProfileId).select('userId');
+            if (!preferredStylistProfile?.userId) {
+                return res.status(400).json({
+                    message: 'This stylist profile is not linked to a staff user account.',
+                });
+            }
+
+            preferredStylistUserId = preferredStylistProfile.userId;
+        }
 
         appointment.rating = numericRating;
         appointment.feedback = feedback;
@@ -874,9 +890,9 @@ const submitAppointmentReview = async (req, res) => {
         const updatedAppointment = await appointment.save();
 
         // VIP consent gate: only update the preferred stylist when the customer explicitly opts in.
-        if (makePreferred && preferredStylist) {
+        if (preferredStylistUserId) {
             await User.findByIdAndUpdate(req.user.id, {
-                preferredStylist,
+                preferredStylist: preferredStylistUserId,
             });
         }
 
@@ -1090,14 +1106,20 @@ const updateAppointmentStatus = async (req, res) => {
 
         // Part of the code to send an email notification to the user about the status update of their appointment. The email includes the appointment details and a message indicating the new status of the appointment. This enhances the user experience by keeping them informed about the status of their appointments in a timely manner.
         if (settings.customerEmails && appointment.user && appointment.user.email) {
-            const emailSubject = `Appointment ${status} - ${salonName}`;
+            const emailStatusKey = Appointment.normalizeStatus(updatedAppointment.status);
+            const emailStatus = updatedAppointment.toJSON().status;
+            const emailSubject = `Appointment ${emailStatus} - ${salonName}`;
 
             // Safely get service names - filter out any null/undefined services
             const serviceNames = (appointment.services && appointment.services.length > 0)
                 ? appointment.services.filter(s => s && s.name).map(s => s.name).join(', ')
                 : 'Not specified';
             
-            const statusColor = status === 'Approved' ? '#27ae60' : status === 'Rejected' ? '#e74c3c' : '#f39c12';
+            const statusColor = emailStatusKey === 'confirmed'
+                ? '#27ae60'
+                : ['rejected', 'cancelled', 'no-show'].includes(emailStatusKey)
+                    ? '#e74c3c'
+                    : '#f39c12';
             const rows = [
                 ['Services', serviceNames],
                 ['Date', appointment.date || 'Not specified'],
@@ -1111,7 +1133,7 @@ const updateAppointmentStatus = async (req, res) => {
                     <div style="font-family: Arial, sans-serif; padding: 24px; border: 1px solid #262626; border-radius: 14px; max-width: 580px; margin: 0 auto; background: #0b0b0b; color: #f5f5f5;">
                         <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; border-bottom:1px solid #232323; padding-bottom:14px;">
                             <h2 style="color:#d4af37; margin:0;">${salonName}</h2>
-                            <span style="padding:6px 12px; border-radius:999px; background:${statusColor}; color:#ffffff; font-size:12px; font-weight:bold;">${status}</span>
+                            <span style="padding:6px 12px; border-radius:999px; background:${statusColor}; color:#ffffff; font-size:12px; font-weight:bold;">${emailStatus}</span>
                         </div>
                         <p style="font-size:16px; margin-top:20px;">Hello <strong>${appointment.user.name}</strong>,</p>
                         <p style="font-size:14px; line-height:1.7; color:#d1d5db;">Your appointment has been updated. Here is your latest booking summary.</p>
@@ -1131,10 +1153,10 @@ const updateAppointmentStatus = async (req, res) => {
                 : `
                     <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px; max-width: 550px; margin: 0 auto; background-color: #f9f9f9;">
                         <h2 style="color: ${statusColor}; text-align: center; border-bottom: 2px solid ${statusColor}; padding-bottom: 10px;">
-                            Appointment Status: ${status}
+                            Appointment Status: ${emailStatus}
                         </h2>
                         <p style="font-size: 16px; margin-top: 20px;">Welcome! <strong>${appointment.user.name}</strong>,</p>
-                        <p style="font-size: 14px; color: #555; margin-bottom: 20px;">Your appointment status has been updated to: <strong style="color: ${statusColor};">${status}</strong></p>
+                        <p style="font-size: 14px; color: #555; margin-bottom: 20px;">Your appointment status has been updated to: <strong style="color: ${statusColor};">${emailStatus}</strong></p>
                         <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
                             <tr><td style="padding: 10px; border: 1px solid #e0e0e0; background-color: #f5f5f5; font-weight: bold; width: 40%;">Services:</td><td style="padding: 10px; border: 1px solid #e0e0e0;">${serviceNames}</td></tr>
                             <tr><td style="padding: 10px; border: 1px solid #e0e0e0; background-color: #f5f5f5; font-weight: bold;">Date:</td><td style="padding: 10px; border: 1px solid #e0e0e0;">${appointment.date}</td></tr>
