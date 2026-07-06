@@ -330,7 +330,7 @@ function AppointmentsPage() {
     return appointments
       .filter((appt) => {
         const appointmentDateParts = getAppointmentDateParts(appt);
-        const statusMatches = activeTab === 'All' ? true : appt.status === activeTab;
+        const statusMatches = activeTab === 'All' ? true : appt.status?.toLowerCase() === activeTab?.toLowerCase();
         const yearMatches = activeYear === 'all' || appointmentDateParts.year === activeYear;
         const monthMatches = activeMonth === 'all' || appointmentDateParts.month === activeMonth;
 
@@ -583,7 +583,7 @@ function AppointmentsPage() {
                 <span className={`rounded-full px-2 py-0.5 text-[11px] ${
                   activeTab === tab ? 'bg-black/10 text-black' : 'bg-white/10 text-gray-300'
                 }`}>
-                  {tab === 'All' ? appointments.length : appointments.filter((appt) => appt.status === tab).length}
+                  {tab === 'All' ? appointments.length : appointments.filter((appt) => appt.status?.toLowerCase() === tab?.toLowerCase()).length}
                 </span>
               </button>
             ))}

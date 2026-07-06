@@ -209,7 +209,7 @@ const updateStaff = async (req, res) => {
     }
 
     const updates = {};
-    const allowedFields = ['name', 'imageUrl', 'specialty'];
+    const allowedFields = ['name', 'specialty'];
 
     allowedFields.forEach((field) => {
       if (req.body[field] !== undefined) updates[field] = req.body[field];
@@ -229,6 +229,8 @@ const updateStaff = async (req, res) => {
 
     if (req.file?.path) {
       updates.imageUrl = req.file.path;
+    } else if (req.body.imageUrl !== undefined) {
+      updates.imageUrl = req.body.imageUrl;
     }
 
     const updatedStaff = await Staff.findByIdAndUpdate(req.params.id, updates, {
