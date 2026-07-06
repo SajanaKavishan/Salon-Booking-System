@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
+import { X } from 'lucide-react';
+import BACKEND_BASE_URL from '../../utils/apiConfig';
 
-const BACKEND_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const formLabelClassName = 'text-xs font-bold uppercase leading-5 tracking-[0.12em] text-gray-400';
 const formValueClassName = 'mt-2 text-base leading-6 text-white';
 const formInputClassName = 'mt-2 w-full bg-transparent pb-2 text-base font-medium leading-6 text-white outline-none border-b border-[#D4AF37]/40 transition focus:border-[#D4AF37]';
@@ -22,6 +23,7 @@ function AdminProfile({ onClose }) {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [profileImage, setProfileImage] = useState(user?.profileImage || user?.imageUrl || user?.image || '');
+  const [profileImageFile, setProfileImageFile] = useState(null);
 
   const [formValues, setFormValues] = useState(() => ({
     name: user?.name || '',
@@ -90,6 +92,7 @@ function AdminProfile({ onClose }) {
       const imageUrl = typeof reader.result === 'string' ? reader.result : '';
       if (!imageUrl) return;
       setProfileImage(imageUrl);
+      setProfileImageFile(file);
       if (!isEditing) setIsEditing(true);
     };
     reader.readAsDataURL(file);
@@ -115,9 +118,10 @@ function AdminProfile({ onClose }) {
       normalize(formValues.name) !== normalize(user?.name)
       || normalize(formValues.email) !== normalize(user?.email)
       || normalize(formValues.phone) !== normalize(user?.phone)
+      || Boolean(profileImageFile)
       || normalize(profileImage) !== normalize(user?.profileImage || user?.imageUrl || user?.image)
     );
-  }, [formValues, isEditing, profileImage, user]);
+  }, [formValues, isEditing, profileImage, profileImageFile, user]);
 
   const resetForm = () => {
     setFormValues({
@@ -126,6 +130,7 @@ function AdminProfile({ onClose }) {
       phone: user?.phone || ''
     });
     setProfileImage(user?.profileImage || user?.imageUrl || user?.image || '');
+    setProfileImageFile(null);
     setIsEditing(false);
   };
 
@@ -143,14 +148,26 @@ function AdminProfile({ onClose }) {
       const updatedUser = {
         name: formValues.name.trim(),
         email: formValues.email.trim(),
-        phone: formValues.phone.trim(),
-        profileImage: profileImage
+        phone: formValues.phone.trim()
       };
+
+      const payload = new FormData();
+      payload.append('name', updatedUser.name);
+      payload.append('email', updatedUser.email);
+      payload.append('phone', updatedUser.phone);
+      if (profileImageFile) {
+        payload.append('profileImage', profileImageFile);
+      }
 
       const response = await axios.put(
         `${BACKEND_BASE_URL}/api/users/profile`,
-        updatedUser,
-        { headers: { Authorization: `Bearer ${token}` } }
+        payload,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data'
+          }
+        }
       );
 
       if (response.data) {
@@ -163,6 +180,7 @@ function AdminProfile({ onClose }) {
           phone: mergedUser.phone || ''
         });
         localStorage.setItem('user', JSON.stringify(mergedUser));
+        setProfileImageFile(null);
         window.dispatchEvent(new CustomEvent('profileUpdated', { detail: mergedUser }));
         setIsEditing(false); 
         toast.success('Admin profile updated successfully!');
@@ -209,7 +227,14 @@ function AdminProfile({ onClose }) {
   return (
     <div className={`relative w-full ${typeof onClose === 'function' ? 'min-h-full' : 'min-h-screen'} bg-[#070707] text-white`}>
       {typeof onClose === 'function' && (
-        <button type="button" onClick={handleClose} className="absolute top-6 right-6 z-10 cursor-pointer text-neutral-400 hover:text-white">Close</button>
+        <button
+          type="button"
+          onClick={handleClose}
+          className="absolute right-5 top-5 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-black/30 text-neutral-400 transition hover:border-[#D4AF37]/40 hover:text-white focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/40"
+          aria-label="Close profile"
+        >
+          <X className="h-5 w-5" aria-hidden="true" />
+        </button>
       )}
       
       <div className="relative">

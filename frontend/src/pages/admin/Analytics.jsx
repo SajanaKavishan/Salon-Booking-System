@@ -28,6 +28,7 @@ import {
 } from "recharts";
 
 import { GlassCard } from "../../components/admin/SystemUI";
+import BACKEND_BASE_URL from "../../utils/apiConfig";
 
 const STATUS_COLORS = {
   Completed: "#22c55e",
@@ -50,19 +51,6 @@ const tooltipStyle = {
   borderRadius: "10px",
   boxShadow: "0 16px 40px rgba(0, 0, 0, 0.45)",
 };
-
-const getBackendBaseUrl = () => {
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
-
-  if (apiBaseUrl) return apiBaseUrl.replace(/\/$/, "");
-  if (import.meta.env.PROD) {
-    throw new Error("VITE_API_BASE_URL must be configured for production analytics requests.");
-  }
-
-  return "http://localhost:5000";
-};
-
-const BACKEND_BASE_URL = getBackendBaseUrl();
 
 const formatRating = (rating) => Number(rating || 0).toFixed(1);
 const getRangeLabel = (range) =>

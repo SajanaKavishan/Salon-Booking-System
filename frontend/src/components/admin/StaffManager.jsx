@@ -6,8 +6,8 @@ import { FaEye, FaEyeSlash } from "react-icons/fa";
 import { Check, ChevronDown } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { GlassCard, GoldButton } from "./SystemUI";
+import API_BASE_URL from "../../utils/apiConfig";
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000").replace(/\/$/, "");
 const currentYear = new Date().getFullYear();
 const leaveYearOptions = Array.from({ length: 5 }, (_, index) => currentYear - 2 + index);
 const mutedGoldButtonClassName = "disabled:cursor-not-allowed disabled:border-[#756a1d] disabled:bg-[#756a1d] disabled:text-black/70 disabled:shadow-none disabled:brightness-75 disabled:hover:bg-[#756a1d] disabled:hover:text-black/70";

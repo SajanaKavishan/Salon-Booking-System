@@ -9,6 +9,7 @@ import { Check, Scissors } from 'lucide-react';
 import Spinner from '../../components/common/Spinner';
 import { AuthShell } from '../../components/admin/SystemUI';
 import { apiUrl } from '../../utils/apiConfig';
+import { getStoredSession } from '../../utils/auth';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -45,27 +46,25 @@ function Login() {
   const safeNextPath = next?.startsWith('/') && !next.startsWith('//') ? next : null;
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const userRole = localStorage.getItem('userRole');
+    const session = getStoredSession();
+    if (!session) return;
 
-    if (!token || !userRole) return;
+    const isFirstLogin = session.user?.isFirstLogin === true;
 
-    let isFirstLogin = false;
-    try {
-      isFirstLogin = JSON.parse(localStorage.getItem('user') || '{}')?.isFirstLogin === true;
-    } catch {
-      isFirstLogin = false;
+    if (session.userRole === 'customer' && isFirstLogin) {
+      navigate('/onboarding', { replace: true });
+      return;
     }
 
-    navigate(safeNextPath || getRoleRedirectPath(userRole, isFirstLogin), { replace: true });
+    navigate(safeNextPath || getRoleRedirectPath(session.userRole, isFirstLogin), { replace: true });
   }, [navigate, safeNextPath]);
 
   const getRedirectPath = (role, isFirstLogin = false) => {
+    if (role === 'customer' && isFirstLogin) return '/onboarding';
     if (safeNextPath) return safeNextPath;
 
     if (role === 'admin') return '/admin';
     if (role === 'staff') return '/staff/dashboard';
-    if (isFirstLogin) return '/onboarding';
 
     return '/dashboard';
   };

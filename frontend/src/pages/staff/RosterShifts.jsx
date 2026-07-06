@@ -4,10 +4,10 @@ import { toast } from "react-toastify";
 import { Calendar, Briefcase, PlusCircle, NotebookText, Loader2, Palmtree, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { GlassCard, GoldButton } from "../../components/admin/SystemUI";
 import { format, addDays, startOfWeek, isSameDay, isWithinInterval, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameMonth } from "date-fns";
+import API_BASE_URL from "../../utils/apiConfig";
 
 const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const calendarDaysOfWeek = ["M", "T", "W", "T", "F", "S", "S"];
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000").replace(/\/$/, "");
 
 const getTimeValue = (date) => {
   const value = date instanceof Date ? date.getTime() : new Date(date).getTime();

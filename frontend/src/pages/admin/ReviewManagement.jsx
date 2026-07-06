@@ -2,8 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { AlertTriangle, Check, Globe, Loader2, Star, Trash2, X } from 'lucide-react';
 import { toast } from 'react-toastify';
-
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
+import API_BASE_URL from '../../utils/apiConfig';
 
 const formatDateTime = (dateValue) => {
   if (!dateValue) return 'Date unavailable';

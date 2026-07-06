@@ -4,10 +4,10 @@ import { CalendarCheck, CalendarPlus, ChevronDown } from 'lucide-react';
 import { toast } from 'react-toastify';
 import AddAppointmentModal from '../../components/admin/AddAppointmentModal';
 import { DarkSelect, GoldButton, StatusBadge } from '../../components/admin/SystemUI';
+import API_BASE_URL from '../../utils/apiConfig';
 
 const finalStatuses = ['Completed', 'Rejected', 'Cancelled', 'No-Show'];
 const PENDING_APPOINTMENTS_REFRESH_EVENT = 'appointments:pending-count-refresh';
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
 const CURRENT_DATE = new Date();
 const CURRENT_YEAR = String(CURRENT_DATE.getFullYear());
 const CURRENT_MONTH = String(CURRENT_DATE.getMonth());

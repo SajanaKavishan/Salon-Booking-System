@@ -11,8 +11,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-
-const BACKEND_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000").replace(/\/$/, "");
+import BACKEND_BASE_URL from "../../utils/apiConfig";
 
 const RANGE_OPTIONS = [
   { value: "FULL_YEAR", label: "Full year" },

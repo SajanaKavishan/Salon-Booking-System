@@ -18,6 +18,28 @@ const getStaff = async (req, res) => {
   }
 };
 
+// @desc    Get public stylist profile details for customer-facing selection
+// @route   GET /api/staff/public-list
+const getPublicStaffList = async (req, res) => {
+  try {
+    const staff = await Staff.find({})
+      .select('_id userId name imageUrl specialty')
+      .sort({ name: 1 })
+      .lean();
+
+    res.status(200).json(staff.map((stylist) => ({
+      _id: stylist._id,
+      userId: stylist.userId,
+      name: stylist.name,
+      imageUrl: stylist.imageUrl || '',
+      specialty: stylist.specialty || 'Luxury Artist',
+      experience: 'Expert Stylist',
+    })));
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // @desc    Get staff performance metrics from approved appointment reviews
 // @route   GET /api/staff/performance
 const getStaffPerformance = async (req, res) => {
@@ -148,4 +170,4 @@ const deleteStaff = async (req, res) => {
   }
 };
 
-module.exports = { getStaff, getStaffPerformance, addStaff, updateStaff, deleteStaff };
+module.exports = { getStaff, getPublicStaffList, getStaffPerformance, addStaff, updateStaff, deleteStaff };

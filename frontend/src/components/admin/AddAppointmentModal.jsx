@@ -11,10 +11,10 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { GoldButton } from './SystemUI';
+import API_BASE_URL from '../../utils/apiConfig';
 
 const BUFFER_MINUTES = 15;
 const BLOCKED_STATUSES = ['cancelled', 'rejected', 'completed', 'no-show'];
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
 
 const initialForm = {
   staffId: '',

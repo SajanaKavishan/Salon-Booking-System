@@ -4,8 +4,8 @@ import axios from 'axios';
 import { toast } from 'react-toastify';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { GlassCard, GoldButton } from './SystemUI';
+import API_BASE_URL from '../../utils/apiConfig';
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
 const mutedGoldButtonClassName = 'disabled:cursor-not-allowed disabled:border-[#756a1d] disabled:bg-[#756a1d] disabled:text-black/70 disabled:shadow-none disabled:brightness-75 disabled:hover:bg-[#756a1d] disabled:hover:text-black/70';
 
 function SalonNumberField({

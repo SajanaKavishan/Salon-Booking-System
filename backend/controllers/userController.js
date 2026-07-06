@@ -557,7 +557,7 @@ const completeOnboarding = async (req, res) => {
       user,
     });
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    return res.status(error.statusCode || 500).json({ message: error.message });
   }
 };
 

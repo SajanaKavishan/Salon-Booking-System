@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import axiosInstance from 'axios'; 
+import axios from 'axios';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
@@ -11,8 +11,8 @@ import {
   Sparkles,
   Star,
 } from 'lucide-react';
+import BACKEND_BASE_URL, { apiUrl } from '../../utils/apiConfig';
 
-const BACKEND_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 const FALLBACK_STAFF_IMAGE = '/Owner.jpg';
 
 const onboardingImages = {
@@ -223,13 +223,13 @@ function StylistCard({
 
       <div className="flex min-h-[15.5rem] flex-col p-5 lg:min-h-[18.4rem] lg:p-6">
         <div>
-          <h3 className="font-serif text-[1.55rem] leading-tight text-white lg:text-[1.72rem]">
+          <h3 className="truncate font-serif text-[1.55rem] leading-tight text-white lg:text-[1.72rem]" title={stylist.name}>
             {stylist.name}
           </h3>
-          <p className="mt-2 text-[0.82rem] font-medium leading-5 text-white/50">
+          <p className="mt-2 truncate text-[0.82rem] font-medium leading-5 text-white/50" title={experience}>
             {experience}
           </p>
-          <p className="mt-4 text-[0.82rem] font-bold uppercase leading-5 tracking-[0.12em] text-[#D4AF37]">
+          <p className="mt-4 truncate text-[0.82rem] font-bold uppercase leading-5 tracking-[0.12em] text-[#D4AF37]" title={specialty}>
             {specialty}
           </p>
         </div>
@@ -295,7 +295,7 @@ function Onboarding() {
     const fetchStylists = async () => {
       setIsLoadingStylists(true);
       try {
-        const response = await axiosInstance.get('/api/staff/performance');
+        const response = await axios.get(apiUrl('/api/staff/public-list'));
         if (isActive) {
           setStylists(Array.isArray(response.data) ? response.data.filter((staff) => staff?.name) : []);
         }
@@ -329,8 +329,8 @@ function Onboarding() {
     setIsCompleting(true);
 
     try {
-      const response = await axiosInstance.patch(
-        '/api/users/complete-onboarding',
+      const response = await axios.patch(
+        apiUrl('/api/users/complete-onboarding'),
         selectedRealStylistId ? { preferredStylist: selectedRealStylistId } : {},
         { headers: { Authorization: `Bearer ${token}` } }
       );

@@ -3,8 +3,11 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
 import {GoogleOAuthProvider} from '@react-oauth/google';
+import { installUnauthorizedInterceptor } from './utils/auth';
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '';
+
+installUnauthorizedInterceptor();
 
 const savedTheme = localStorage.getItem('theme');
 if (savedTheme === 'dark') {
@@ -23,4 +26,3 @@ createRoot(document.getElementById('root')).render(
     </GoogleOAuthProvider>
   </StrictMode>,
 )
-

@@ -23,10 +23,9 @@ import {
 } from "recharts";
 
 import { GoldButton, GlassCard } from "../../components/admin/SystemUI";
+import API_BASE_URL from "../../utils/apiConfig";
 
 
-
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || "http://localhost:5000").replace(/\/$/, "");
 
 const formatYAxis = (value) => {
   const numericValue = Number(value) || 0;

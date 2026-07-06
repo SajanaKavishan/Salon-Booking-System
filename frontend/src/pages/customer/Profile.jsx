@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
+import { X } from 'lucide-react';
+import BACKEND_BASE_URL from '../../utils/apiConfig';
 
 const DEFAULT_STYLISTS = [];
 
-const BACKEND_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
 const formLabelClassName = 'text-xs font-bold uppercase leading-5 tracking-[0.12em] text-gray-400';
 const formValueClassName = 'mt-2 text-base leading-6 text-white';
 const formInputClassName = 'mt-2 w-full bg-transparent pb-2 text-base font-medium leading-6 text-white outline-none border-b border-[#D4AF37]/40 transition focus:border-[#D4AF37]';
@@ -24,6 +25,7 @@ function Profile({ onClose }) {
   const [isSaving, setIsSaving] = useState(false);
   const [stylists, setStylists] = useState(DEFAULT_STYLISTS);
   const [profileImage, setProfileImage] = useState(user?.profileImage || '');
+  const [profileImageFile, setProfileImageFile] = useState(null);
 
   const [formValues, setFormValues] = useState(() => ({
     name: user?.name || '',
@@ -135,6 +137,7 @@ function Profile({ onClose }) {
       const imageUrl = typeof reader.result === 'string' ? reader.result : '';
       if (!imageUrl) return;
       setProfileImage(imageUrl);
+      setProfileImageFile(file);
       
       if (!isEditing) {
         setIsEditing(true);
@@ -172,9 +175,10 @@ function Profile({ onClose }) {
       || normalize(formValues.email) !== normalize(user?.email)
       || normalize(formValues.phone) !== normalize(user?.phone)
       || normalize(formValues.preferredStylist) !== normalize(user?.preferredStylist)
+      || Boolean(profileImageFile)
       || normalize(profileImage) !== normalize(user?.profileImage)
     );
-  }, [formValues, isEditing, profileImage, user]);
+  }, [formValues, isEditing, profileImage, profileImageFile, user]);
 
   const updateField = (field, value) => {
     setFormValues((current) => ({
@@ -192,6 +196,7 @@ function Profile({ onClose }) {
       preferredStylist
     });
     setProfileImage(user?.profileImage || '');
+    setProfileImageFile(null);
     setStylistQuery(preferredStylist);
     setIsStylistOpen(false);
     setIsEditing(false);
@@ -216,15 +221,24 @@ function Profile({ onClose }) {
         email: formValues.email.trim() || user?.email || '',
         phone: formValues.phone.trim() || user?.phone || '',
         preferredStylist: formValues.preferredStylist.trim() || user?.preferredStylist || '',
-        profileImage: profileImage
       };
+
+      const payload = new FormData();
+      payload.append('name', updatedUser.name);
+      payload.append('email', updatedUser.email);
+      payload.append('phone', updatedUser.phone);
+      payload.append('preferredStylist', updatedUser.preferredStylist);
+      if (profileImageFile) {
+        payload.append('profileImage', profileImageFile);
+      }
 
       const response = await axios.put(
         `${BACKEND_BASE_URL}/api/users/profile`,
-        updatedUser,
+        payload,
         {
           headers: {
-            Authorization: `Bearer ${token}`
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data'
           }
         }
       );
@@ -235,6 +249,7 @@ function Profile({ onClose }) {
         setUser(mergedUser);
         localStorage.setItem('user', JSON.stringify(mergedUser));
         setProfileImage(mergedUser.profileImage || '');
+        setProfileImageFile(null);
         
         setFormValues({
           name: mergedUser.name || '',
@@ -317,10 +332,10 @@ function Profile({ onClose }) {
         <button
           type="button"
           onClick={handleClose}
-          className="absolute top-6 right-6 z-10 cursor-pointer text-neutral-400 transition-colors hover:text-white"
+          className="absolute right-5 top-5 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-black/30 text-neutral-400 transition hover:border-[#D4AF37]/40 hover:text-white focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/40"
           aria-label="Close profile"
         >
-          Close
+          <X className="h-5 w-5" aria-hidden="true" />
         </button>
       )}
       <div className="relative">
@@ -379,10 +394,11 @@ function Profile({ onClose }) {
                 </svg>
               </div>
               <div className="w-full">
-                <p className={formLabelClassName}>Preferred Stylist</p>
+                <label htmlFor="customer-profile-stylist-desktop" className={formLabelClassName}>Preferred Stylist</label>
                 <p className="mt-1 text-sm font-medium text-white">Select your signature artist</p>
                 <div className="relative mt-5">
                   <input
+                    id="customer-profile-stylist-desktop"
                     type="text"
                     value={isEditing ? stylistQuery : displayStylist}
                     onFocus={() => {
@@ -399,6 +415,7 @@ function Profile({ onClose }) {
                       window.setTimeout(() => setIsStylistOpen(false), 140);
                     }}
                     placeholder="Search stylists"
+                    autoComplete="off"
                     readOnly={!isEditing}
                     className="w-full rounded-2xl border border-[#D4AF37]/60 bg-transparent px-4 py-3 text-base font-medium text-white outline-none transition focus:border-[#D4AF37]"
                   />
@@ -445,48 +462,55 @@ function Profile({ onClose }) {
 
             <div className="mt-8 grid grid-cols-1 gap-6 md:mt-6 md:gap-5">
               <div>
-                <p className={formLabelClassName}>Full Name</p>
+                <label htmlFor="customer-profile-name" className={formLabelClassName}>Full Name</label>
                 {isEditing ? (
                   <input
+                    id="customer-profile-name"
                     type="text"
                     value={formValues.name}
                     onChange={(event) => updateField('name', event.target.value)}
                     className={formInputClassName}
+                    autoComplete="name"
                   />
                 ) : (
                   <p className={formValueClassName}>{displayName}</p>
                 )}
               </div>
               <div>
-                <p className={formLabelClassName}>Email Address</p>
+                <label htmlFor="customer-profile-email" className={formLabelClassName}>Email Address</label>
                 {isEditing ? (
                   <input
+                    id="customer-profile-email"
                     type="email"
                     value={formValues.email}
                     onChange={(event) => updateField('email', event.target.value)}
                     className={formInputClassName}
+                    autoComplete="email"
                   />
                 ) : (
                   <p className={formValueClassName}>{displayEmail}</p>
                 )}
               </div>
               <div>
-                <p className={formLabelClassName}>Phone Number</p>
+                <label htmlFor="customer-profile-phone" className={formLabelClassName}>Phone Number</label>
                 {isEditing ? (
                   <input
-                    type="text"
+                    id="customer-profile-phone"
+                    type="tel"
                     value={formValues.phone}
                     onChange={(event) => updateField('phone', event.target.value)}
                     className={formInputClassName}
+                    autoComplete="tel"
                   />
                 ) : (
                   <p className={formValueClassName}>{displayPhone}</p>
                 )}
               </div>
               <div className="md:hidden">
-                <p className={formLabelClassName}>Preferred Stylist</p>
+                <label htmlFor="customer-profile-stylist-mobile" className={formLabelClassName}>Preferred Stylist</label>
                 <div className="relative mt-2">
                   <input
+                    id="customer-profile-stylist-mobile"
                     type="text"
                     value={isEditing ? stylistQuery : displayStylist}
                     onFocus={() => {
@@ -503,6 +527,7 @@ function Profile({ onClose }) {
                       window.setTimeout(() => setIsStylistOpen(false), 140);
                     }}
                     placeholder="Search stylists"
+                    autoComplete="off"
                     readOnly={!isEditing}
                     className="w-full rounded-2xl border border-[#D4AF37]/60 bg-transparent px-4 py-3 text-base font-medium text-white outline-none transition focus:border-[#D4AF37]"
                   />
@@ -574,23 +599,27 @@ function Profile({ onClose }) {
             
             <div className="space-y-5">
               <div>
-                <p className="text-[10px] uppercase tracking-widest text-gray-500 mb-2">New Password</p>
+                <label htmlFor="customer-profile-new-password" className="mb-2 block text-[10px] uppercase tracking-widest text-gray-500">New Password</label>
                 <input
+                  id="customer-profile-new-password"
                   type="password"
                   value={passwordValues.newPassword}
                   onChange={(e) => setPasswordValues({...passwordValues, newPassword: e.target.value})}
                   className="w-full rounded-xl border border-[#D4AF37]/40 bg-transparent px-4 py-3 text-sm text-white outline-none transition focus:border-[#D4AF37]"
                   placeholder="Enter new password"
+                  autoComplete="new-password"
                 />
               </div>
               <div>
-                <p className="text-[10px] uppercase tracking-widest text-gray-500 mb-2">Confirm New Password</p>
+                <label htmlFor="customer-profile-confirm-password" className="mb-2 block text-[10px] uppercase tracking-widest text-gray-500">Confirm New Password</label>
                 <input
+                  id="customer-profile-confirm-password"
                   type="password"
                   value={passwordValues.confirmPassword}
                   onChange={(e) => setPasswordValues({...passwordValues, confirmPassword: e.target.value})}
                   className="w-full rounded-xl border border-[#D4AF37]/40 bg-transparent px-4 py-3 text-sm text-white outline-none transition focus:border-[#D4AF37]"
                   placeholder="Confirm new password"
+                  autoComplete="new-password"
                 />
               </div>
             </div>

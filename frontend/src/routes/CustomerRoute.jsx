@@ -1,5 +1,6 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
+import { getStoredSession } from '../utils/auth';
 
 const getRoleHome = (role) => {
   if (role === 'admin') return '/admin';
@@ -9,19 +10,12 @@ const getRoleHome = (role) => {
 
 function CustomerRoute({ children }) {
   const location = useLocation();
-  const token = localStorage.getItem('token');
-  const userRole = localStorage.getItem('userRole');
-  const storedUser = localStorage.getItem('user');
-  let isFirstLogin = false;
+  const session = getStoredSession();
+  const userRole = session?.userRole;
+  const isFirstLogin = session?.user?.isFirstLogin === true;
 
-  try {
-    isFirstLogin = JSON.parse(storedUser || '{}')?.isFirstLogin === true;
-  } catch {
-    isFirstLogin = false;
-  }
-
-  if (!token || !userRole) {
-    const nextPath = `${location.pathname}${location.search}`;
+  if (!session) {
+    const nextPath = `${location.pathname}${location.search}${location.hash}`;
 
     return <Navigate to={`/login?next=${encodeURIComponent(nextPath)}`} replace />;
   }
