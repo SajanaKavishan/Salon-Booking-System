@@ -3,6 +3,12 @@ const DEFAULT_WORKING_HOURS = {
   end: '17:00',
 };
 
+const createScheduleError = (message) => {
+  const error = new Error(message);
+  error.statusCode = 400;
+  return error;
+};
+
 const normalizeOffDays = (offDays) => {
   if (offDays === undefined) return undefined;
   if (offDays === null || offDays === '') return [];
@@ -32,13 +38,39 @@ const to24HourTime = (value) => {
   if (!twelveHourMatch) return time;
 
   let hours = Number(twelveHourMatch[1]);
-  const minutes = twelveHourMatch[2];
+  const minutes = Number(twelveHourMatch[2]);
   const period = twelveHourMatch[3].toUpperCase();
+
+  if (hours < 1 || hours > 12 || minutes > 59) {
+    throw createScheduleError('Working hours must contain valid times.');
+  }
 
   if (period === 'AM' && hours === 12) hours = 0;
   if (period === 'PM' && hours !== 12) hours += 12;
 
-  return `${String(hours).padStart(2, '0')}:${minutes}`;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+};
+
+const timeToMinutes = (value) => {
+  const time = to24HourTime(value);
+
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+    throw createScheduleError('Working hours must use valid HH:mm times.');
+  }
+
+  const [hours, minutes] = time.split(':').map(Number);
+  return hours * 60 + minutes;
+};
+
+const validateWorkingHoursRange = (workingHours) => {
+  const start = timeToMinutes(workingHours.start);
+  const end = timeToMinutes(workingHours.end);
+
+  if (end <= start) {
+    throw createScheduleError('Working hours end time must be after the start time.');
+  }
+
+  return workingHours;
 };
 
 const normalizeWorkingHours = (workingHours) => {
@@ -46,10 +78,10 @@ const normalizeWorkingHours = (workingHours) => {
   if (!workingHours) return { ...DEFAULT_WORKING_HOURS };
 
   if (typeof workingHours === 'object' && !Array.isArray(workingHours)) {
-    return {
+    return validateWorkingHoursRange({
       start: to24HourTime(workingHours.start) || DEFAULT_WORKING_HOURS.start,
       end: to24HourTime(workingHours.end) || DEFAULT_WORKING_HOURS.end,
-    };
+    });
   }
 
   if (typeof workingHours === 'string') {
@@ -62,14 +94,16 @@ const normalizeWorkingHours = (workingHours) => {
 
     const range = workingHours.split(/\s+-\s+/);
     if (range.length === 2) {
-      return {
+      return validateWorkingHoursRange({
         start: to24HourTime(range[0]) || DEFAULT_WORKING_HOURS.start,
         end: to24HourTime(range[1]) || DEFAULT_WORKING_HOURS.end,
-      };
+      });
     }
+
+    throw createScheduleError('Working hours must be a valid time range.');
   }
 
-  return { ...DEFAULT_WORKING_HOURS };
+  throw createScheduleError('Working hours must be a valid time range.');
 };
 
 module.exports = {

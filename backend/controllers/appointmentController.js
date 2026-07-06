@@ -55,6 +55,46 @@ const getLocalDateKey = (date = new Date()) => {
     return `${year}-${month}-${day}`;
 };
 
+const createAppointmentError = (message, statusCode = 400) => {
+    const error = new Error(message);
+    error.statusCode = statusCode;
+    return error;
+};
+
+const parseSlotRange = (slotRange) => {
+    if (typeof slotRange !== 'string') {
+        throw createAppointmentError('Please select a valid appointment time slot.');
+    }
+
+    const [startTime, endTime] = slotRange.split(/\s+-\s+/);
+    if (!startTime || !endTime) {
+        throw createAppointmentError('Please select a valid appointment time slot.');
+    }
+
+    const start = timeToMinutes(startTime);
+    const end = timeToMinutes(endTime);
+
+    if (end <= start) {
+        throw createAppointmentError('Please select a valid appointment time slot.');
+    }
+
+    return { start, end };
+};
+
+const slotRangesMatch = (firstSlotRange, secondSlotRange) => (
+    firstSlotRange.start === secondSlotRange.start
+    && firstSlotRange.end === secondSlotRange.end
+);
+
+const isDuplicateAppointmentKeyError = (error) => (
+    error?.code === 11000
+    && (
+        error?.keyPattern?.staffId
+        || error?.keyPattern?.bookingDate
+        || error?.keyPattern?.startTime
+    )
+);
+
 // @desc    Get available time slots for a staff member
 // @route   GET /api/appointments/availability
 // @access  Public
@@ -121,7 +161,7 @@ const createAppointment = async (req, res) => {
                 ? parsedBookingDate.toISOString().slice(0, 10)
                 : ''
         );
-        const [slotStartTime, slotEndTime] = typeof timeSlot === 'string'
+        const [slotStartTime] = typeof timeSlot === 'string'
             ? timeSlot.split(/\s+-\s+/)
             : [];
         const startTime = legacyStartTime || slotStartTime;
@@ -132,13 +172,18 @@ const createAppointment = async (req, res) => {
         const supportEmail = settings?.supportEmail || defaultSettings.supportEmail;
         const contactNumber = settings?.contactNumber || defaultSettings.contactNumber;
 
+        if (!Array.isArray(services)) {
+            return res.status(400).json({ message: 'Please provide at least one valid service.' });
+        }
+
         // Check if all required fields are provided
-        if (!date || !startTime || !services || services.length === 0) {
+        if (!date || !startTime || services.length === 0) {
             return res.status(400).json({ message: "Please fill in all required fields." });
         }
 
-        if (!Array.isArray(services)) {
-            return res.status(400).json({ message: 'Please provide at least one valid service.' });
+        const requestedSlotRange = timeSlot ? parseSlotRange(timeSlot) : null;
+        if (!isAdminBypass && !requestedSlotRange) {
+            return res.status(400).json({ message: 'Please select an available appointment time slot.' });
         }
 
         let bookingUser = req.user;
@@ -198,8 +243,15 @@ const createAppointment = async (req, res) => {
             totalAmount += service.price;
         });
         const startMins = timeToMinutes(startTime);
-        const calculatedEndMins = startMins + totalDuration;
-        const endMins = slotEndTime ? timeToMinutes(slotEndTime) : calculatedEndMins;
+        const endMins = startMins + totalDuration;
+        const serverSlotRange = { start: startMins, end: endMins };
+
+        if (requestedSlotRange && !slotRangesMatch(requestedSlotRange, serverSlotRange)) {
+            return res.status(400).json({
+                message: 'Selected time slot duration does not match the selected services.'
+            });
+        }
+
         const formattedStartTime = minutesToTime(startMins);
         const formattedEndTime = minutesToTime(endMins);
 
@@ -310,6 +362,23 @@ const createAppointment = async (req, res) => {
             return res.status(400).json({ message: 'This stylist is on approved leave for the selected date.' });
         }
 
+        if (!isAdminBypass) {
+            const generatedSlots = await generateAvailableSlots({
+                staffId: stylistId,
+                date,
+                serviceDuration: totalDuration,
+            });
+            const isGeneratedSlotAvailable = generatedSlots.some(({ slot }) => (
+                slotRangesMatch(parseSlotRange(slot), serverSlotRange)
+            ));
+
+            if (!isGeneratedSlotAvailable) {
+                return res.status(400).json({
+                    message: 'Selected time slot is no longer available. Please choose another slot.'
+                });
+            }
+        }
+
         const appointment = await Appointment.create({
             user: bookingUser._id,
             services: requestedServiceIds,
@@ -329,22 +398,26 @@ const createAppointment = async (req, res) => {
         if (settings.bookingAlerts && supportEmail) {
             const serviceNames = selectedServices.map((service) => service.name).join(', ');
 
-            await sendEmail({
-                email: supportEmail,
-                subject: `New Booking Alert - ${salonName}`,
-                message: `
-                    <div style="font-family: Arial, sans-serif; padding: 20px; background: #111111; color: #f5f5f5; border-radius: 10px;">
-                        <h2 style="color: #d4af37; margin-top: 0;">New appointment received</h2>
-                        <p><strong>Client:</strong> ${bookingUser.name || bookingUser.email}</p>
-                        <p><strong>Services:</strong> ${serviceNames}</p>
-                        <p><strong>Date:</strong> ${date}</p>
-                        <p><strong>Time:</strong> ${formattedStartTime} - ${formattedEndTime}</p>
-                        <p><strong>Stylist:</strong> ${stylistName}</p>
-                        <p><strong>Status:</strong> pending</p>
-                        <p style="margin-top: 16px; color: #bbbbbb;">For assistance, contact ${supportEmail} or ${contactNumber}</p>
-                    </div>
-                `
-            });
+            try {
+                await sendEmail({
+                    email: supportEmail,
+                    subject: `New Booking Alert - ${salonName}`,
+                    message: `
+                        <div style="font-family: Arial, sans-serif; padding: 20px; background: #111111; color: #f5f5f5; border-radius: 10px;">
+                            <h2 style="color: #d4af37; margin-top: 0;">New appointment received</h2>
+                            <p><strong>Client:</strong> ${bookingUser.name || bookingUser.email}</p>
+                            <p><strong>Services:</strong> ${serviceNames}</p>
+                            <p><strong>Date:</strong> ${date}</p>
+                            <p><strong>Time:</strong> ${formattedStartTime} - ${formattedEndTime}</p>
+                            <p><strong>Stylist:</strong> ${stylistName}</p>
+                            <p><strong>Status:</strong> pending</p>
+                            <p style="margin-top: 16px; color: #bbbbbb;">For assistance, contact ${supportEmail} or ${contactNumber}</p>
+                        </div>
+                    `
+                });
+            } catch (emailError) {
+                console.error('Booking alert email failed:', emailError);
+            }
         }
 
         res.status(201).json({
@@ -353,8 +426,22 @@ const createAppointment = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Appointment Controller Error:", error);
-        res.status(500).json({ message: "Server Error: Appointment could not be created." });
+        if (isDuplicateAppointmentKeyError(error)) {
+            return res.status(409).json({
+                message: 'This appointment slot was just booked. Please choose another available slot.'
+            });
+        }
+
+        const statusCode = error.statusCode || 500;
+        if (statusCode >= 500) {
+            console.error("Appointment Controller Error:", error);
+        }
+
+        res.status(statusCode).json({
+            message: statusCode >= 500
+                ? "Server Error: Appointment could not be created."
+                : error.message
+        });
     }
 };
 

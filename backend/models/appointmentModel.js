@@ -152,6 +152,16 @@ appointmentSchema.pre('validate', function synchronizeBookingFields() {
     this.status = normalizeBookingStatus(this.status);
 });
 
+appointmentSchema.index(
+    { staffId: 1, bookingDate: 1, startTime: 1 },
+    {
+        unique: true,
+        partialFilterExpression: {
+            status: { $in: ['pending', 'confirmed'] },
+        },
+    }
+);
+
 appointmentSchema.statics.normalizeStatus = normalizeBookingStatus;
 
 module.exports = mongoose.model('Appointment', appointmentSchema);

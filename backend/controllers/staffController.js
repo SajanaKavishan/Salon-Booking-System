@@ -7,6 +7,41 @@ const {
   normalizeWorkingHours,
 } = require('../utils/staffSchedule');
 
+const validateLinkedStaffUser = async (userId, currentStaffId = null) => {
+  if (!mongoose.isValidObjectId(userId)) {
+    const error = new Error('Please provide a valid linked user ID.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const linkedUser = await User.findOne({
+    _id: userId,
+    role: { $in: ['staff', 'admin'] },
+  }).select('_id');
+
+  if (!linkedUser) {
+    const error = new Error('Linked user account must exist and have a staff or admin role.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const duplicateQuery = { userId };
+  if (currentStaffId) duplicateQuery._id = { $ne: currentStaffId };
+
+  const existingStaffProfile = await Staff.findOne(duplicateQuery).select('_id');
+  if (existingStaffProfile) {
+    const error = new Error('A staff profile already exists for this user account.');
+    error.statusCode = 409;
+    throw error;
+  }
+
+  return linkedUser._id;
+};
+
+const sendControllerError = (res, error) => (
+  res.status(error.statusCode || 500).json({ message: error.message })
+);
+
 // @desc    Get all staff
 // @route   GET /api/staff
 const getStaff = async (req, res) => {
@@ -36,7 +71,7 @@ const getPublicStaffList = async (req, res) => {
       experience: 'Expert Stylist',
     })));
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendControllerError(res, error);
   }
 };
 
@@ -63,26 +98,12 @@ const addStaff = async (req, res) => {
       return res.status(400).json({ message: 'Please add all fields' });
     }
 
-    if (userId) {
-      if (!mongoose.isValidObjectId(userId)) {
-        return res.status(400).json({ message: 'Please provide a valid linked user ID.' });
-      }
-
-      const linkedUser = await User.findOne({ _id: userId, role: 'staff' }).select('_id');
-      if (!linkedUser) {
-        return res.status(400).json({ message: 'Linked staff user account was not found.' });
-      }
-
-      const existingStaffProfile = await Staff.findOne({ userId }).select('_id');
-      if (existingStaffProfile) {
-        return res.status(409).json({ message: 'A staff profile already exists for this user account.' });
-      }
-    }
+    const linkedUserId = userId ? await validateLinkedStaffUser(userId) : undefined;
     
     const imageUrl = req.file?.path || '';
 
     const staff = await Staff.create({ 
-      userId,
+      userId: linkedUserId,
       name, 
       imageUrl, 
       specialty,
@@ -100,12 +121,20 @@ const addStaff = async (req, res) => {
 // @route   PUT /api/staff/:id
 const updateStaff = async (req, res) => {
   try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: 'Please provide a valid staff profile ID.' });
+    }
+
     const updates = {};
-    const allowedFields = ['userId', 'name', 'imageUrl', 'specialty'];
+    const allowedFields = ['name', 'imageUrl', 'specialty'];
 
     allowedFields.forEach((field) => {
       if (req.body[field] !== undefined) updates[field] = req.body[field];
     });
+
+    if (req.body.userId !== undefined) {
+      updates.userId = await validateLinkedStaffUser(req.body.userId, req.params.id);
+    }
 
     if (req.body.offDays !== undefined) {
       updates.offDays = normalizeOffDays(req.body.offDays);
@@ -126,7 +155,7 @@ const updateStaff = async (req, res) => {
 
     res.status(200).json(updatedStaff);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    sendControllerError(res, error);
   }
 };
 

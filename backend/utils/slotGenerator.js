@@ -265,7 +265,7 @@ const generateAvailableSlots = async (
       $gte: requestedDate,
       $lt: nextDate,
     },
-    status: { $ne: 'cancelled' },
+    status: { $nin: ['cancelled', 'rejected', 'completed', 'no-show'] },
   })
     .select('timeSlot')
     .lean();
