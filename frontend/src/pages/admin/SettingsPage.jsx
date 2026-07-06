@@ -642,6 +642,7 @@ function HolidayMultiDateCalendar({ selectedDates = [], onChange, holidays = [],
           const isSelected = selectedDates.includes(dateKey);
           const isToday = isSameDay(calendarDay.date, new Date());
           const isExistingClosure = holidayDateKeys.has(dateKey);
+          const dayAriaLabel = `${format(calendarDay.date, 'MMMM d, yyyy')}${isExistingClosure ? ' - Existing Closure' : ''}`;
 
           return (
             <button
@@ -649,6 +650,8 @@ function HolidayMultiDateCalendar({ selectedDates = [], onChange, holidays = [],
               key={calendarDay.id}
               onClick={() => toggleSelectedDate(calendarDay.date)}
               disabled={disabled}
+              aria-label={dayAriaLabel}
+              aria-pressed={isSelected}
               className={`relative aspect-square min-h-9 rounded-lg text-xs font-semibold transition ${
                 isSelected
                   ? 'bg-[#c5a880] text-black shadow-[0_0_16px_rgba(197,168,128,0.35)]'
@@ -678,9 +681,42 @@ function HolidayMultiDateCalendar({ selectedDates = [], onChange, holidays = [],
 }
 
 function HolidaySelectedDateChips({ selectedDates = [], onRemove, disabled = false }) {
+  const [isExpanded, setIsExpanded] = useState(false);
   const sortedSelectedDates = useMemo(
     () => [...selectedDates].sort((first, second) => first.localeCompare(second)),
     [selectedDates]
+  );
+  const selectedDateCount = sortedSelectedDates.length;
+  const summaryText = `${selectedDateCount} Date${selectedDateCount === 1 ? '' : 's'} Selected`;
+
+  useEffect(() => {
+    if (selectedDateCount === 0) {
+      setIsExpanded(false);
+    }
+  }, [selectedDateCount]);
+
+  const renderDateChips = () => (
+    sortedSelectedDates.length > 0 ? (
+      sortedSelectedDates.map((dateKey) => (
+        <span
+          key={dateKey}
+          className="inline-flex items-center gap-1 rounded-full border border-[#c5a880]/30 bg-[#c5a880]/10 px-2.5 py-1 text-xs font-semibold text-[#f1d9ad]"
+        >
+          {format(new Date(`${dateKey}T00:00:00`), 'MMM d')}
+          <button
+            type="button"
+            onClick={() => onRemove(dateKey)}
+            disabled={disabled}
+            className="rounded-full p-0.5 text-[#f1d9ad] transition hover:bg-[#c5a880]/20 hover:text-white disabled:cursor-not-allowed"
+            aria-label={`Remove ${format(new Date(`${dateKey}T00:00:00`), 'MMM d')}`}
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </span>
+      ))
+    ) : (
+      <span className="self-center text-xs text-slate-600">No closure dates selected.</span>
+    )
   );
 
   return (
@@ -692,28 +728,36 @@ function HolidaySelectedDateChips({ selectedDates = [], onRemove, disabled = fal
         </span>
       </div>
 
-      <div className="flex max-h-32 min-h-11 flex-wrap items-start gap-2 overflow-y-auto pr-1">
-        {sortedSelectedDates.length > 0 ? (
-          sortedSelectedDates.map((dateKey) => (
-            <span
-              key={dateKey}
-              className="inline-flex items-center gap-1 rounded-full border border-[#c5a880]/30 bg-[#c5a880]/10 px-2.5 py-1 text-xs font-semibold text-[#f1d9ad]"
-            >
-              {format(new Date(`${dateKey}T00:00:00`), 'MMM d')}
+      <div className="sm:hidden">
+        {selectedDateCount > 0 ? (
+          <div className="rounded-lg border border-[#c5a880]/20 bg-[#c5a880]/5 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-semibold text-[#f1d9ad]">{summaryText}</p>
               <button
                 type="button"
-                onClick={() => onRemove(dateKey)}
-                disabled={disabled}
-                className="rounded-full p-0.5 text-[#f1d9ad] transition hover:bg-[#c5a880]/20 hover:text-white disabled:cursor-not-allowed"
-                aria-label={`Remove ${format(new Date(`${dateKey}T00:00:00`), 'MMM d')}`}
+                onClick={() => setIsExpanded((current) => !current)}
+                className="shrink-0 rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-zinc-300 transition hover:border-[#d4af37]/40 hover:text-[#d4af37]"
+                aria-expanded={isExpanded}
               >
-                <X className="h-3 w-3" />
+                {isExpanded ? 'Hide' : 'View All'}
               </button>
-            </span>
-          ))
+            </div>
+
+            {isExpanded && (
+              <div className="mt-3 flex flex-wrap items-start gap-2">
+                {renderDateChips()}
+              </div>
+            )}
+          </div>
         ) : (
-          <span className="self-center text-xs text-slate-600">No closure dates selected.</span>
+          <div className="flex min-h-11 items-center">
+            {renderDateChips()}
+          </div>
         )}
+      </div>
+
+      <div className="hidden flex-wrap items-start gap-2 sm:flex">
+        {renderDateChips()}
       </div>
     </div>
   );
@@ -738,6 +782,7 @@ function SettingsPage() {
   const isHolidaySavingRef = useRef(false);
   const [isHolidaySyncing, setIsHolidaySyncing] = useState(false);
   const isHolidaySyncingRef = useRef(false);
+  const [isHolidayWorkspaceFocused, setIsHolidayWorkspaceFocused] = useState(false);
   const [holidayConflict, setHolidayConflict] = useState(null);
   const [editingHolidayId, setEditingHolidayId] = useState(null);
   const [holidayDeleteTarget, setHolidayDeleteTarget] = useState(null);
@@ -1073,7 +1118,11 @@ function SettingsPage() {
         authConfig
       );
 
-      toast.success(`Synced ${response.data?.fetched || 0} Sri Lankan public holidays.`);
+      const inserted = Number(response.data?.inserted || 0);
+      const reactivated = Number(response.data?.reactivated || 0);
+      const skipped = Number(response.data?.skipped || 0);
+
+      toast.success(`Synced Successfully: ${inserted} Inserted, ${reactivated} Reactivated, ${skipped} Skipped.`);
       fetchHolidays();
     } catch (error) {
       console.error('Error syncing holidays:', error);
@@ -1135,6 +1184,19 @@ function SettingsPage() {
       )
     )
   );
+  const hasHolidayDraft = Boolean(
+    isHolidayWorkspaceFocused
+    || isHolidaySaving
+    || isHolidaySyncing
+    || holidayConflict
+    || holidayDeleteTarget
+    || editingHolidayId
+    || holidayForm.dates.length > 0
+    || holidayForm.name.trim()
+    || !holidayForm.isFullDay
+  );
+  const showGlobalSaveBar = !hasHolidayDraft;
+
   return (
     <div className="mx-auto w-full max-w-7xl overflow-x-hidden px-1 pb-28 sm:px-0 sm:pb-24">
       <header className="mb-6 flex flex-col gap-4 sm:mb-8 xl:flex-row xl:items-end xl:justify-between">
@@ -1278,7 +1340,15 @@ function SettingsPage() {
             </div>
           </SectionPanel>
 
-          <SectionPanel className="p-4 sm:p-8 xl:col-span-2">
+          <SectionPanel
+            className="p-4 sm:p-8 xl:col-span-2"
+            onFocusCapture={() => setIsHolidayWorkspaceFocused(true)}
+            onBlurCapture={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget)) {
+                setIsHolidayWorkspaceFocused(false);
+              }
+            }}
+          >
             <div className="border-b border-white/10 pb-5">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
@@ -1475,11 +1545,13 @@ function SettingsPage() {
         </section>
       )}
 
-      <div className="fixed bottom-0 left-0 right-0 z-20 flex items-center justify-end border-t border-zinc-800/80 bg-[#0a0a0c]/90 px-4 py-3 backdrop-blur-md sm:px-6 sm:py-4 md:left-80 md:z-40">
-        <GoldButton type="button" onClick={handleSave} disabled={isSaving || isLoading || !hasSettingsChanges} className="w-full px-6 py-3 text-sm disabled:opacity-45 sm:w-fit sm:text-base">
-          {isSaving ? 'Saving...' : 'Save Changes'}
-        </GoldButton>
-      </div>
+      {showGlobalSaveBar && (
+        <div className="fixed bottom-0 left-0 right-0 z-20 flex items-center justify-end border-t border-zinc-800/80 bg-[#0a0a0c]/90 px-4 py-3 backdrop-blur-md sm:px-6 sm:py-4 md:left-80 md:z-40">
+          <GoldButton type="button" onClick={handleSave} disabled={isSaving || isLoading || !hasSettingsChanges} className="w-full px-6 py-3 text-sm disabled:opacity-45 sm:w-fit sm:text-base">
+            {isSaving ? 'Saving...' : 'Save Changes'}
+          </GoldButton>
+        </div>
+      )}
 
       {holidayConflict && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-md">

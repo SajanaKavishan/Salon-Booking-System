@@ -61,32 +61,40 @@ const syncSriLankanPublicHolidays = async (year = getCurrentYear()) => {
     normalizedHolidays.map((holiday) => [holiday.date, holiday])
   );
   const uniqueHolidays = Array.from(uniqueHolidaysByDate.values());
-  const holidayDates = uniqueHolidays.map((holiday) => holiday.date);
+  const bulkOperations = uniqueHolidays.map((holiday) => {
+    const { isActive, ...holidayOnInsert } = holiday;
 
-  const existingHolidays =
-    holidayDates.length > 0
-      ? await Holiday.find({ date: { $in: holidayDates } }).select('date').lean()
-      : [];
-  const existingDates = new Set(existingHolidays.map((holiday) => holiday.date));
-  const holidaysToInsert = uniqueHolidays.filter(
-    (holiday) => !existingDates.has(holiday.date)
-  );
+    return {
+      updateOne: {
+        filter: { date: holiday.date },
+        update: {
+          $set: { isActive: true },
+          $setOnInsert: holidayOnInsert,
+        },
+        upsert: true,
+      },
+    };
+  });
+  const writeResult = bulkOperations.length > 0
+    ? await Holiday.bulkWrite(bulkOperations, { ordered: false })
+    : null;
 
-  if (holidaysToInsert.length > 0) {
-    await Holiday.insertMany(holidaysToInsert, { ordered: false });
-  }
+  const inserted = writeResult?.upsertedCount || 0;
+  const reactivated = writeResult?.modifiedCount || 0;
+  const skipped = Math.max(uniqueHolidays.length - inserted - reactivated, 0);
 
   const result = {
     provider: 'google-calendar',
     year,
     fetched: publicHolidays.length,
     normalized: uniqueHolidays.length,
-    inserted: holidaysToInsert.length,
-    skippedExisting: uniqueHolidays.length - holidaysToInsert.length,
+    inserted,
+    reactivated,
+    skipped,
   };
 
   console.log(
-    `Sri Lankan public holiday sync complete: fetched ${result.fetched}, inserted ${result.inserted}, skipped ${result.skippedExisting} for ${year}.`
+    `Sri Lankan public holiday sync complete: fetched ${result.fetched}, inserted ${result.inserted}, reactivated ${result.reactivated}, skipped ${result.skipped} for ${year}.`
   );
   console.log('Sri Lankan public holiday sync summary:', result);
 

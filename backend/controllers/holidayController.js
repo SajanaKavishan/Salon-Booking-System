@@ -5,6 +5,8 @@ const { syncSriLankanPublicHolidays } = require('../services/holidaySyncService'
 
 const ACTIVE_STATUSES = ['pending', 'confirmed'];
 const SALON_TIMEZONE = 'Asia/Colombo';
+const MIN_PUBLIC_HOLIDAY_SYNC_YEAR = 2000;
+const MAX_PUBLIC_HOLIDAY_SYNC_YEAR = 2100;
 
 const getTodayDateKey = () => {
   const dateParts = new Intl.DateTimeFormat('en-GB', {
@@ -499,8 +501,22 @@ const deleteHoliday = async (req, res) => {
 
 const syncPublicHolidays = async (req, res) => {
   try {
-    const requestedYear = Number(req.body?.year || req.query?.year || new Date().getFullYear());
-    const year = Number.isInteger(requestedYear) ? requestedYear : new Date().getFullYear();
+    const requestedYear = Number(
+      req.body?.year ?? req.query?.year ?? new Date().getFullYear()
+    );
+
+    if (
+      !Number.isInteger(requestedYear)
+      || requestedYear < MIN_PUBLIC_HOLIDAY_SYNC_YEAR
+      || requestedYear > MAX_PUBLIC_HOLIDAY_SYNC_YEAR
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: `Holiday sync year must be an integer between ${MIN_PUBLIC_HOLIDAY_SYNC_YEAR} and ${MAX_PUBLIC_HOLIDAY_SYNC_YEAR}.`,
+      });
+    }
+
+    const year = requestedYear;
     const result = await syncSriLankanPublicHolidays(year);
 
     return res.status(200).json({
