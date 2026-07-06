@@ -20,6 +20,13 @@ const allowedOrigins = (process.env.CLIENT_URL || defaultClientUrl)
     .map((origin) => origin.trim())
     .filter(Boolean);
 
+if (process.env.NODE_ENV === "production" && allowedOrigins.length === 0) {
+    process.emitWarning(
+        "CLIENT_URL is not configured in production. Browser requests with an Origin header will be rejected by CORS.",
+        { code: "MISSING_CLIENT_URL" }
+    );
+}
+
 const mongoOptions = { 
     family: 4,
     serverSelectionTimeoutMS: 30000,
@@ -44,13 +51,15 @@ app.use(cors({
             return callback(null, true);
         }
 
-        return callback(new Error("Not allowed by CORS"));
+        const corsError = new Error("Not allowed by CORS");
+        corsError.status = 403;
+        return callback(corsError);
     },
     credentials: true,
 }));
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ limit: '10mb', extended: true }));
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ limit: '2mb', extended: true }));
 
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
@@ -115,6 +124,19 @@ app.get("/", (req, res) => { // Basic route to check if the server is running
     res.send("Salon Management API is running!");
 });
 
+app.use((err, req, res, next) => {
+    const statusCode = err.status || err.statusCode || 500;
+
+    if (res.headersSent) {
+        return next(err);
+    }
+
+    return res.status(statusCode).json({
+        success: false,
+        message: err.message || "Internal Server Error",
+    });
+});
+
 const PORT = process.env.PORT || 5000;
 
 async function startServer() {
@@ -127,7 +149,7 @@ async function startServer() {
 
     app.listen(PORT, () => {
         startHolidaySyncScheduler();
-        console.log(`✅ Server is running on port ${PORT}`);
+        console.log(`[SUCCESS] Server is running on port ${PORT}`);
     });
 }
 

@@ -11,6 +11,9 @@ const storage = new CloudinaryStorage({
   },
 });
 
-const uploadHomePageImage = multer({ storage });
+const uploadHomePageImage = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+});
 
 module.exports = uploadHomePageImage;

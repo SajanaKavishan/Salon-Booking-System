@@ -5,6 +5,7 @@ const SalonSettings = require('../models/SalonSettings');
 
 const GROQ_MODEL = 'llama-3.1-8b-instant';
 const DEFAULT_REPLY = 'I am here to help with SalonDEES services, stylists, timings, and beauty care guidance.';
+const MAX_USER_MESSAGE_LENGTH = 500;
 let groqClient = null;
 
 const getGroqClient = () => {
@@ -128,6 +129,12 @@ const handleChat = async (req, res) => {
 
     if (!userMessage) {
       return res.status(400).json({ message: 'Message is required.' });
+    }
+
+    if (userMessage.length > MAX_USER_MESSAGE_LENGTH) {
+      return res.status(400).json({
+        message: `Message must be ${MAX_USER_MESSAGE_LENGTH} characters or fewer.`,
+      });
     }
 
     const groq = getGroqClient();

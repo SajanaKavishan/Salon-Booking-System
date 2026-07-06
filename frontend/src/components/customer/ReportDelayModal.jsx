@@ -1,21 +1,75 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { Clock, Loader2, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 import API_BASE_URL from '../../utils/apiConfig';
 
 const DELAY_OPTIONS = [10, 15, 20];
+const focusableSelector = [
+  'a[href]',
+  'button:not([disabled])',
+  'textarea:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
+const getFocusableElements = (container) => (
+  Array.from(container?.querySelectorAll(focusableSelector) || [])
+    .filter((element) => !element.hasAttribute('disabled') && element.getAttribute('aria-hidden') !== 'true')
+);
 
 function ReportDelayModal({ appointment, onClose, onSuccess }) {
   const [selectedValue, setSelectedValue] = useState(15);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const dialogRef = useRef(null);
+  const previousFocusRef = useRef(null);
 
   const appointmentId = appointment?._id || appointment?.id;
+
+  useEffect(() => {
+    previousFocusRef.current = document.activeElement;
+    const dialog = dialogRef.current;
+    const firstFocusableElement = getFocusableElements(dialog)[0];
+
+    (firstFocusableElement || dialog)?.focus({ preventScroll: true });
+
+    return () => {
+      if (previousFocusRef.current?.focus && document.contains(previousFocusRef.current)) {
+        previousFocusRef.current.focus({ preventScroll: true });
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (event) => {
       if (event.key === 'Escape' && !isSubmitting) {
         onClose?.();
+        return;
+      }
+
+      if (event.key !== 'Tab') {
+        return;
+      }
+
+      const dialog = dialogRef.current;
+      const focusableElements = getFocusableElements(dialog);
+
+      if (focusableElements.length === 0) {
+        event.preventDefault();
+        dialog?.focus({ preventScroll: true });
+        return;
+      }
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+
+      if (event.shiftKey && document.activeElement === firstElement) {
+        event.preventDefault();
+        lastElement.focus();
+      } else if (!event.shiftKey && document.activeElement === lastElement) {
+        event.preventDefault();
+        firstElement.focus();
       }
     };
 
@@ -63,6 +117,8 @@ function ReportDelayModal({ appointment, onClose, onSuccess }) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="report-delay-title"
+        ref={dialogRef}
+        tabIndex={-1}
         className="relative max-w-md w-full rounded-xl border border-zinc-800 bg-zinc-950 p-5 shadow-2xl animate-scaleIn"
         onClick={(event) => event.stopPropagation()}
       >

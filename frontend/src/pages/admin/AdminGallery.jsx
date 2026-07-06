@@ -7,6 +7,19 @@ import API_BASE_URL from '../../utils/apiConfig';
 
 const isRequestCanceled = (error) => error.code === 'ERR_CANCELED' || axios.isCancel(error);
 const uploadHelperText = 'Max size: 5MB. Formats: JPG, PNG, WEBP, GIF.';
+const focusableSelector = [
+  'a[href]',
+  'button:not([disabled])',
+  'textarea:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',');
+
+const getFocusableElements = (container) => (
+  Array.from(container?.querySelectorAll(focusableSelector) || [])
+    .filter((element) => !element.hasAttribute('disabled') && element.getAttribute('aria-hidden') !== 'true')
+);
 
 const homeImageCards = [
   {
@@ -41,6 +54,9 @@ function AdminGallery() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const fileInputRef = useRef(null);
+  const deleteDialogRef = useRef(null);
+  const previousFocusRef = useRef(null);
+  const isDeletingRef = useRef(false);
 
   const getAuthConfig = () => {
     const token = localStorage.getItem('token');
@@ -104,6 +120,60 @@ function AdminGallery() {
       URL.revokeObjectURL(previewUrl);
     }
   }, [previewUrl]);
+
+  useEffect(() => {
+    isDeletingRef.current = isDeleting;
+  }, [isDeleting]);
+
+  useEffect(() => {
+    if (!deleteTarget) return undefined;
+
+    previousFocusRef.current = document.activeElement;
+    const dialog = deleteDialogRef.current;
+    const firstFocusableElement = getFocusableElements(dialog)[0];
+
+    (firstFocusableElement || dialog)?.focus({ preventScroll: true });
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape' && !isDeletingRef.current) {
+        setDeleteTarget(null);
+        return;
+      }
+
+      if (event.key !== 'Tab') {
+        return;
+      }
+
+      const focusableElements = getFocusableElements(dialog);
+
+      if (focusableElements.length === 0) {
+        event.preventDefault();
+        dialog?.focus({ preventScroll: true });
+        return;
+      }
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+
+      if (event.shiftKey && document.activeElement === firstElement) {
+        event.preventDefault();
+        lastElement.focus();
+      } else if (!event.shiftKey && document.activeElement === lastElement) {
+        event.preventDefault();
+        firstElement.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+
+      if (previousFocusRef.current?.focus && document.contains(previousFocusRef.current)) {
+        previousFocusRef.current.focus({ preventScroll: true });
+      }
+    };
+  }, [deleteTarget]);
 
   const handleImageSelect = (file) => {
     if (!file) return;
@@ -318,6 +388,8 @@ function AdminGallery() {
             />
 
             <div
+              role="button"
+              aria-label="Upload salon gallery images"
               tabIndex={0}
               onClick={openGalleryFilePicker}
               onKeyDown={handleDropzoneKeyDown}
@@ -444,6 +516,8 @@ function AdminGallery() {
             aria-modal="true"
             aria-labelledby="delete-gallery-image-title"
             aria-describedby="delete-gallery-image-description"
+            ref={deleteDialogRef}
+            tabIndex={-1}
             className="w-full max-w-md rounded-lg border border-red-500/25 bg-[#111111] p-5 shadow-2xl"
           >
             <div className="flex items-start justify-between gap-4">
