@@ -333,7 +333,7 @@ function ServiceManager() {
             <input
               ref={serviceFileInputRef}
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp"
               className="hidden"
               onChange={(e) => selectImageFile(e.target.files?.[0] || null, setSelectedServiceImage, setServiceImagePreview, serviceImagePreview)}
             />
@@ -629,7 +629,7 @@ function ServiceManager() {
                 <input
                   ref={editFileInputRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp"
                   className="hidden"
                   onChange={(e) => selectImageFile(e.target.files?.[0] || null, setSelectedEditImage, setEditImagePreview, editImagePreview)}
                 />

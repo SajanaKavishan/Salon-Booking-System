@@ -20,6 +20,11 @@ const serviceSchema = new mongoose.Schema(
     image: {
       type: String,
       default: "https://via.placeholder.com/400x300?text=Salon+Service"
+    },
+    imagePublicId: {
+      type: String,
+      trim: true,
+      default: '',
     }
   },
   {

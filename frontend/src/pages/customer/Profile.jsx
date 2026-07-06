@@ -377,7 +377,7 @@ function Profile({ onClose }) {
               <input
                 ref={photoInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp"
                 className="hidden"
                 onChange={handlePhotoChange}
               />

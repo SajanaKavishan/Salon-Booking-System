@@ -1,5 +1,6 @@
 const cloudinary = require('../config/cloudinary');
 const GalleryImage = require('../models/GalleryImage');
+const { cleanupUploadedCloudinaryFile } = require('../utils/cloudinaryAssets');
 
 // @desc    Get active gallery images
 // @route   GET /api/gallery
@@ -34,6 +35,7 @@ const uploadImage = async (req, res) => {
 
     res.status(201).json(image);
   } catch (error) {
+    await cleanupUploadedCloudinaryFile(req.file, 'Gallery image creation cleanup');
     res.status(500).json({ message: error.message });
   }
 };

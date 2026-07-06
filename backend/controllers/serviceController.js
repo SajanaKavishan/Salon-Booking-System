@@ -1,5 +1,10 @@
 const mongoose = require('mongoose');
 const Service = require('../models/Service');
+const {
+  cleanupUploadedCloudinaryFile,
+  destroyCloudinaryAsset,
+  resolveCloudinaryPublicId,
+} = require('../utils/cloudinaryAssets');
 
 const getValidationMessage = (error) => (
   Object.values(error.errors || {})
@@ -34,6 +39,7 @@ const createService = async (req, res) => {
   try {
     const { name, price, duration, image } = req.body;
     if (!name || price === undefined || price === '' || duration === undefined || duration === '') {
+      await cleanupUploadedCloudinaryFile(req.file, 'Service validation cleanup');
       return res.status(400).json({ message: 'Please add all fields' });
     }
 
@@ -42,10 +48,12 @@ const createService = async (req, res) => {
       price,
       duration,
       image: req.file?.path || image || undefined,
+      imagePublicId: req.file?.filename || resolveCloudinaryPublicId('', image) || '',
     });
 
     res.status(201).json(service);
   } catch (error) {
+    await cleanupUploadedCloudinaryFile(req.file, 'Service creation cleanup');
     sendServiceError(res, error, 'Error creating service');
   }
 };
@@ -56,6 +64,11 @@ const updateService = async (req, res) => {
   try {
     if (!mongoose.isValidObjectId(req.params.id)) {
       return res.status(400).json({ message: 'Invalid service ID' });
+    }
+
+    const existingService = await Service.findById(req.params.id);
+    if (!existingService) {
+      return res.status(404).json({ message: 'Service not found' });
     }
 
     const updateData = {};
@@ -69,12 +82,21 @@ const updateService = async (req, res) => {
 
     if (req.body.imageUrl !== undefined) {
       updateData.image = req.body.imageUrl;
+      updateData.imagePublicId = resolveCloudinaryPublicId('', req.body.imageUrl);
     } else if (req.body.image !== undefined) {
       updateData.image = req.body.image;
+      updateData.imagePublicId = resolveCloudinaryPublicId('', req.body.image);
     }
 
     if (req.file?.path) {
+      await destroyCloudinaryAsset(existingService.imagePublicId, existingService.image);
       updateData.image = req.file.path;
+      updateData.imagePublicId = req.file.filename || '';
+    } else if (
+      updateData.image !== undefined
+      && updateData.image !== existingService.image
+    ) {
+      await destroyCloudinaryAsset(existingService.imagePublicId, existingService.image);
     }
 
     const updatedService = await Service.findByIdAndUpdate(
@@ -82,11 +104,6 @@ const updateService = async (req, res) => {
       updateData,
       { new: true, runValidators: true }
     );
-
-    if (!updatedService) {
-      return res.status(404).json({ message: 'Service not found' });
-    }
-
     res.status(200).json(updatedService);
   } catch (error) {
     sendServiceError(res, error, 'Error updating service');
@@ -101,10 +118,14 @@ const deleteService = async (req, res) => {
       return res.status(400).json({ message: 'Invalid service ID' });
     }
 
-    const service = await Service.findByIdAndDelete(req.params.id);
+    const service = await Service.findById(req.params.id);
     if (!service) {
       return res.status(404).json({ message: 'Service not found' });
     }
+
+    await destroyCloudinaryAsset(service.imagePublicId, service.image);
+    await Service.findByIdAndDelete(req.params.id);
+
     res.status(200).json({ id: req.params.id, message: 'Service deleted' });
   } catch (error) {
     res.status(500).json({ message: error.message });

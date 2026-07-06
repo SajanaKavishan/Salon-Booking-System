@@ -15,6 +15,11 @@ const staffSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    imagePublicId: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     specialty: {
       type: String,
       required: [true, 'Please add a specialty (e.g., Hair Stylist)'],

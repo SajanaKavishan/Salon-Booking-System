@@ -8,6 +8,7 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const axios = require('axios'); 
+const { destroyCloudinaryAsset, resolveCloudinaryPublicId } = require('../utils/cloudinaryAssets');
 const {
   normalizeOffDays,
   normalizeWorkingHours,
@@ -217,6 +218,7 @@ const registerUser = async (req, res) => { // Register a new user
             phone: normalizedPhone,
             preferredStylist: resolvedPreferredStylist || null,
             profileImage: req.body.profileImage || '',
+            profileImagePublicId: resolveCloudinaryPublicId('', req.body.profileImage),
             password: hashedPassword,
             role: 'customer',
         });
@@ -306,6 +308,7 @@ const googleLogin = async (req, res) => {
         phone: isValidPhoneNumber(normalizedPhone) ? normalizedPhone : OAUTH_PHONE_FALLBACK,
         preferredStylist: resolvedPreferredStylist || null,
         profileImage: req.body.profileImage || '',
+        profileImagePublicId: resolveCloudinaryPublicId('', req.body.profileImage),
         password: hashedPassword,
         role: 'customer'
       });
@@ -417,6 +420,7 @@ const updateUserProfile = async (req, res) => {
     const normalizedPhone = phone !== undefined ? String(phone).trim() : undefined;
     const nextPassword = newPassword || password;
     const uploadedProfileImage = req.file?.path;
+    const uploadedProfileImagePublicId = req.file?.filename || '';
 
     if (normalizedName !== undefined && !normalizedName) {
       return res.status(400).json({ message: 'Name is required.' });
@@ -465,7 +469,14 @@ const updateUserProfile = async (req, res) => {
     user.preferredStylist = resolvedPreferredStylist !== undefined
       ? resolvedPreferredStylist
       : user.preferredStylist;
-    user.profileImage = uploadedProfileImage || user.profileImage;
+
+    if (uploadedProfileImage) {
+      await destroyCloudinaryAsset(user.profileImagePublicId, user.profileImage);
+      user.profileImage = uploadedProfileImage;
+      user.profileImagePublicId = uploadedProfileImagePublicId;
+    } else {
+      user.profileImagePublicId = user.profileImagePublicId || resolveCloudinaryPublicId('', user.profileImage);
+    }
 
     if (nextPassword) {
       const salt = await bcrypt.genSalt(10);
@@ -506,13 +517,21 @@ const updateUserProfile = async (req, res) => {
           userId: updatedUser._id,
           name: updatedUser.name,
           imageUrl: uploadedProfileImage || '',
+          imagePublicId: uploadedProfileImagePublicId,
           specialty: specialty || 'General Stylist',
           workingHours: normalizeWorkingHours(workingHours),
           offDays: normalizedOffDays || [],
         });
       } else {
+        if (uploadedProfileImage) {
+          await destroyCloudinaryAsset(staffDetails.imagePublicId, staffDetails.imageUrl);
+        }
+
         staffDetails.name = updatedUser.name || staffDetails.name;
         staffDetails.imageUrl = uploadedProfileImage || staffDetails.imageUrl;
+        staffDetails.imagePublicId = uploadedProfileImage
+          ? uploadedProfileImagePublicId
+          : staffDetails.imagePublicId || resolveCloudinaryPublicId('', staffDetails.imageUrl);
         staffDetails.specialty = specialty !== undefined ? specialty : staffDetails.specialty;
         if (workingHours !== undefined) {
           staffDetails.workingHours = normalizeWorkingHours(workingHours);

@@ -55,6 +55,11 @@ const userSchema = new mongoose.Schema(
 				message: 'Base64 profile images are not allowed. Please upload an image file.',
 			},
 		},
+		profileImagePublicId: {
+			type: String,
+			trim: true,
+			default: '',
+		},
 		isFirstLogin: {
 			type: Boolean,
 			default: true,

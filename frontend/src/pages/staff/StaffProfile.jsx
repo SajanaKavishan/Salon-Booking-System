@@ -284,7 +284,7 @@ function StaffProfile({ onClose }) {
                 <span className="md:hidden">Change Photo</span>
                 <span className="hidden md:inline">{profileImage ? 'Change Photo' : 'Add Photo'}</span>
               </button>
-              <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+              <input ref={photoInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handlePhotoChange} />
             </div>
             <div className="max-w-xl md:pl-10">
               <div className="flex flex-wrap items-center gap-3">

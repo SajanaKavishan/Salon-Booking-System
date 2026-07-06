@@ -4,6 +4,11 @@ const Staff = require('../models/Staff');
 const User = require('../models/User');
 const { aggregateStaffPerformance } = require('./analyticsController');
 const {
+  cleanupUploadedCloudinaryFile,
+  destroyCloudinaryAsset,
+  resolveCloudinaryPublicId,
+} = require('../utils/cloudinaryAssets');
+const {
   normalizeOffDays,
   normalizeWorkingHours,
 } = require('../utils/staffSchedule');
@@ -119,6 +124,7 @@ const registerStaffProfile = async (req, res) => {
     const normalizedPhone = String(req.body.phone || '').trim();
 
     if (!normalizedName || !normalizedEmail || !password || !normalizedSpecialty) {
+      await cleanupUploadedCloudinaryFile(req.file, 'Staff registration validation cleanup');
       return res.status(400).json({
         message: 'Name, email, password, and specialty are required.',
       });
@@ -146,6 +152,7 @@ const registerStaffProfile = async (req, res) => {
         userId: staffUser._id,
         name: normalizedName,
         imageUrl: req.file?.path || req.body.imageUrl || '',
+        imagePublicId: req.file?.filename || resolveCloudinaryPublicId('', req.body.imageUrl) || '',
         specialty: normalizedSpecialty,
         offDays: normalizeOffDays(offDays),
         workingHours: normalizeWorkingHours(workingHours),
@@ -162,6 +169,8 @@ const registerStaffProfile = async (req, res) => {
       staff: staffProfile,
     });
   } catch (error) {
+    await cleanupUploadedCloudinaryFile(req.file, 'Staff registration creation cleanup');
+
     if (error?.code === 11000) {
       return res.status(409).json({ message: 'User with this email already exists.' });
     }
@@ -179,6 +188,7 @@ const addStaff = async (req, res) => {
     const { name, specialty, offDays, workingHours, userId } = req.body;
     
     if (!name || !specialty) {
+      await cleanupUploadedCloudinaryFile(req.file, 'Staff validation cleanup');
       return res.status(400).json({ message: 'Please add all fields' });
     }
 
@@ -190,6 +200,7 @@ const addStaff = async (req, res) => {
       userId: linkedUserId,
       name, 
       imageUrl, 
+      imagePublicId: req.file?.filename || '',
       specialty,
       workingHours: normalizeWorkingHours(workingHours),
       offDays: normalizeOffDays(offDays),
@@ -197,6 +208,7 @@ const addStaff = async (req, res) => {
     
     res.status(201).json(staff);
   } catch (error) {
+    await cleanupUploadedCloudinaryFile(req.file, 'Staff creation cleanup');
     res.status(500).json({ message: error.message });
   }
 };
@@ -233,7 +245,21 @@ const updateStaff = async (req, res) => {
       updates.workingHours = normalizeWorkingHours(req.body.workingHours);
     }
 
-    updates.imageUrl = req.file?.path || req.body.imageUrl || existingStaff.imageUrl;
+    if (req.file?.path) {
+      await destroyCloudinaryAsset(existingStaff.imagePublicId, existingStaff.imageUrl);
+      updates.imageUrl = req.file.path;
+      updates.imagePublicId = req.file.filename || '';
+    } else if (req.body.imageUrl !== undefined) {
+      if (req.body.imageUrl !== existingStaff.imageUrl) {
+        await destroyCloudinaryAsset(existingStaff.imagePublicId, existingStaff.imageUrl);
+      }
+
+      updates.imageUrl = req.body.imageUrl;
+      updates.imagePublicId = resolveCloudinaryPublicId('', req.body.imageUrl);
+    } else {
+      updates.imageUrl = existingStaff.imageUrl;
+      updates.imagePublicId = existingStaff.imagePublicId || resolveCloudinaryPublicId('', existingStaff.imageUrl);
+    }
 
     const updatedStaff = await Staff.findByIdAndUpdate(req.params.id, updates, {
       new: true,
@@ -256,25 +282,30 @@ const deleteStaff = async (req, res) => {
   const session = await mongoose.startSession();
 
   try {
-    let deletedStaff = null;
+    const existingStaff = await Staff.findById(req.params.id);
+    if (!existingStaff) {
+      return res.status(404).json({ message: 'Staff member not found' });
+    }
+
+    const linkedUser = existingStaff.userId
+      ? await User.findById(existingStaff.userId).select('profileImage profileImagePublicId')
+      : null;
+
+    await destroyCloudinaryAsset(existingStaff.imagePublicId, existingStaff.imageUrl);
+    if (linkedUser) {
+      await destroyCloudinaryAsset(linkedUser.profileImagePublicId, linkedUser.profileImage);
+    }
+
     let deletedUserId = null;
 
     await session.withTransaction(async () => {
-      deletedStaff = await Staff.findByIdAndDelete(req.params.id, { session });
+      await Staff.findByIdAndDelete(req.params.id, { session });
 
-      if (!deletedStaff) {
-        return;
-      }
-
-      if (deletedStaff.userId) {
-        await User.findByIdAndDelete(deletedStaff.userId, { session });
-        deletedUserId = deletedStaff.userId;
+      if (existingStaff.userId) {
+        await User.findByIdAndDelete(existingStaff.userId, { session });
+        deletedUserId = existingStaff.userId;
       }
     });
-
-    if (!deletedStaff) {
-      return res.status(404).json({ message: 'Staff member not found' });
-    }
 
     res.status(200).json({
       id: req.params.id,
