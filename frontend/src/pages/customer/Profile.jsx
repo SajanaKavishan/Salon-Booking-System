@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { X } from 'lucide-react';
 import BACKEND_BASE_URL from '../../utils/apiConfig';
+import { getStoredSession } from '../../utils/auth';
 
 const DEFAULT_STYLISTS = [];
 
@@ -13,12 +14,7 @@ function Profile({ onClose }) {
   const photoInputRef = useRef(null);
 
   const [user, setUser] = useState(() => {
-    try {
-      const storedUser = localStorage.getItem('user');
-      return storedUser ? JSON.parse(storedUser) : {};
-    } catch {
-      return {};
-    }
+    return getStoredSession()?.user || {};
   });
 
   const [isEditing, setIsEditing] = useState(false);
@@ -320,7 +316,6 @@ function Profile({ onClose }) {
   };
 
   const startEditing = () => {
-    const preferredStylist = user?.preferredStylist || '';
     setFormValues({
       name: user?.name || '',
       email: user?.email || '',
@@ -570,7 +565,7 @@ function Profile({ onClose }) {
                 onClick={() => setIsPasswordModalOpen(true)}
                 className="flex items-center gap-2 text-sm font-bold uppercase tracking-[0.08em] text-white transition hover:text-[#D4AF37]"
               >
-                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6">
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
                   <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                   <path d="M7 11V7a5 5 0 0110 0v4" />
                 </svg>

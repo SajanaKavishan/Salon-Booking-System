@@ -3,6 +3,7 @@ import axios from 'axios';
 import { toast } from 'react-toastify'; 
 import { X } from 'lucide-react';
 import BACKEND_BASE_URL from '../../utils/apiConfig';
+import { getStoredSession } from '../../utils/auth';
 
 const formLabelClassName = 'text-xs font-bold uppercase leading-5 tracking-[0.12em] text-gray-400';
 const formValueClassName = 'mt-2 text-base leading-6 text-white';
@@ -24,12 +25,7 @@ function StaffProfile({ onClose }) {
   const photoInputRef = useRef(null);
 
   const [user, setUser] = useState(() => {
-    try {
-      const storedUser = localStorage.getItem('user');
-      return storedUser ? JSON.parse(storedUser) : {};
-    } catch {
-      return {};
-    }
+    return getStoredSession()?.user || {};
   });
 
   const [isEditing, setIsEditing] = useState(false);
@@ -361,7 +357,7 @@ function StaffProfile({ onClose }) {
 
             <div className="pt-7 mt-8 border-t border-[#D4AF37]/10 md:mt-6 md:pt-5">
               <button type="button" onClick={() => setIsPasswordModalOpen(true)} className="flex items-center gap-2 text-sm font-bold uppercase tracking-[0.08em] text-white transition hover:text-[#D4AF37]">
-                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6"><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0110 0v4" /></svg>
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0110 0v4" /></svg>
                 Change Password
               </button>
             </div>
@@ -392,7 +388,7 @@ function StaffProfile({ onClose }) {
           <section className="font-sans order-2 md:order-1 md:col-span-1">
             <div className="flex items-center gap-3 text-[#D4AF37]">
               <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#D4AF37]/40">
-                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.6"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
               </span>
               <div>
                 <p className="text-[10px] uppercase tracking-widest text-[#D4AF37]/70">Professional Details</p>

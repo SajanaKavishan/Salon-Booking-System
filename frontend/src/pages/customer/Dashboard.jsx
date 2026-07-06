@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { DollarSign } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'react-toastify';
-import { useAppointments } from '../../context/AppointmentsContext';
+import { useAppointments } from '../../context/useAppointments';
 import ActiveBookingCard from '../../components/customer/ActiveBookingCard';
 import AppointmentReviewModal from '../../components/customer/AppointmentReviewModal';
 import DashboardHeader from '../../components/customer/DashboardHeader';

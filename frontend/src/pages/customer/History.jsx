@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { CalendarCheck, ChevronDown } from 'lucide-react';
 import { toast } from 'react-toastify';
-import { useAppointments } from '../../context/AppointmentsContext';
+import { useAppointments } from '../../context/useAppointments';
 import API_BASE_URL from '../../utils/apiConfig';
 
 const HISTORY_STATUSES = ['completed', 'rejected', 'cancelled', 'canceled', 'no-show'];

@@ -1,6 +1,5 @@
-import React, { createContext, useContext, useCallback, useMemo, useState } from 'react';
-
-const AppointmentsContext = createContext();
+import React, { useCallback, useMemo, useState } from 'react';
+import { AppointmentsContext } from './appointmentsStore';
 
 const getAppointmentId = (appointment) => appointment?._id || appointment?.id;
 
@@ -52,10 +51,3 @@ export function AppointmentsProvider({ children }) {
   );
 }
 
-export function useAppointments() {
-  const context = useContext(AppointmentsContext);
-  if (!context) {
-    throw new Error('useAppointments must be used within AppointmentsProvider');
-  }
-  return context;
-}

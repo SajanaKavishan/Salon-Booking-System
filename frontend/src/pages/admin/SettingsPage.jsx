@@ -178,7 +178,11 @@ function OpeningHoursScheduler({ value, onChange }) {
 
   useEffect(() => {
     if (valueSignature === lastEmittedSignatureRef.current) return;
-    setSlots(openingHoursToSlots(value));
+    const timeoutId = window.setTimeout(() => {
+      setSlots(openingHoursToSlots(value));
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [valueSignature, value]);
 
   const emitSlots = (nextSlots) => {
@@ -402,10 +406,14 @@ function DarkCalendarPicker({ value, onChange, holidays = [] }) {
   );
 
   useEffect(() => {
-    if (selectedDate) {
+    if (!selectedDate) return undefined;
+
+    const timeoutId = window.setTimeout(() => {
       setViewDate(selectedDate);
-    }
-  }, [value]);
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [selectedDate]);
 
   useEffect(() => {
     if (!isOpen) return undefined;

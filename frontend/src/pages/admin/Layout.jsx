@@ -1,10 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Menu } from 'lucide-react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from '../../components/admin/Sidebar';
 import RoleProfile from '../shared/RoleProfile';
 import API_BASE_URL from '../../utils/apiConfig';
+import { getStoredSession } from '../../utils/auth';
 
 const formatRelativeTime = (dateValue) => {
   if (!dateValue) return 'Just now';
@@ -54,12 +55,9 @@ function Layout() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   
   const [user, setUser] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem('user'));
-    } catch {
-      return null;
-    }
+    return getStoredSession()?.user || null;
   });
+  const closeProfile = useCallback(() => setIsProfileOpen(false), []);
 
   // Fetch notifications from the backend API
   const fetchNotifications = async () => {
@@ -273,9 +271,9 @@ function Layout() {
 
     document.addEventListener('keydown', handleDialogKeyDown);
     return () => document.removeEventListener('keydown', handleDialogKeyDown);
-  }, [isProfileOpen]);
+  }, [closeProfile, isProfileOpen]);
 
-  const role = localStorage.getItem('userRole') || user?.role;
+  const role = getStoredSession()?.userRole || user?.role;
 
   if (!user || !['admin', 'staff', 'customer'].includes(role)) {
     return <Navigate to="/login" replace />;
@@ -318,7 +316,6 @@ function Layout() {
   })();
 
   const userInitial = user?.name ? user.name.charAt(0).toUpperCase() : 'U';
-  const closeProfile = () => setIsProfileOpen(false);
   const isReviewsPage = location.pathname.startsWith('/admin/reviews');
 
   return (
@@ -353,7 +350,7 @@ function Layout() {
                 className="relative flex h-10 w-10 items-center justify-center rounded-lg text-white hover:text-[#d4af37] transition duration-200"
                 aria-label="Notifications"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 22 22" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 22 22" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
                 </svg>
 

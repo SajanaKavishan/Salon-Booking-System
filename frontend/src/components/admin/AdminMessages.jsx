@@ -50,7 +50,6 @@ function AdminMessages() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [totalMessages, setTotalMessages] = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState('');
@@ -105,7 +104,6 @@ function AdminMessages() {
           : fetchedMessages
       );
       setPage(currentPage);
-      setTotalPages(fetchedTotalPages);
       setTotalMessages(fetchedTotalMessages);
       setHasMore(currentPage < fetchedTotalPages);
     } catch (error) {
@@ -175,11 +173,11 @@ function AdminMessages() {
     setDeleteError('');
   };
 
-  const closeDeleteDialog = () => {
+  const closeDeleteDialog = useCallback(() => {
     if (deleteLoading) return;
     setDeleteTarget(null);
     setDeleteError('');
-  };
+  }, [deleteLoading]);
 
   const confirmDelete = async () => {
     if (!deleteTarget?._id || deleteLoading) return;
@@ -216,7 +214,7 @@ function AdminMessages() {
 
     window.addEventListener('keydown', handleEscape);
     return () => window.removeEventListener('keydown', handleEscape);
-  }, [deleteLoading, deleteTarget]);
+  }, [closeDeleteDialog, deleteTarget]);
 
   if (loading) {
     return (

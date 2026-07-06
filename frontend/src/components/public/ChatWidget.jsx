@@ -19,7 +19,7 @@ const quickActions = [
 ];
 
 function TypingMessage({ text, shouldAnimate, onProgress, onComplete }) {
-  const [displayText, setDisplayText] = useState(shouldAnimate ? '' : text);
+  const [displayText, setDisplayText] = useState('');
   const onProgressRef = useRef(onProgress);
   const onCompleteRef = useRef(onComplete);
 
@@ -32,13 +32,9 @@ function TypingMessage({ text, shouldAnimate, onProgress, onComplete }) {
   }, [onComplete]);
 
   useEffect(() => {
-    if (!shouldAnimate) {
-      setDisplayText(text);
-      return undefined;
-    }
+    if (!shouldAnimate) return undefined;
 
     let index = 0;
-    setDisplayText('');
 
     const timer = setInterval(() => {
       index += 1;
@@ -54,7 +50,7 @@ function TypingMessage({ text, shouldAnimate, onProgress, onComplete }) {
     return () => clearInterval(timer);
   }, [shouldAnimate, text]);
 
-  return displayText;
+  return shouldAnimate ? displayText : text;
 }
 
 function ChatWidget({ mode = 'desktop-floating' }) {

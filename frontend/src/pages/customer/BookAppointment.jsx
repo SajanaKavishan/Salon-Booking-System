@@ -14,7 +14,7 @@ import Spinner from '../../components/common/Spinner';
 
 import { useSalonSettings } from '../../hooks/useSalonSettings';
 
-import { useAppointments } from '../../context/AppointmentsContext';
+import { useAppointments } from '../../context/useAppointments';
 import API_BASE_URL from '../../utils/apiConfig';
 
 const SRI_LANKAN_MOBILE_REGEX = /^(?:\+94|0)[7][0-9]{8}$/;
@@ -488,15 +488,11 @@ function BookAppointment({ userProfile, customerData }) {
 
           const profileData = response.data || {};
 
-          setUser({
-
-            ...user,
-
+          setUser((currentUser) => ({
+            ...currentUser,
             ...profileData,
-
-            phone: profileData?.phone || profileData?.mobile || profileData?.phoneNumber || user?.phone || ''
-
-          });
+            phone: profileData?.phone || profileData?.mobile || profileData?.phoneNumber || currentUser?.phone || ''
+          }));
 
         } catch (error) {
 

@@ -2,9 +2,10 @@ import React from 'react';
 import CustomerProfile from '../customer/Profile';
 import StaffProfile from '../staff/StaffProfile';
 import AdminProfile from '../admin/AdminProfile';
+import { getStoredSession } from '../../utils/auth';
 
 function RoleProfile(props) {
-  const role = localStorage.getItem('userRole');
+  const role = getStoredSession()?.userRole;
 
   if (role === 'staff') {
     return <StaffProfile {...props} />;
