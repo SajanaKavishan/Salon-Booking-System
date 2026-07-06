@@ -38,8 +38,8 @@ const registerStaff = async (req, res) => {
   try {
     const { name, email, password, specialty, offDays, workingHours } = req.body;
 
-    if (!name || !email || !password) {
-      return res.status(400).json({ message: 'Name, email, and password are required.' });
+    if (!name || !email || !password || !specialty) {
+      return res.status(400).json({ message: 'Name, email, password, and specialty are required.' });
     }
 
     const existingUser = await User.findOne({ email: email.toLowerCase() });
@@ -62,8 +62,6 @@ const registerStaff = async (req, res) => {
         role: 'staff',
         phone: isValidPhoneNumber(normalizedPhone) ? normalizedPhone : DEFAULT_PHONE_FALLBACK
       }], { session }).then((users) => users[0]);
-
-      if (!specialty) return;
 
       staffProfile = await Staff.create([{
         userId: staffUser._id,

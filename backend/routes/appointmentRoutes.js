@@ -21,6 +21,7 @@ const {
   hideAppointmentByCustomer
 } = require('../controllers/appointmentController');
 const { protect, admin, staffOrAdmin } = require('../middleware/authMiddleware'); // Import the protect and admin middleware to secure the routes and restrict access to admin-only routes    
+const validateObjectId = require('../middleware/validateObjectId');
 const Appointment = require('../models/appointmentModel'); // Import the Appointment model to interact with the appointments collection in the database
 
 // Routes for appointments. Both routes are protected, meaning that only authenticated users can access them. The createAppointment route allows users to create a new appointment, while the getMyAppointments route allows users to retrieve their own appointments.
@@ -89,7 +90,7 @@ router.get('/booked-times', async (req, res) => {
         { date: String(date).slice(0, 10), stylist: stylistId },
         { bookingDate, staffId: stylistId },
       ],
-      status: { $nin: ['cancelled', 'Rejected', 'Cancelled'] }
+      status: { $nin: ['cancelled', 'rejected', 'Rejected', 'Cancelled'] }
     });
 
     let blockedSlots = [];
@@ -113,13 +114,13 @@ router.get('/booked-times', async (req, res) => {
 });
 
 // Routes with ID parameters - defined after specific routes to avoid conflicts
-router.route('/:id').delete(protect, deleteAppointment);
-router.post('/:id/review', protect, submitAppointmentReview);
-router.delete('/:id/review', protect, admin, deleteAppointmentReview);
-router.put('/:id/review-approve', protect, admin, toggleReviewApproval);
-router.route('/:id/running-late').post(protect, markAppointmentRunningLate);
-router.route('/:id/status').put(protect, staffOrAdmin, updateAppointmentStatus); // Admin and staff route to update the status of an appointment.
-router.route('/:id/staff-status').put(protect, staffOrAdmin, updateAppointmentStatusByStaff);
-router.route('/:id/hide').put(protect, hideAppointmentByCustomer);
+router.route('/:id').delete(validateObjectId(), protect, deleteAppointment);
+router.post('/:id/review', validateObjectId(), protect, submitAppointmentReview);
+router.delete('/:id/review', validateObjectId(), protect, admin, deleteAppointmentReview);
+router.put('/:id/review-approve', validateObjectId(), protect, admin, toggleReviewApproval);
+router.route('/:id/running-late').post(validateObjectId(), protect, markAppointmentRunningLate);
+router.route('/:id/status').put(validateObjectId(), protect, staffOrAdmin, updateAppointmentStatus); // Admin and staff route to update the status of an appointment.
+router.route('/:id/staff-status').put(validateObjectId(), protect, staffOrAdmin, updateAppointmentStatusByStaff);
+router.route('/:id/hide').put(validateObjectId(), protect, hideAppointmentByCustomer);
 
 module.exports = router;

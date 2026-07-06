@@ -203,11 +203,14 @@ function StaffManager() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
-  const [editData, setEditData] = useState({ specialty: "", workingHours: "", offDays: "" });
-  const [originalEditData, setOriginalEditData] = useState({ specialty: "", workingHours: "", offDays: "" });
+  const [editData, setEditData] = useState({ name: "", specialty: "", workingHours: "", offDays: "", imageUrl: "" });
+  const [originalEditData, setOriginalEditData] = useState({ name: "", specialty: "", workingHours: "", offDays: "", imageUrl: "" });
+  const [selectedEditImage, setSelectedEditImage] = useState(null);
+  const [editImagePreview, setEditImagePreview] = useState("");
+  const editFileInputRef = useRef(null);
   const [editingId, setEditingId] = useState(null);
   const [isUpdatingStaff, setIsUpdatingStaff] = useState(false);
-  const hasEditChanges = JSON.stringify(editData) !== JSON.stringify(originalEditData);
+  const hasEditChanges = JSON.stringify(editData) !== JSON.stringify(originalEditData) || Boolean(selectedEditImage);
   const canAddStaff = Boolean(
     formData.name.trim() &&
     formData.email.trim() &&
@@ -247,6 +250,12 @@ function StaffManager() {
       URL.revokeObjectURL(imagePreview);
     }
   }, [imagePreview]);
+
+  useEffect(() => () => {
+    if (editImagePreview) {
+      URL.revokeObjectURL(editImagePreview);
+    }
+  }, [editImagePreview]);
 
   const specialtyOptions = ["Hair Stylist", "Colorist", "Beautician", "Massage Therapist", "All-Rounder"];
 
@@ -332,6 +341,37 @@ function StaffManager() {
     }
   };
 
+  const handleEditImageChange = (file) => {
+    if (!file) {
+      setSelectedEditImage(null);
+      setEditImagePreview("");
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select an image file.");
+      return;
+    }
+
+    if (editImagePreview) {
+      URL.revokeObjectURL(editImagePreview);
+    }
+
+    setSelectedEditImage(file);
+    setEditImagePreview(URL.createObjectURL(file));
+  };
+
+  const clearSelectedEditImage = () => {
+    if (editImagePreview) {
+      URL.revokeObjectURL(editImagePreview);
+    }
+    setSelectedEditImage(null);
+    setEditImagePreview("");
+    if (editFileInputRef.current) {
+      editFileInputRef.current.value = "";
+    }
+  };
+
   const handleAddStaff = async (e) => {
     e.preventDefault();
     if (isAddingStaff || !canAddStaff) return;
@@ -340,21 +380,10 @@ function StaffManager() {
     try {
       const authHeaders = getAuthHeaders();
 
-      const registerResponse = await axios.post(
-        `${API_BASE_URL}/api/users/register-staff`,
-        {
-          name: formData.name,
-          email: formData.email,
-          password: formData.password,
-        },
-        authHeaders
-      );
-
       const payload = new FormData();
-      if (registerResponse.data?._id) {
-        payload.append("userId", registerResponse.data._id);
-      }
       payload.append("name", formData.name);
+      payload.append("email", formData.email);
+      payload.append("password", formData.password);
       payload.append("specialty", formData.specialty);
       if (formData.offDays) {
         payload.append("offDays", formData.offDays);
@@ -368,8 +397,8 @@ function StaffManager() {
         payload.append("workingHours", formData.workingHours);
       }
 
-      const response = await axios.post(`${API_BASE_URL}/api/staff`, payload, authHeaders);
-      setStaffList((currentStaff) => [...currentStaff, response.data]);
+      const response = await axios.post(`${API_BASE_URL}/api/staff/register`, payload, authHeaders);
+      setStaffList((currentStaff) => [...currentStaff, response.data.staff]);
       setFormData({ name: "", email: "", password: "", specialty: "", offDays: "", workingHours: "" });
       clearSelectedImage();
       toast.success("Staff member added successfully!");
@@ -398,10 +427,13 @@ function StaffManager() {
 
   const openEditModal = (staff) => {
     const nextEditData = {
+      name: staff.name || "",
       specialty: staff.specialty,
       workingHours: getWorkingHoursValue(staff.workingHours),
       offDays: getOffDayValue(staff.offDays),
+      imageUrl: staff.imageUrl || "",
     };
+    clearSelectedEditImage();
     setEditData(nextEditData);
     setOriginalEditData(nextEditData);
     setEditingId(staff._id);
@@ -415,10 +447,27 @@ function StaffManager() {
 
     setIsUpdatingStaff(true);
     try {
-      const response = await axios.put(`${API_BASE_URL}/api/staff/${editingId}`, editData, getAuthHeaders());
+      const payload = new FormData();
+      payload.append("name", editData.name);
+      payload.append("specialty", editData.specialty);
+      payload.append("workingHours", editData.workingHours);
+      payload.append("offDays", editData.offDays);
+      if (selectedEditImage) {
+        payload.append("image", selectedEditImage);
+      }
+
+      const response = await axios.put(`${API_BASE_URL}/api/staff/${editingId}`, payload, getAuthHeaders());
+      const nextEditData = {
+        name: response.data.name || "",
+        specialty: response.data.specialty || "",
+        workingHours: getWorkingHoursValue(response.data.workingHours),
+        offDays: getOffDayValue(response.data.offDays),
+        imageUrl: response.data.imageUrl || "",
+      };
       setStaffList((currentStaff) => currentStaff.map((staff) => (staff._id === editingId ? response.data : staff)));
       setIsEditModalOpen(false);
-      setOriginalEditData(editData);
+      setOriginalEditData(nextEditData);
+      clearSelectedEditImage();
       toast.success("Staff updated successfully!");
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to update staff");
@@ -806,11 +855,29 @@ function StaffManager() {
             aria-labelledby="edit-staff-title"
             className="relative w-full max-w-md border-t-4 border-t-[#d4af37] bg-[#111111] p-8"
           >
-            <button type="button" onClick={() => setIsEditModalOpen(false)} className="absolute right-4 top-4 text-xl text-gray-400 hover:text-white">
+            <button
+              type="button"
+              onClick={() => {
+                setIsEditModalOpen(false);
+                clearSelectedEditImage();
+              }}
+              className="absolute right-4 top-4 text-xl text-gray-400 hover:text-white"
+            >
               x
             </button>
             <h3 id="edit-staff-title" className="salon-heading mb-6 border-b border-white/10 pb-4">Edit Staff Member</h3>
             <form onSubmit={handleUpdateStaff} className="flex flex-col gap-4">
+              <div>
+                <label htmlFor="edit-staff-name" className="mb-1 block text-xs font-medium text-gray-400">Name</label>
+                <input
+                  id="edit-staff-name"
+                  type="text"
+                  value={editData.name}
+                  onChange={(event) => setEditData((current) => ({ ...current, name: event.target.value }))}
+                  required
+                  className={fieldClassName}
+                />
+              </div>
               <SalonSelect
                 id="edit-staff-specialty"
                 label="Specialty"
@@ -836,8 +903,58 @@ function StaffManager() {
                 onChange={(value) => setEditData((current) => ({ ...current, offDays: value }))}
                 options={offDayOptions}
               />
+              <div>
+                <input
+                  id="edit-staff-image"
+                  ref={editFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={(event) => handleEditImageChange(event.target.files?.[0] || null)}
+                  className="hidden"
+                />
+                <label
+                  htmlFor="edit-staff-image"
+                  className="flex cursor-pointer items-center gap-4 rounded-xl border border-dashed border-gray-700 bg-black/30 p-4 text-sm text-gray-300 transition hover:border-[#d4af37] hover:bg-black/40"
+                >
+                  {editImagePreview || editData.imageUrl ? (
+                    <img
+                      src={editImagePreview || editData.imageUrl}
+                      alt="Staff preview"
+                      className="h-16 w-16 shrink-0 rounded-full border border-[#d4af37]/40 object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-[#d4af37]/20 bg-[#d4af37]/10 text-[#d4af37]">
+                      <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M12 16V7m0 0-3.5 3.5M12 7l3.5 3.5M4 17.5V18a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                  )}
+                  <span className="min-w-0">
+                    <span className="block font-medium text-white">{selectedEditImage ? "Replacement image selected" : "Change staff image"}</span>
+                    <span className="mt-1 block truncate text-xs text-gray-400">{selectedEditImage?.name || "Choose a new image file"}</span>
+                  </span>
+                </label>
+                {selectedEditImage && (
+                  <button
+                    type="button"
+                    onClick={clearSelectedEditImage}
+                    className="mt-2 text-xs text-[#d4af37] hover:text-yellow-400"
+                  >
+                    Remove selected image
+                  </button>
+                )}
+              </div>
               <div className="mt-4 flex justify-end gap-3">
-                <GoldButton type="button" variant="ghost" onClick={() => setIsEditModalOpen(false)} disabled={isUpdatingStaff} className="bg-gray-800 px-4 py-2 text-white hover:bg-gray-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-60">
+                <GoldButton
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    setIsEditModalOpen(false);
+                    clearSelectedEditImage();
+                  }}
+                  disabled={isUpdatingStaff}
+                  className="bg-gray-800 px-4 py-2 text-white hover:bg-gray-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                >
                   Cancel
                 </GoldButton>
                 <GoldButton

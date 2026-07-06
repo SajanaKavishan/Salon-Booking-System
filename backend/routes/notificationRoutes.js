@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Notification = require('../models/Notification');
 const { protect } = require('../middleware/authMiddleware');
+const validateObjectId = require('../middleware/validateObjectId');
 
 const hasUserReadNotification = (notification, userId) => {
     if (notification.user) {
@@ -42,7 +43,7 @@ router.get('/', protect, async (req, res) => {
 });
 
 // Mark a user-specific or global notification as read for the logged-in user.
-router.put('/:id/read', protect, async (req, res) => {
+router.put('/:id/read', validateObjectId(), protect, async (req, res) => {
     try {
         const userId = req.user._id.toString();
         const notification = await Notification.findOne({

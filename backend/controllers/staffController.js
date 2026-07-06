@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 const Staff = require('../models/Staff');
 const User = require('../models/User');
 const { aggregateStaffPerformance } = require('./analyticsController');
@@ -6,6 +7,15 @@ const {
   normalizeOffDays,
   normalizeWorkingHours,
 } = require('../utils/staffSchedule');
+
+const DEFAULT_PHONE_FALLBACK = '0000000000';
+
+const isValidPhoneNumber = (phoneValue) => {
+  const trimmedPhone = String(phoneValue || '').trim();
+  const digitsOnly = trimmedPhone.replace(/\D/g, '');
+
+  return /^[+()\-\s\d]+$/.test(trimmedPhone) && digitsOnly.length >= 7 && digitsOnly.length <= 15;
+};
 
 const validateLinkedStaffUser = async (userId, currentStaffId = null) => {
   if (!mongoose.isValidObjectId(userId)) {
@@ -41,6 +51,12 @@ const validateLinkedStaffUser = async (userId, currentStaffId = null) => {
 const sendControllerError = (res, error) => (
   res.status(error.statusCode || 500).json({ message: error.message })
 );
+
+const createStaffRegistrationError = (message, statusCode = 400) => {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+};
 
 // @desc    Get all staff
 // @route   GET /api/staff
@@ -85,6 +101,73 @@ const getStaffPerformance = async (req, res) => {
   } catch (error) {
     console.error('Get Staff Performance Error:', error);
     res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Atomically create a staff user account and staff profile
+// @route   POST /api/staff/register
+// @access  Admin
+const registerStaffProfile = async (req, res) => {
+  const session = await mongoose.startSession();
+
+  try {
+    const { name, email, password, specialty, offDays, workingHours } = req.body;
+    const normalizedName = String(name || '').trim();
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    const normalizedSpecialty = String(specialty || '').trim();
+    const normalizedPhone = String(req.body.phone || '').trim();
+
+    if (!normalizedName || !normalizedEmail || !password || !normalizedSpecialty) {
+      return res.status(400).json({
+        message: 'Name, email, password, and specialty are required.',
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, await bcrypt.genSalt(10));
+    let staffUser = null;
+    let staffProfile = null;
+
+    await session.withTransaction(async () => {
+      const existingUser = await User.findOne({ email: normalizedEmail }).session(session);
+      if (existingUser) {
+        throw createStaffRegistrationError('User with this email already exists.');
+      }
+
+      staffUser = await User.create([{
+        name: normalizedName,
+        email: normalizedEmail,
+        password: hashedPassword,
+        role: 'staff',
+        phone: isValidPhoneNumber(normalizedPhone) ? normalizedPhone : DEFAULT_PHONE_FALLBACK,
+      }], { session }).then((users) => users[0]);
+
+      staffProfile = await Staff.create([{
+        userId: staffUser._id,
+        name: normalizedName,
+        imageUrl: req.file?.path || req.body.imageUrl || '',
+        specialty: normalizedSpecialty,
+        offDays: normalizeOffDays(offDays),
+        workingHours: normalizeWorkingHours(workingHours),
+      }], { session }).then((staffProfiles) => staffProfiles[0]);
+    });
+
+    return res.status(201).json({
+      user: {
+        _id: staffUser._id,
+        name: staffUser.name,
+        email: staffUser.email,
+        role: staffUser.role,
+      },
+      staff: staffProfile,
+    });
+  } catch (error) {
+    if (error?.code === 11000) {
+      return res.status(409).json({ message: 'User with this email already exists.' });
+    }
+
+    return sendControllerError(res, error);
+  } finally {
+    await session.endSession();
   }
 };
 
@@ -144,6 +227,10 @@ const updateStaff = async (req, res) => {
       updates.workingHours = normalizeWorkingHours(req.body.workingHours);
     }
 
+    if (req.file?.path) {
+      updates.imageUrl = req.file.path;
+    }
+
     const updatedStaff = await Staff.findByIdAndUpdate(req.params.id, updates, {
       new: true,
       runValidators: true,
@@ -199,4 +286,12 @@ const deleteStaff = async (req, res) => {
   }
 };
 
-module.exports = { getStaff, getPublicStaffList, getStaffPerformance, addStaff, updateStaff, deleteStaff };
+module.exports = {
+  getStaff,
+  getPublicStaffList,
+  getStaffPerformance,
+  registerStaffProfile,
+  addStaff,
+  updateStaff,
+  deleteStaff,
+};
