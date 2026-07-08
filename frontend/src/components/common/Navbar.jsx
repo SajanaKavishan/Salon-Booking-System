@@ -60,7 +60,7 @@ function Navbar() {
   ];
 
   return (
-    <nav className="fixed top-0 left-0 w-full z-50 border-b border-white/5 bg-black/60 px-3 py-3 font-sans shadow-lg backdrop-blur-md sm:px-6 sm:py-4 lg:px-12">
+    <nav className="fixed inset-x-0 top-0 z-50 border-b border-white/5 bg-black/60 px-3 py-3 font-sans shadow-lg backdrop-blur-md sm:px-6 sm:py-4 lg:px-12">
       <div className="flex w-full items-center justify-between gap-3 text-white sm:px-6 lg:px-12">
         <motion.button
           type="button"

@@ -394,14 +394,14 @@ function Home() {
   const scrollViewport = { once: true, amount: 0.2 };
   return (
     <motion.div
-      className="salon-page min-h-screen bg-[#0a0a0a] text-white selection:bg-[#d4af37] selection:text-black"
+      className="salon-page min-h-screen overflow-x-clip bg-[#0a0a0a] text-white selection:bg-[#d4af37] selection:text-black"
       variants={containerVariants}
       initial="hidden"
       animate="show"
     >
       <div className="salon-page-overlay absolute inset-0 -z-10" />
-      <div className="pointer-events-none absolute left-[-5%] top-[-10%] h-[220px] w-[220px] rounded-full bg-primary/10 blur-[100px] sm:h-[300px] sm:w-[300px] sm:blur-[120px]" />
-      <div className="pointer-events-none absolute right-[-10%] top-[20%] h-[220px] w-[220px] rounded-full bg-primary/10 blur-[100px] sm:h-[300px] sm:w-[300px] sm:blur-[120px]" />
+      <div className="pointer-events-none absolute left-0 top-0 h-[220px] w-[220px] -translate-x-1/3 -translate-y-1/3 rounded-full bg-primary/10 blur-[100px] sm:h-[300px] sm:w-[300px] sm:blur-[120px]" />
+      <div className="pointer-events-none absolute right-0 top-[20%] h-[220px] w-[220px] translate-x-1/3 rounded-full bg-primary/10 blur-[100px] sm:h-[300px] sm:w-[300px] sm:blur-[120px]" />
       <div className="pointer-events-none absolute bottom-[10%] left-[20%] h-[240px] w-[240px] rounded-full bg-primary/10 blur-[110px] sm:h-[320px] sm:w-[320px] sm:blur-[140px]" />
 
       <section id="home" className="relative flex min-h-[100svh] w-full max-w-full items-center justify-center overflow-hidden px-4 pb-[calc(env(safe-area-inset-bottom)+2rem)] pt-24 max-[380px]:pt-20 sm:min-h-screen sm:px-6 sm:pb-44 sm:pt-32 md:pb-52">

@@ -19,6 +19,37 @@
         --salon-danger: #ef4444;
     }
 
+    html {
+        min-height: 100%;
+        overflow-x: clip;
+        background: #0a0a0a;
+        scrollbar-color: rgba(212, 175, 55, 0.55) #0a0a0a;
+        scrollbar-width: thin;
+    }
+
+    body,
+    #root {
+        min-height: 100%;
+        width: 100%;
+        max-width: 100%;
+        overflow-x: clip;
+        background: #0a0a0a;
+    }
+
+    body::-webkit-scrollbar {
+        width: 10px;
+    }
+
+    body::-webkit-scrollbar-track {
+        background: #0a0a0a;
+    }
+
+    body::-webkit-scrollbar-thumb {
+        border: 2px solid #0a0a0a;
+        border-radius: 999px;
+        background: rgba(212, 175, 55, 0.58);
+    }
+
     * {
         @apply border-border outline-ring/50;
     }
@@ -34,7 +65,10 @@
         background: radial-gradient(140% 140% at 20% 10%, rgba(124, 92, 252, 0.12) 0%, rgba(15, 17, 21, 0) 55%),
             radial-gradient(120% 120% at 85% 20%, rgba(214, 179, 106, 0.12) 0%, rgba(15, 17, 21, 0) 50%),
             #0f1115;
-        overflow-x: hidden;
+        width: 100%;
+        max-width: 100%;
+        overflow-x: clip;
+        isolation: isolate;
     }
 
     .salon-page-overlay {
@@ -279,7 +313,6 @@
 
 body {
     @apply bg-background text-foreground font-sans antialiased transition-colors duration-300;
-    
 }
 
 @keyframes luxFadeIn {
