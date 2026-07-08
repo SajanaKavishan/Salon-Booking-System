@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { DollarSign, RefreshCw } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { GoldButton, StatusBadge } from '../../components/admin/SystemUI';
 import API_BASE_URL from '../../utils/apiConfig';
+import { getStoredSession } from '../../utils/auth';
 
 const timeToMinutes = (timeStr) => {
   if (!timeStr || typeof timeStr !== 'string') return 0;
@@ -223,6 +225,15 @@ const isCompletedAppointment = (appointment) => (
   String(appointment?.status || '').trim().toLowerCase() === 'completed'
 );
 
+const COMPLETION_WINDOW_MS = 10 * 60 * 1000;
+
+const canCompleteAppointment = (appointment, currentTime = Date.now()) => {
+  const endDateTime = buildAppointmentDateTime(appointment, appointment?.endTime);
+  if (!endDateTime) return false;
+
+  return currentTime >= endDateTime.getTime() - COMPLETION_WINDOW_MS;
+};
+
 const formatCurrency = (amount) => (
   `Rs. ${new Intl.NumberFormat('en-LK', {
     maximumFractionDigits: 0,
@@ -236,6 +247,8 @@ const getServicesLabel = (appointment) => (
 );
 
 function StaffDashboard() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [_user, setUser] = useState(null);
   const [staffProfile, setStaffProfile] = useState(null);
   const [leaveRequests, setLeaveRequests] = useState([]);
@@ -245,6 +258,7 @@ function StaffDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [actionKey, setActionKey] = useState('');
+  const [processingAppointmentId, setProcessingAppointmentId] = useState('');
   const [currentTime, setCurrentTime] = useState(Date.now());
   const staffName = localStorage.getItem('userName') || 'Staff';
 
@@ -299,19 +313,20 @@ function StaffDashboard() {
   }, []);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
+    const session = getStoredSession();
 
-    if (!storedUser) {
+    if (!session?.user) {
       setIsLoading(false);
       setError('Authentication token not found. Please log in again.');
+      const nextPath = `${location.pathname}${location.search}${location.hash}`;
+      navigate(`/login?next=${encodeURIComponent(nextPath)}`, { replace: true });
       return;
     }
 
-    const parsedUser = JSON.parse(storedUser);
-    setUser(parsedUser);
+    setUser(session.user);
 
     fetchSchedule();
-  }, [fetchSchedule]);
+  }, [fetchSchedule, location.hash, location.pathname, location.search, navigate]);
 
   useEffect(() => {
     const timerId = window.setInterval(() => {
@@ -510,8 +525,11 @@ function StaffDashboard() {
   }, [appointments]);
 
   const handleStatusUpdate = async (appointmentId, status) => {
+    if (processingAppointmentId === appointmentId) return;
+
     try {
       const token = localStorage.getItem('token');
+      setProcessingAppointmentId(appointmentId);
       setActionKey(`${appointmentId}-${status}`);
 
       const endpoint = `${API_BASE_URL}/api/appointments/${appointmentId}/staff-status`;
@@ -542,14 +560,15 @@ function StaffDashboard() {
       toast.error(error.response?.data?.message || 'Could not update appointment status.');
     } finally {
       setActionKey('');
+      setProcessingAppointmentId('');
     }
   };
 
   const renderAppointmentActions = (appointment, { stacked = false } = {}) => {
     const startDateTime = buildAppointmentDateTime(appointment);
-    const endDateTime = buildAppointmentDateTime(appointment, appointment.endTime);
     const isStarted = startDateTime?.getTime() <= currentTime;
-    const isEnded = endDateTime?.getTime() <= currentTime;
+    const isProcessingAppointment = processingAppointmentId === appointment._id;
+    const canComplete = canCompleteAppointment(appointment, currentTime);
     const actionWrapperClass = stacked
       ? 'grid gap-2'
       : 'flex flex-wrap justify-end gap-2';
@@ -566,7 +585,7 @@ function StaffDashboard() {
             <GoldButton
               type="button"
               onClick={() => handleStatusUpdate(appointment._id, 'Approved')}
-              disabled={actionKey === `${appointment._id}-Approved`}
+              disabled={isProcessingAppointment}
               className={buttonClass}
             >
               {actionKey === `${appointment._id}-Approved` ? 'Working...' : 'Accept'}
@@ -575,7 +594,7 @@ function StaffDashboard() {
               type="button"
               variant="ghost"
               onClick={() => handleStatusUpdate(appointment._id, 'Rejected')}
-              disabled={actionKey === `${appointment._id}-Rejected`}
+              disabled={isProcessingAppointment}
               className={`${buttonClass} border border-red-900/50 bg-[#1a1a1a] text-red-400 hover:border-transparent hover:bg-red-900/80 hover:text-white`}
             >
               {actionKey === `${appointment._id}-Rejected` ? 'Working...' : 'Reject'}
@@ -584,11 +603,11 @@ function StaffDashboard() {
         )}
 
         {appointment.status === 'Approved' && (
-          isEnded ? (
+          canComplete ? (
             <GoldButton
               type="button"
               onClick={() => handleStatusUpdate(appointment._id, 'Completed')}
-              disabled={actionKey === `${appointment._id}-Completed`}
+              disabled={isProcessingAppointment}
               className={buttonClass}
             >
               {actionKey === `${appointment._id}-Completed` ? 'Working...' : 'Complete'}
@@ -679,11 +698,14 @@ function StaffDashboard() {
                 Contact Client
               </a>
             )}
-            {isActive && (
+            {isActive
+              && ['approved', 'confirmed'].includes(String(appointment.status || '').trim().toLowerCase())
+              && canCompleteAppointment(appointment, currentTime)
+              && (
               <GoldButton
                 type="button"
                 onClick={() => handleStatusUpdate(appointment._id, 'Completed')}
-                disabled={!appointment.endTime || buildAppointmentDateTime(appointment, appointment.endTime)?.getTime() > currentTime || actionKey === `${appointment._id}-Completed`}
+                disabled={processingAppointmentId === appointment._id}
                 className="rounded-lg px-4 py-2 text-sm"
               >
                 {actionKey === `${appointment._id}-Completed` ? 'Working...' : 'Mark Complete'}

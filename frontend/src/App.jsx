@@ -30,6 +30,7 @@ const AdminMessages = lazy(() => import("./components/admin/AdminMessages"));
 const StaffDashboard = lazy(() => import("./pages/staff/StaffDashboard"));
 const RosterShifts = lazy(() => import("./pages/staff/RosterShifts"));
 const StaffEarnings = lazy(() => import("./pages/staff/StaffEarnings"));
+const StaffProfile = lazy(() => import("./pages/staff/StaffProfile"));
 
 function RouteLoadingFallback() {
   return (
@@ -127,6 +128,7 @@ function App() {
                 <Route path="appointments" element={<AppointmentsPage />} />
                 <Route path="roster-shifts" element={<RosterShifts />} />
                 <Route path="earnings" element={<StaffEarnings />} />
+                <Route path="profile" element={<StaffProfile />} />
               </Route>
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
