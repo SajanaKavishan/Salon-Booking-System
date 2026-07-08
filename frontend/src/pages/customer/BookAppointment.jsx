@@ -18,7 +18,6 @@ import { useAppointments } from '../../context/useAppointments';
 import API_BASE_URL from '../../utils/apiConfig';
 
 const SRI_LANKAN_MOBILE_REGEX = /^(?:\+94|0)[7][0-9]{8}$/;
-const TEN_DIGIT_PHONE_REGEX = /^[0-9]{10}$/;
 
 const getLocalDateKey = () => {
   const now = new Date();
@@ -1033,9 +1032,9 @@ function BookAppointment({ userProfile, customerData }) {
       const phoneValue = phoneVerificationInput;
 
       if (!phoneValue.trim()) return '';
-      if (SRI_LANKAN_MOBILE_REGEX.test(phoneValue) || TEN_DIGIT_PHONE_REGEX.test(phoneValue)) return '';
+      if (SRI_LANKAN_MOBILE_REGEX.test(phoneValue)) return '';
 
-      return 'Enter a valid mobile number: 07XXXXXXXX, +947XXXXXXXX, or 10 digits only.';
+      return 'Enter a valid Sri Lankan mobile number: 07XXXXXXXX or +947XXXXXXXX.';
     }, [phoneVerificationInput]);
     const isPhoneVerificationInputValid = Boolean(phoneVerificationInput.trim() && !phoneVerificationError);
 

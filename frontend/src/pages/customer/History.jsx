@@ -6,6 +6,7 @@ import { useAppointments } from '../../context/useAppointments';
 import API_BASE_URL from '../../utils/apiConfig';
 
 const HISTORY_STATUSES = ['completed', 'rejected', 'cancelled', 'canceled', 'no-show'];
+const HIDEABLE_HISTORY_STATUSES = ['completed', 'cancelled', 'canceled'];
 const HERO_IMAGE_URL = '/heroBg.jpg';
 
 const normalizeStatus = (status) => String(status || '').trim().toLowerCase();
@@ -45,6 +46,10 @@ const statusClassName = (status) => {
   return 'border-white/10 bg-white/5 text-slate-300';
 };
 
+const canHideFromHistory = (appointment) => (
+  HIDEABLE_HISTORY_STATUSES.includes(normalizeStatus(appointment?.status))
+);
+
 const filterButtonClassName = (isActive) => (
   `inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold transition ${
     isActive
@@ -62,12 +67,13 @@ const filterCountClassName = (isActive) => (
 );
 
 function History() {
-  const { appointments, replaceAppointments } = useAppointments();
+  const { appointments, replaceAppointments, upsertAppointment } = useAppointments();
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [activeFilter, setActiveFilter] = useState('');
   const [activeYear, setActiveYear] = useState(CURRENT_YEAR);
   const [isYearMenuOpen, setIsYearMenuOpen] = useState(false);
+  const [hidingAppointmentIds, setHidingAppointmentIds] = useState([]);
   const yearMenuRef = useRef(null);
 
   useEffect(() => {
@@ -144,6 +150,40 @@ function History() {
   const handleYearSelect = (year) => {
     setActiveYear(year);
     setIsYearMenuOpen(false);
+  };
+
+  const handleHideFromHistory = async (appointment) => {
+    const appointmentId = appointment?._id || appointment?.id;
+    if (!appointmentId || !canHideFromHistory(appointment) || hidingAppointmentIds.includes(appointmentId)) return;
+
+    setHidingAppointmentIds((currentIds) => [...currentIds, appointmentId]);
+    upsertAppointment({
+      _id: appointmentId,
+      id: appointmentId,
+      isHiddenByCustomer: true
+    });
+
+    try {
+      const token = localStorage.getItem('token');
+
+      await axios.put(`${API_BASE_URL}/api/appointments/${appointmentId}/hide`, {}, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      toast.success('Appointment removed from your history.');
+    } catch (error) {
+      console.error('Hide Appointment Error:', error);
+      upsertAppointment({
+        _id: appointmentId,
+        id: appointmentId,
+        isHiddenByCustomer: false
+      });
+      toast.error(error.response?.data?.message || 'Unable to remove this appointment from history.');
+    } finally {
+      setHidingAppointmentIds((currentIds) => currentIds.filter((id) => id !== appointmentId));
+    }
   };
 
   useEffect(() => {
@@ -359,6 +399,16 @@ function History() {
                       {appt.status}
                     </span>
                     <span className="text-sm font-semibold text-[#d4af37]">Rs. {appt.totalAmount || 0}</span>
+                    {canHideFromHistory(appt) && (
+                      <button
+                        type="button"
+                        onClick={() => handleHideFromHistory(appt)}
+                        disabled={hidingAppointmentIds.includes(appt._id || appt.id)}
+                        className="rounded-lg border border-white/10 px-3 py-1.5 text-xs font-semibold text-slate-400 transition hover:border-red-300/30 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {hidingAppointmentIds.includes(appt._id || appt.id) ? 'Removing...' : 'Remove from History'}
+                      </button>
+                    )}
                   </div>
                 </article>
               ))}

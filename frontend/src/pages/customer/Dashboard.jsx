@@ -12,6 +12,7 @@ import API_BASE_URL from '../../utils/apiConfig';
 
 const HISTORY_STATUSES = ['completed', 'rejected', 'cancelled', 'canceled', 'no-show'];
 const UPCOMING_STATUSES = ['pending', 'approved', 'confirmed'];
+const HIDEABLE_HISTORY_STATUSES = ['completed', 'cancelled', 'canceled'];
 const REVIEW_PROMPT_STORAGE_PREFIX = 'salonDismissedReviewPrompts';
 const MotionDiv = motion.div;
 
@@ -44,6 +45,10 @@ const statusClassName = (status) => {
   if (normalizedStatus === 'completed') return 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300';
   return 'border-white/10 bg-white/5 text-slate-300';
 };
+
+const canHideFromHistory = (appointment) => (
+  HIDEABLE_HISTORY_STATUSES.includes(String(appointment?.status || '').trim().toLowerCase())
+);
 
 const timeToMinutes = (timeValue) => {
   if (!timeValue || typeof timeValue !== 'string') return 0;
@@ -130,6 +135,7 @@ function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [appointmentToCancel, setAppointmentToCancel] = useState(null);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [hidingAppointmentIds, setHidingAppointmentIds] = useState([]);
   const [dismissedReviewAppointmentIds, setDismissedReviewAppointmentIds] = useState([]);
   const [temporarilyClosedReviewAppointmentIds, setTemporarilyClosedReviewAppointmentIds] = useState([]);
 
@@ -274,6 +280,40 @@ function Dashboard() {
     upsertAppointment(updatedAppointment);
   };
 
+  const handleHideFromHistory = async (appointment) => {
+    const appointmentId = appointment?._id || appointment?.id;
+    if (!appointmentId || !canHideFromHistory(appointment) || hidingAppointmentIds.includes(appointmentId)) return;
+
+    setHidingAppointmentIds((currentIds) => [...currentIds, appointmentId]);
+    upsertAppointment({
+      _id: appointmentId,
+      id: appointmentId,
+      isHiddenByCustomer: true
+    });
+
+    try {
+      const token = localStorage.getItem('token');
+
+      await axios.put(`${API_BASE_URL}/api/appointments/${appointmentId}/hide`, {}, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      toast.success('Appointment removed from your history.');
+    } catch (error) {
+      console.error('Hide Appointment Error:', error);
+      upsertAppointment({
+        _id: appointmentId,
+        id: appointmentId,
+        isHiddenByCustomer: false
+      });
+      toast.error(error.response?.data?.message || 'Unable to remove this appointment from history.');
+    } finally {
+      setHidingAppointmentIds((currentIds) => currentIds.filter((id) => id !== appointmentId));
+    }
+  };
+
   const markReviewPromptSeen = useCallback((appointmentId) => {
     if (!appointmentId) return;
 
@@ -390,13 +430,25 @@ function Dashboard() {
                       {formatDate(appointment.date)} &bull; {getStylistDisplayName(appointment)} &bull; <span className="font-medium">{appointment.status}</span>
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleRebook(appointment)}
-                    className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-semibold text-white transition hover:border-[#d4af37]/40 hover:text-[#d4af37] sm:w-fit"
-                  >
-                    Rebook
-                  </button>
+                  <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+                    <button
+                      type="button"
+                      onClick={() => handleRebook(appointment)}
+                      className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2 text-sm font-semibold text-white transition hover:border-[#d4af37]/40 hover:text-[#d4af37] sm:w-fit"
+                    >
+                      Rebook
+                    </button>
+                    {canHideFromHistory(appointment) && (
+                      <button
+                        type="button"
+                        onClick={() => handleHideFromHistory(appointment)}
+                        disabled={hidingAppointmentIds.includes(appointment._id || appointment.id)}
+                        className="w-full rounded-lg border border-white/10 px-4 py-2 text-sm font-semibold text-slate-400 transition hover:border-red-300/30 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-50 sm:w-fit"
+                      >
+                        {hidingAppointmentIds.includes(appointment._id || appointment.id) ? 'Removing...' : 'Remove from History'}
+                      </button>
+                    )}
+                  </div>
                 </article>
               ))
             ) : (

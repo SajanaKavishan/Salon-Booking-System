@@ -79,12 +79,13 @@ const getStaff = async (req, res) => {
 const getPublicStaffList = async (req, res) => {
   try {
     const staff = await Staff.find({})
-      .select('_id name imageUrl specialty workingHours offDays')
+      .select('_id userId name imageUrl specialty workingHours offDays')
       .sort({ name: 1 })
       .lean();
 
     res.status(200).json(staff.map((stylist) => ({
       _id: stylist._id,
+      userId: stylist.userId?.toString() || '',
       name: stylist.name,
       imageUrl: stylist.imageUrl || '',
       specialty: stylist.specialty || 'Luxury Artist',
