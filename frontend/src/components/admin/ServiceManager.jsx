@@ -588,11 +588,16 @@ function ServiceManager() {
         <>
           {isEditModalOpen && (
         <div className="fixed inset-0 z-[9999] flex min-h-screen items-center justify-center overflow-y-auto bg-black/90 px-4 py-6 backdrop-blur-xl">
-          <GlassCard className="relative w-full max-w-md border-t-4 border-t-[#d4af37] bg-[#111111] p-5 sm:p-8">
+          <GlassCard
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-title"
+            className="relative w-full max-w-md border-t-4 border-t-[#d4af37] bg-[#111111] p-5 sm:p-8"
+          >
             <button type="button" onClick={() => setIsEditModalOpen(false)} aria-label="Close dialog" className="absolute right-4 top-4 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-sm text-gray-400 hover:text-white">
               x
             </button>
-            <h3 className="salon-heading mb-6 border-b border-white/10 pb-4 pr-10 text-2xl sm:text-3xl">Edit Service</h3>
+            <h3 id="modal-title" className="salon-heading mb-6 border-b border-white/10 pb-4 pr-10 text-2xl sm:text-3xl">Edit Service</h3>
             <form onSubmit={handleUpdateService} className="flex flex-col gap-4">
               <div>
                 <label htmlFor="edit-service-name" className={labelClassName}>Service Name</label>
@@ -691,8 +696,13 @@ function ServiceManager() {
 
           {isDeleteModalOpen && (
         <div className="fixed inset-0 z-[9999] flex min-h-screen items-center justify-center bg-black/90 px-4 backdrop-blur-xl">
-          <GlassCard className="w-full max-w-sm border-t-4 border-t-red-600 bg-[#111111] p-5 sm:p-6">
-            <h4 className="mb-3 text-xl font-semibold text-white">Delete Service</h4>
+          <GlassCard
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-title"
+            className="w-full max-w-sm border-t-4 border-t-red-600 bg-[#111111] p-5 sm:p-6"
+          >
+            <h4 id="modal-title" className="mb-3 text-xl font-semibold text-white">Delete Service</h4>
             <p className="mb-6 text-gray-400">Are you sure you want to delete this? This action cannot be undone.</p>
             <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
               <GoldButton

@@ -20,7 +20,6 @@ const History = lazy(() => import("./pages/customer/History"));
 const Layout = lazy(() => import("./pages/admin/Layout"));
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
 const AppointmentsPage = lazy(() => import("./pages/admin/AppointmentsPage"));
-const ClientsPage = lazy(() => import("./pages/admin/ClientsPage"));
 const StaffPage = lazy(() => import("./pages/admin/StaffPage"));
 const ServicesPage = lazy(() => import("./pages/admin/ServicesPage"));
 const SettingsPage = lazy(() => import("./pages/admin/SettingsPage"));
@@ -105,7 +104,7 @@ function App() {
               >
                 <Route index element={<AdminDashboard />} />
                 <Route path="appointments" element={<AppointmentsPage />} />
-                <Route path="clients" element={<ClientsPage />} />
+                {/* <Route path="clients" element={<ClientsPage />} /> */}
                 <Route path="staff" element={<StaffPage />} />
                 <Route path="services" element={<ServicesPage />} />
                 <Route path="analytics" element={<Analytics />} />

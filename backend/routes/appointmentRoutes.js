@@ -119,7 +119,7 @@ router.post('/:id/review', validateObjectId(), protect, submitAppointmentReview)
 router.delete('/:id/review', validateObjectId(), protect, admin, deleteAppointmentReview);
 router.put('/:id/review-approve', validateObjectId(), protect, admin, toggleReviewApproval);
 router.route('/:id/running-late').post(validateObjectId(), protect, markAppointmentRunningLate);
-router.route('/:id/status').put(validateObjectId(), protect, staffOrAdmin, updateAppointmentStatus); // Admin and staff route to update the status of an appointment.
+router.route('/:id/status').put(validateObjectId(), protect, admin, updateAppointmentStatus); // Admin-only route to update the status of an appointment.
 router.route('/:id/staff-status').put(validateObjectId(), protect, staffOrAdmin, updateAppointmentStatusByStaff);
 router.route('/:id/hide').put(validateObjectId(), protect, hideAppointmentByCustomer);
 
