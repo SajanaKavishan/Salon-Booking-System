@@ -8,7 +8,6 @@ import {
   CalendarDays,
   CheckCircle2,
   Clock3,
-  Sparkles,
   Star,
 } from 'lucide-react';
 import BACKEND_BASE_URL, { apiUrl } from '../../utils/apiConfig';
@@ -187,22 +186,24 @@ function StylistCard({
       onClick={() => setSelectedStylistId(stylistId)}
       animate={{
         opacity: isMuted ? 0.4 : 1,
-        scale: isHovered ? 1.025 : 1,
+        scale: 1,
+        y: isHovered ? -6 : 0,
+        zIndex: isHovered ? 30 : isSelected ? 20 : 1,
         borderColor: isSelected
           ? 'rgba(212,175,55,0.95)'
           : isHovered
             ? 'rgba(212,175,55,0.58)'
             : 'rgba(255,255,255,0.1)',
         boxShadow: isHovered
-          ? '0 24px 55px rgba(0,0,0,0.42), 0 0 28px rgba(245,158,11,0.18)'
+          ? '0 18px 42px rgba(0,0,0,0.4), 0 0 24px rgba(212,175,55,0.18)'
           : isSelected
             ? '0 0 0 1px rgba(212,175,55,0.48), 0 22px 44px rgba(0,0,0,0.38), 0 0 30px rgba(212,175,55,0.12)'
             : '0 18px 34px rgba(0,0,0,0.24)',
       }}
       transition={{ duration: 0.25, ease: 'easeOut' }}
-      className="group w-[72vw] max-w-[17rem] shrink-0 overflow-hidden rounded-[18px] border bg-[#141417]/95 text-left backdrop-blur-xl sm:w-[13rem] lg:w-[10.25rem] xl:w-[10.85rem]"
+      className="group relative origin-bottom w-[72vw] max-w-[17rem] shrink-0 overflow-hidden rounded-[18px] border bg-[#141417]/95 text-left backdrop-blur-xl sm:w-[13rem] lg:w-[10.25rem] xl:w-[10.85rem]"
     >
-      <div className="relative h-[14rem] overflow-hidden bg-zinc-900 lg:h-[15rem] xl:h-[16rem]">
+      <div className="relative h-[14rem] overflow-hidden bg-zinc-900 lg:h-[13rem] xl:h-[13.75rem]">
         <img
           src={getImageUrl(stylist.imageUrl || stylist.profileImage)}
           alt={stylist.name}
@@ -213,23 +214,23 @@ function StylistCard({
             event.currentTarget.src = FALLBACK_STAFF_IMAGE;
           }}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#141417] via-black/8 to-transparent" />
-        <div className="absolute bottom-4 left-4 flex items-center gap-2 rounded-full bg-black/72 px-3 py-1.5 text-sm font-bold text-white shadow-lg backdrop-blur">
+        <div className="absolute inset-0 bg-gradient-to-t from-[#141417] via-[#141417]/45 to-transparent" />
+        <div className="absolute bottom-4 left-4 z-10 flex items-center gap-2 rounded-full bg-black/72 px-3 py-1.5 text-sm font-bold text-white shadow-lg backdrop-blur">
           <Star className="h-4 w-4 fill-[#D4AF37] text-[#D4AF37]" />
           <span>{formatRating(stylist.averageRating)}</span>
           <span className="text-xs font-medium text-white/48">({formatReviewCount(stylist.totalReviewsCount)})</span>
         </div>
       </div>
 
-      <div className="flex min-h-[15.5rem] flex-col p-5 lg:min-h-[18.4rem] lg:p-6">
+      <div className="relative z-10 -mt-0.5 flex min-h-[15.5rem] flex-col bg-[#141417] p-5 shadow-[0_-10px_18px_#141417] lg:min-h-[15.8rem] lg:p-5 xl:min-h-[16.4rem]">
         <div>
-          <h3 className="truncate font-serif text-[1.55rem] leading-tight text-white lg:text-[1.72rem]" title={stylist.name}>
+          <h3 className="truncate font-serif text-[1.55rem] leading-tight text-white lg:text-[1.62rem]" title={stylist.name}>
             {stylist.name}
           </h3>
           <p className="mt-2 truncate text-[0.82rem] font-medium leading-5 text-white/50" title={experience}>
             {experience}
           </p>
-          <p className="mt-4 truncate text-[0.82rem] font-bold uppercase leading-5 tracking-[0.12em] text-[#D4AF37]" title={specialty}>
+          <p className="mt-4 truncate text-[0.82rem] font-bold uppercase leading-5 tracking-[0.12em] text-[#D4AF37] lg:mt-3" title={specialty}>
             {specialty}
           </p>
         </div>
@@ -361,9 +362,6 @@ function Onboarding() {
           exit="exit"
           className="flex w-full max-w-[540px] flex-col items-center text-center lg:ml-auto lg:items-start lg:text-left"
         >
-          <motion.div variants={itemVariants} className="mb-7 flex h-[58px] w-[58px] items-center justify-center rounded-full border border-[#D4AF37]/55 bg-[#D4AF37]/10 text-[#D4AF37] shadow-[0_0_45px_rgba(212,175,55,0.13)] lg:mb-10 lg:h-[64px] lg:w-[64px]">
-            <Sparkles className="h-6 w-6 lg:h-7 lg:w-7" />
-          </motion.div>
           <motion.h1 variants={itemVariants} className="font-serif text-4xl leading-[1.08] text-white sm:text-5xl lg:text-[4.15rem] lg:leading-[1.06] xl:text-[5.65rem]">
             Welcome to
             <span className="relative mx-auto block w-fit pr-5 lg:mx-0">
@@ -437,7 +435,7 @@ function Onboarding() {
           exit="exit"
           className="w-full max-w-[37rem] text-center lg:text-left"
         >
-          <motion.h1 variants={itemVariants} className="font-serif text-4xl leading-tight text-white sm:text-5xl lg:text-[3.05rem] lg:leading-none">
+          <motion.h1 variants={itemVariants} className="font-serif text-4xl leading-tight text-white sm:text-5xl lg:text-[2.85rem] lg:leading-none xl:text-[3.05rem]">
             {activeStep.title}
           </motion.h1>
           <motion.p variants={itemVariants} className="mx-auto mt-4 max-w-[32rem] text-base leading-7 text-[#b9c0d2] sm:text-lg lg:mx-0 lg:text-[1.28rem] lg:leading-tight">
@@ -445,14 +443,23 @@ function Onboarding() {
           </motion.p>
           <motion.div
             variants={itemVariants}
-            className="salon-scrollbar -mx-6 mt-6 flex min-w-0 snap-x gap-4 overflow-x-auto overflow-y-visible scroll-px-6 px-6 pb-5 pt-1 sm:-mx-8 sm:px-8 lg:-mx-1 lg:gap-5 lg:px-1 lg:pb-4"
+            className="salon-scrollbar -mx-6 mt-6 flex min-w-0 snap-x gap-4 overflow-x-auto overflow-y-visible scroll-px-6 px-6 pb-10 pt-4 sm:-mx-8 sm:px-8 sm:pb-10 lg:-mx-1 lg:mt-5 lg:gap-5 lg:px-1 lg:pb-5 lg:pt-2"
           >
             {isLoadingStylists
               ? [1, 2, 3].map((item) => (
-                  <div key={item} className="h-[30rem] w-[72vw] max-w-[17rem] shrink-0 animate-pulse rounded-[18px] border border-white/10 bg-white/[0.04] sm:w-[13rem] lg:h-[34.5rem] lg:w-[10.25rem] xl:w-[10.85rem]" />
+                  <div key={item} className="h-[30rem] w-[72vw] max-w-[17rem] shrink-0 animate-pulse rounded-[18px] border border-white/10 bg-white/[0.04] sm:w-[13rem] lg:h-[29rem] lg:w-[10.25rem] xl:h-[30.25rem] xl:w-[10.85rem]" />
                 ))
               : displayStylists.map((stylist) => (
-                  <div key={getStaffId(stylist) || stylist.name} className="snap-start">
+                  <div
+                    key={getStaffId(stylist) || stylist.name}
+                    className={`relative snap-start ${
+                      hoveredStylistId === getStaffId(stylist)
+                        ? 'z-30'
+                        : selectedStylistId === getStaffId(stylist)
+                          ? 'z-20'
+                          : 'z-0'
+                    }`}
+                  >
                     <StylistCard
                       stylist={stylist}
                       hoveredStylistId={hoveredStylistId}
@@ -464,11 +471,11 @@ function Onboarding() {
                 ))}
           </motion.div>
           {!isLoadingStylists && stylists.length === 0 && (
-            <motion.p variants={itemVariants} className="mt-4 text-sm text-amber-200/70">
+            <motion.p variants={itemVariants} className="mt-4 text-sm text-[#d4af37]/70">
               Showing preview stylists because the staff list could not be loaded.
             </motion.p>
           )}
-          <motion.div variants={itemVariants} className="mt-6 flex flex-col items-center justify-center gap-4 border-t border-white/10 pt-6 sm:flex-row lg:mt-8 lg:justify-end lg:gap-10">
+          <motion.div variants={itemVariants} className="mt-6 flex flex-col items-center justify-center gap-4 border-t border-white/10 pt-6 sm:flex-row lg:mt-4 lg:justify-end lg:gap-10 lg:pt-4">
             <button
               type="button"
               onClick={() => goToStep(4)}
@@ -476,7 +483,15 @@ function Onboarding() {
             >
               Skip for Now
             </button>
-            <PrimaryButton onClick={() => goToStep(4)} className="w-full max-w-[14rem] min-w-0 rounded-full bg-[#f5a400] px-10 py-4 text-[1.05rem] shadow-[0_0_26px_rgba(245,164,0,0.32)] hover:bg-[#ffb21a] sm:w-auto sm:min-w-[150px]">
+            <PrimaryButton
+              onClick={() => goToStep(4)}
+              disabled={!selectedStylistId}
+              className={`w-full max-w-[14rem] min-w-0 rounded-full px-10 py-4 text-[1.05rem] sm:w-auto sm:min-w-[150px] ${
+                selectedStylistId
+                  ? 'bg-[#d4af37] shadow-[0_0_26px_rgba(212,175,55,0.32)] hover:bg-[#d4af37] hover:brightness-110'
+                  : 'onboarding-muted-continue border-[#d4af37]/25 bg-[#d4af37]/20 text-[#d4af37]/70 shadow-[0_0_18px_rgba(212,175,55,0.08)]'
+              }`}
+            >
               Continue
             </PrimaryButton>
           </motion.div>
@@ -489,27 +504,25 @@ function Onboarding() {
         {/* 👑 REFACTORED HIGHER BASE LUXURY BREATHING GLOW (NEVER DISAPPEARS) */}
         <motion.div 
           variants={itemVariants} 
-          animate={{
-            boxShadow: [
-              "0 0 30px 4px rgba(212,175,55,0.35), inset 0 0 15px rgba(212,175,55,0.2)",
-              "0 0 65px 14px rgba(212,175,55,0.75), inset 0 0 20px rgba(212,175,55,0.4)",
-              "0 0 30px 4px rgba(212,175,55,0.35), inset 0 0 15px rgba(212,175,55,0.2)"
-            ],
-            borderColor: [
-              "rgba(212,175,55,0.45)",
-              "rgba(212,175,55,0.9)",
-              "rgba(212,175,55,0.45)"
-            ],
-            scale: [1, 1.025, 1]
-          }}
-          transition={{
-            duration: 2.6,
-            repeat: Infinity,
-            ease: "easeInOut"
-          }}
-          className="mx-auto mb-8 flex h-20 w-20 items-center justify-center rounded-full border bg-[#D4AF37]/15 text-[#D4AF37] shadow-[0_0_30px_4px_rgba(212,175,55,0.35)] lg:mb-10 lg:h-24 lg:w-24"
+          className="animate-cinematic-glow mx-auto mb-8 flex h-20 w-20 items-center justify-center rounded-full border bg-[#D4AF37]/15 text-[#D4AF37] shadow-[0_0_24px_3px_rgba(212,175,55,0.22)] lg:mb-10 lg:h-24 lg:w-24"
         >
-          <Sparkles className="h-8 w-8 filter drop-shadow-[0_0_6px_rgba(212,175,55,0.4)] lg:h-10 lg:w-10" />
+          <svg viewBox="0 0 64 48" className="w-11 h-9 animate-cinematic-scissors text-[#d4af37]" fill="none" stroke="currentColor" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="24" cy="24" r="1.6" fill="currentColor" stroke="none" />
+            <g className="animate-cinematic-top-grip">
+              <circle cx="14" cy="12" r="8" />
+              <path d="M19.7 17.7L24 24" />
+            </g>
+            <g className="animate-cinematic-bottom-grip">
+              <circle cx="14" cy="36" r="8" />
+              <path d="M19.7 30.3L24 24" />
+            </g>
+            <g className="animate-cinematic-top">
+              <path d="M24 24L54 8" />
+            </g>
+            <g className="animate-cinematic-bottom">
+              <path d="M24 24L54 40" />
+            </g>
+          </svg>
         </motion.div>
         
         <motion.h1 variants={itemVariants} className="font-serif text-4xl leading-[1.12] text-center text-white sm:text-5xl lg:text-6xl lg:leading-[1.1]">
@@ -523,7 +536,7 @@ function Onboarding() {
             variant="outline"
             onClick={completeOnboarding}
             disabled={isCompleting}
-            className="w-full max-w-[20rem] px-6 py-4 text-xs tracking-[0.14em] sm:px-10 sm:text-sm lg:py-5 lg:tracking-[0.18em]"
+            className="onboarding-suite-sheen w-full max-w-[20rem] px-6 py-4 text-xs tracking-[0.14em] sm:px-10 sm:text-sm lg:py-5 lg:tracking-[0.18em]"
           >
             {isCompleting ? 'PREPARING YOUR SUITE...' : 'EXPERIENCE YOUR SUITE'}
           </PrimaryButton>
@@ -543,7 +556,11 @@ function Onboarding() {
           exit="exit"
           className="relative flex h-auto min-h-screen w-full flex-col overflow-x-hidden bg-[#050506] lg:block lg:h-full lg:min-h-0 lg:overflow-hidden"
         >
-          <div className="relative z-0 h-[40vh] min-h-[15rem] w-full shrink-0 overflow-hidden sm:h-[45vh] sm:min-h-[17rem] lg:hidden">
+          <div className={`relative z-0 w-full shrink-0 overflow-hidden lg:hidden ${
+            currentStep === 4
+              ? 'h-[40vh] min-h-[15rem] sm:h-[45vh] sm:min-h-[17rem]'
+              : 'h-[40vh] min-h-[15rem] sm:h-[45vh] sm:min-h-[17rem]'
+          }`}>
             <img
               src={activeStep.image}
               alt=""
@@ -551,7 +568,11 @@ function Onboarding() {
               decoding="async"
               fetchPriority="high"
               className={`h-full w-full object-cover ${
-                currentStep === 1 ? 'object-left' : 'object-center'
+                currentStep === 1
+                  ? 'object-left'
+                  : currentStep === 4
+                    ? 'object-[center_28%]'
+                    : 'object-center'
               } ${currentStep === 3 ? 'grayscale' : ''}`}
             />
             <div className="absolute inset-0 bg-black/35" />
@@ -613,6 +634,10 @@ function Onboarding() {
           {/* 👑 WRAPPER ALIGNED TO TRULY SNAPS TO THE ABSOLUTE RIGHT EDGE */}
           <div
             className={`relative z-10 flex w-full flex-1 items-center justify-center px-6 pb-12 pt-6 sm:px-8 sm:pb-14 lg:h-full lg:flex-none lg:px-12 lg:py-16 lg:pb-16 ${
+              currentStep === 4 ? '-mt-16 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-0 sm:mt-0 sm:pb-16 sm:pt-4 ' : ''
+            }${
+              currentStep === 3 ? 'lg:pt-10 lg:pb-12 xl:pt-12 xl:pb-14 ' : ''
+            }${
               currentStep === 1
                 ? 'lg:w-1/2 lg:ml-auto lg:pl-0 lg:pr-[8%] xl:pr-[10%]'
                 : currentStep === 2

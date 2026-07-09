@@ -326,6 +326,154 @@ body {
     }
 }
 
+@keyframes cinematic-zoom {
+    0%, 100% {
+        transform: scale(1);
+    }
+    6% {
+        transform: scale(1.045);
+    }
+    12%, 20% {
+        transform: scale(1.09);
+    }
+    28%, 100% {
+        transform: scale(1);
+    }
+}
+
+@keyframes cinematic-top {
+    0%, 18% {
+        transform: rotate(0deg);
+    }
+    28% {
+        transform: rotate(28deg);
+    }
+    38% {
+        transform: rotate(12deg);
+    }
+    48% {
+        transform: rotate(28deg);
+    }
+    64%, 100% {
+        transform: rotate(0deg);
+    }
+}
+
+@keyframes cinematic-bottom {
+    0%, 18% {
+        transform: rotate(0deg);
+    }
+    28% {
+        transform: rotate(-28deg);
+    }
+    38% {
+        transform: rotate(-12deg);
+    }
+    48% {
+        transform: rotate(-28deg);
+    }
+    64%, 100% {
+        transform: rotate(0deg);
+    }
+}
+
+@keyframes cinematic-top-grip {
+    0%, 18% {
+        transform: rotate(0deg);
+    }
+    28% {
+        transform: rotate(-28deg);
+    }
+    38% {
+        transform: rotate(-12deg);
+    }
+    48% {
+        transform: rotate(-28deg);
+    }
+    64%, 100% {
+        transform: rotate(0deg);
+    }
+}
+
+@keyframes cinematic-bottom-grip {
+    0%, 18% {
+        transform: rotate(0deg);
+    }
+    28% {
+        transform: rotate(28deg);
+    }
+    38% {
+        transform: rotate(12deg);
+    }
+    48% {
+        transform: rotate(28deg);
+    }
+    64%, 100% {
+        transform: rotate(0deg);
+    }
+}
+
+@keyframes cinematic-glow {
+    0%, 78%, 100% {
+        border-color: rgba(212, 175, 55, 0.34);
+        box-shadow: 0 0 22px 3px rgba(212, 175, 55, 0.2), inset 0 0 12px rgba(212, 175, 55, 0.12);
+        transform: scale(1);
+    }
+    6% {
+        border-color: rgba(212, 175, 55, 0.62);
+        box-shadow: 0 0 42px 8px rgba(212, 175, 55, 0.42), inset 0 0 16px rgba(212, 175, 55, 0.22);
+        transform: scale(1.012);
+    }
+    12%, 20% {
+        border-color: rgba(212, 175, 55, 0.84);
+        box-shadow: 0 0 62px 13px rgba(212, 175, 55, 0.58), inset 0 0 21px rgba(212, 175, 55, 0.32);
+        transform: scale(1.026);
+    }
+    28%, 48% {
+        border-color: rgba(212, 175, 55, 0.9);
+        box-shadow: 0 0 68px 15px rgba(212, 175, 55, 0.64), inset 0 0 22px rgba(212, 175, 55, 0.36);
+        transform: scale(1.032);
+    }
+    64% {
+        border-color: rgba(212, 175, 55, 0.58);
+        box-shadow: 0 0 40px 7px rgba(212, 175, 55, 0.34), inset 0 0 16px rgba(212, 175, 55, 0.2);
+        transform: scale(1.008);
+    }
+}
+
+.animate-cinematic-scissors {
+    transform-origin: center;
+    animation: cinematic-zoom 4.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.animate-cinematic-glow {
+    animation: cinematic-glow 4.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.animate-cinematic-top {
+    transform-origin: 24px 24px;
+    transform-box: view-box;
+    animation: cinematic-top 4.2s ease-in-out infinite;
+}
+
+.animate-cinematic-bottom {
+    transform-origin: 24px 24px;
+    transform-box: view-box;
+    animation: cinematic-bottom 4.2s ease-in-out infinite;
+}
+
+.animate-cinematic-top-grip {
+    transform-origin: 24px 24px;
+    transform-box: view-box;
+    animation: cinematic-top-grip 4.2s ease-in-out infinite;
+}
+
+.animate-cinematic-bottom-grip {
+    transform-origin: 24px 24px;
+    transform-box: view-box;
+    animation: cinematic-bottom-grip 4.2s ease-in-out infinite;
+}
+
 @keyframes dashboardButtonSheen {
     0%, 42% {
         transform: translateX(0) rotate(12deg);
@@ -333,4 +481,39 @@ body {
     70%, 100% {
         transform: translateX(360%) rotate(12deg);
     }
+}
+
+.onboarding-suite-sheen {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+}
+
+.onboarding-suite-sheen::before {
+    content: '';
+    position: absolute;
+    inset: -60% auto -60% -45%;
+    z-index: -1;
+    width: 42%;
+    transform: translateX(0) rotate(12deg);
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(212, 175, 55, 0.08) 28%,
+        rgba(255, 241, 184, 0.36) 50%,
+        rgba(212, 175, 55, 0.08) 72%,
+        transparent 100%
+    );
+    filter: blur(0.5px);
+    animation: dashboardButtonSheen 3.1s ease-in-out infinite;
+}
+
+.onboarding-muted-continue:disabled,
+.onboarding-muted-continue:disabled:hover {
+    border-color: rgba(212, 175, 55, 0.25);
+    background: rgba(212, 175, 55, 0.2);
+    color: rgba(212, 175, 55, 0.7);
+    box-shadow: 0 0 18px rgba(212, 175, 55, 0.08);
+    filter: none;
+    transform: none;
 }
