@@ -42,7 +42,7 @@ const steps = {
     eyebrow: 'Signature Artist',
   },
   4: {
-    title: 'Your Luxury Journey Begins Now',
+    title: 'Your Salon Journey Begins Now',
     subtitle: 'Your profile is configured for the ultimate SalonDEES experience. Book your first appointment now.',
     image: onboardingImages[4],
     eyebrow: 'Suite Unlocked',
@@ -501,7 +501,6 @@ function Onboarding() {
 
     return (
       <motion.div variants={contentVariants} initial="initial" animate="animate" exit="exit" className="flex w-full max-w-[560px] flex-col items-center text-center">
-        {/* 👑 REFACTORED HIGHER BASE LUXURY BREATHING GLOW (NEVER DISAPPEARS) */}
         <motion.div 
           variants={itemVariants} 
           className="animate-cinematic-glow mx-auto mb-8 flex h-20 w-20 items-center justify-center rounded-full border bg-[#D4AF37]/15 text-[#D4AF37] shadow-[0_0_24px_3px_rgba(212,175,55,0.22)] lg:mb-10 lg:h-24 lg:w-24"
@@ -628,10 +627,8 @@ function Onboarding() {
             </div>
           )}
           
-          {/* PROGRESS NAVIGATION */}
           <StepProgress currentStep={currentStep} />
           
-          {/* 👑 WRAPPER ALIGNED TO TRULY SNAPS TO THE ABSOLUTE RIGHT EDGE */}
           <div
             className={`relative z-10 flex w-full flex-1 items-center justify-center px-6 pb-12 pt-6 sm:px-8 sm:pb-14 lg:h-full lg:flex-none lg:px-12 lg:py-16 lg:pb-16 ${
               currentStep === 4 ? '-mt-16 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-0 sm:mt-0 sm:pb-16 sm:pt-4 ' : ''
