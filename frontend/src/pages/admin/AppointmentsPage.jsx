@@ -7,6 +7,17 @@ import { DarkSelect, GoldButton, StatusBadge } from '../../components/admin/Syst
 import API_BASE_URL from '../../utils/apiConfig';
 
 const finalStatuses = ['Completed', 'Rejected', 'Cancelled', 'No-Show'];
+const STATUS_API_VALUES = {
+  Pending: 'pending',
+  Approved: 'confirmed',
+  Confirmed: 'confirmed',
+  Rejected: 'rejected',
+  Cancelled: 'cancelled',
+  Canceled: 'cancelled',
+  Completed: 'completed',
+  'No-Show': 'no-show',
+  'No Show': 'no-show'
+};
 const PENDING_APPOINTMENTS_REFRESH_EVENT = 'appointments:pending-count-refresh';
 const CURRENT_DATE = new Date();
 const CURRENT_YEAR = String(CURRENT_DATE.getFullYear());
@@ -110,6 +121,8 @@ const sortAppointmentsByPriority = (a, b) => {
 
   return getAppointmentTimeStamp(b) - getAppointmentTimeStamp(a);
 };
+
+const toApiStatus = (status) => STATUS_API_VALUES[status] || String(status || '').trim().toLowerCase();
 
 function AppointmentsPage() {
   const [appointments, setAppointments] = useState([]);
@@ -283,18 +296,19 @@ function AppointmentsPage() {
         ? `${API_BASE_URL}/api/appointments/${id}/status`
         : `${API_BASE_URL}/api/appointments/${id}/staff-status`;
 
-      await axios.put(
+      const response = await axios.put(
         statusEndpoint,
-        { status: newStatus },
+        { status: toApiStatus(newStatus) },
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      const updatedStatus = response.data?.appointment?.status || newStatus;
 
       setAppointments((current) =>
-        current.map((appt) => (appt._id === id ? { ...appt, status: newStatus } : appt))
+        current.map((appt) => (appt._id === id ? { ...appt, status: updatedStatus } : appt))
       );
       window.dispatchEvent(new Event(PENDING_APPOINTMENTS_REFRESH_EVENT));
 
-      toast.success(`Status changed to "${newStatus}" successfully!`);
+      toast.success(`Status changed to "${updatedStatus}" successfully!`);
     } catch (error) {
       console.error('Status Update Error:', error);
       toast.error('Oops! Failed to update the appointment status.');

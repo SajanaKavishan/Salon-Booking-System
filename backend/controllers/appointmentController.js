@@ -9,6 +9,15 @@ const generateAvailableSlots = require('../utils/slotGenerator');
 const { isStaffOnApprovedLeave } = require('../utils/slotGenerator');
 const { ensureSettingsDocument, defaultSettings } = require('./settingsController');
 
+const escapeHtml = (value) => (
+    String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;')
+);
+
 // Utility functions to convert time formats for easier calculations when checking for overlapping appointments. The timeToMinutes function converts a time string (e.g., "10:30 AM") into total minutes, while the minutesToTime function converts total minutes back into a time string format. These functions are essential for accurately determining if appointment times overlap when creating or updating appointments.
 const timeToMinutes = (timeStr) => {
     if (!timeStr) return 0;
@@ -85,6 +94,32 @@ const slotRangesMatch = (firstSlotRange, secondSlotRange) => (
     firstSlotRange.start === secondSlotRange.start
     && firstSlotRange.end === secondSlotRange.end
 );
+
+const findOverlappingAppointmentForStaff = async ({ date, staffId, startMins, endMins }) => {
+    const startDate = new Date(`${date}T00:00:00.000Z`);
+    const endDate = new Date(startDate);
+    endDate.setUTCDate(endDate.getUTCDate() + 1);
+
+    const appointments = await Appointment.find({
+        status: { $nin: ['cancelled', 'canceled', 'rejected', 'completed', 'no-show', 'Cancelled', 'Canceled', 'Rejected', 'Completed', 'No-Show'] },
+        $or: [
+            { date, stylist: staffId },
+            { date, staffId },
+            { bookingDate: { $gte: startDate, $lt: endDate }, stylist: staffId },
+            { bookingDate: { $gte: startDate, $lt: endDate }, staffId },
+        ],
+    }).select('startTime endTime timeSlot status').lean();
+
+    return appointments.find((appointment) => {
+        const [slotStartTime, slotEndTime] = typeof appointment.timeSlot === 'string'
+            ? appointment.timeSlot.split(/\s+-\s+/)
+            : [];
+        const existingStart = timeToMinutes(appointment.startTime || slotStartTime);
+        const existingEnd = timeToMinutes(appointment.endTime || slotEndTime);
+
+        return startMins < existingEnd && endMins > existingStart;
+    });
+};
 
 const isDuplicateAppointmentKeyError = (error) => (
     error?.code === 11000
@@ -366,6 +401,23 @@ const createAppointment = async (req, res) => {
 
         const stylistName = finalStylist.name;
 
+        if (isAdminBypass) {
+            const overlappingAppointment = await findOverlappingAppointmentForStaff({
+                date,
+                staffId: stylistId,
+                startMins,
+                endMins,
+            });
+
+            if (overlappingAppointment) {
+                return res.status(409).json({
+                    message: 'This stylist already has an overlapping appointment at this time. Please refresh appointments and try again.',
+                    conflict: true,
+                    reason: 'STALE_APPOINTMENT_DATA',
+                });
+            }
+        }
+
         if (!isAdminBypass && await isStaffOnApprovedLeave(finalStylist, appointmentDate, nextAppointmentDate)) {
             return res.status(400).json({ message: 'This stylist is on approved leave for the selected date.' });
         }
@@ -404,7 +456,13 @@ const createAppointment = async (req, res) => {
         });
 
         if (settings.bookingAlerts && supportEmail) {
-            const serviceNames = selectedServices.map((service) => service.name).join(', ');
+            const serviceNames = selectedServices.map((service) => escapeHtml(service.name)).join(', ');
+            const safeSupportEmail = escapeHtml(supportEmail);
+            const safeContactNumber = escapeHtml(contactNumber);
+            const safeClientName = escapeHtml(bookingUser.name || bookingUser.email);
+            const safeDate = escapeHtml(date);
+            const safeTime = escapeHtml(`${formattedStartTime} - ${formattedEndTime}`);
+            const safeStylistName = escapeHtml(stylistName);
 
             try {
                 await sendEmail({
@@ -413,13 +471,13 @@ const createAppointment = async (req, res) => {
                     message: `
                         <div style="font-family: Arial, sans-serif; padding: 20px; background: #111111; color: #f5f5f5; border-radius: 10px;">
                             <h2 style="color: #d4af37; margin-top: 0;">New appointment received</h2>
-                            <p><strong>Client:</strong> ${bookingUser.name || bookingUser.email}</p>
+                            <p><strong>Client:</strong> ${safeClientName}</p>
                             <p><strong>Services:</strong> ${serviceNames}</p>
-                            <p><strong>Date:</strong> ${date}</p>
-                            <p><strong>Time:</strong> ${formattedStartTime} - ${formattedEndTime}</p>
-                            <p><strong>Stylist:</strong> ${stylistName}</p>
+                            <p><strong>Date:</strong> ${safeDate}</p>
+                            <p><strong>Time:</strong> ${safeTime}</p>
+                            <p><strong>Stylist:</strong> ${safeStylistName}</p>
                             <p><strong>Status:</strong> pending</p>
-                            <p style="margin-top: 16px; color: #bbbbbb;">For assistance, contact ${supportEmail} or ${contactNumber}</p>
+                            <p style="margin-top: 16px; color: #bbbbbb;">For assistance, contact ${safeSupportEmail} or ${safeContactNumber}</p>
                         </div>
                     `
                 });
@@ -1117,10 +1175,15 @@ const updateAppointmentStatus = async (req, res) => {
             const emailStatusKey = Appointment.normalizeStatus(updatedAppointment.status);
             const emailStatus = updatedAppointment.toJSON().status;
             const emailSubject = `Appointment ${emailStatus} - ${salonName}`;
+            const safeSalonName = escapeHtml(salonName);
+            const safeSupportEmail = escapeHtml(supportEmail);
+            const safeContactNumber = escapeHtml(contactNumber);
+            const safeEmailStatus = escapeHtml(emailStatus);
+            const safeCustomerName = escapeHtml(appointment.user.name || 'there');
 
             // Safely get service names - filter out any null/undefined services
             const serviceNames = (appointment.services && appointment.services.length > 0)
-                ? appointment.services.filter(s => s && s.name).map(s => s.name).join(', ')
+                ? appointment.services.filter(s => s && s.name).map(s => escapeHtml(s.name)).join(', ')
                 : 'Not specified';
             
             const statusColor = emailStatusKey === 'confirmed'
@@ -1135,18 +1198,19 @@ const updateAppointmentStatus = async (req, res) => {
                 ['Duration', `${appointment.totalDuration || 0} minutes`],
                 ['Total Amount', `Rs. ${(appointment.totalAmount || 0).toFixed(2)}`]
             ];
+            const safeRows = rows.map(([label, value]) => [escapeHtml(label), escapeHtml(value)]);
 
             const emailMessage = settings.darkReceipts
                 ? `
                     <div style="font-family: Arial, sans-serif; padding: 24px; border: 1px solid #262626; border-radius: 14px; max-width: 580px; margin: 0 auto; background: #0b0b0b; color: #f5f5f5;">
                         <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; border-bottom:1px solid #232323; padding-bottom:14px;">
-                            <h2 style="color:#d4af37; margin:0;">${salonName}</h2>
-                            <span style="padding:6px 12px; border-radius:999px; background:${statusColor}; color:#ffffff; font-size:12px; font-weight:bold;">${emailStatus}</span>
+                            <h2 style="color:#d4af37; margin:0;">${safeSalonName}</h2>
+                            <span style="padding:6px 12px; border-radius:999px; background:${statusColor}; color:#ffffff; font-size:12px; font-weight:bold;">${safeEmailStatus}</span>
                         </div>
-                        <p style="font-size:16px; margin-top:20px;">Hello <strong>${appointment.user.name}</strong>,</p>
+                        <p style="font-size:16px; margin-top:20px;">Hello <strong>${safeCustomerName}</strong>,</p>
                         <p style="font-size:14px; line-height:1.7; color:#d1d5db;">Your appointment has been updated. Here is your latest booking summary.</p>
                         <div style="margin-top:18px; border:1px solid #232323; border-radius:12px; overflow:hidden;">
-                            ${rows.map(([label, value], index) => `
+                            ${safeRows.map(([label, value], index) => `
                                 <div style="display:flex; justify-content:space-between; gap:16px; padding:12px 14px; ${index < rows.length - 1 ? 'border-bottom:1px solid #232323;' : ''}">
                                     <span style="color:#9ca3af; font-size:13px;">${label}</span>
                                     <span style="color:#ffffff; font-size:13px; font-weight:600; text-align:right;">${value}</span>
@@ -1154,26 +1218,26 @@ const updateAppointmentStatus = async (req, res) => {
                             `).join('')}
                         </div>
                         <p style="margin-top:20px; font-size:13px; color:#9ca3af; text-align:center;">
-                            Thank you for choosing ${salonName}.<br/>Need help? Reach us at ${supportEmail} or ${contactNumber}
+                            Thank you for choosing ${safeSalonName}.<br/>Need help? Reach us at ${safeSupportEmail} or ${safeContactNumber}
                         </p>
                     </div>
                 `
                 : `
                     <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px; max-width: 550px; margin: 0 auto; background-color: #f9f9f9;">
                         <h2 style="color: ${statusColor}; text-align: center; border-bottom: 2px solid ${statusColor}; padding-bottom: 10px;">
-                            Appointment Status: ${emailStatus}
+                            Appointment Status: ${safeEmailStatus}
                         </h2>
-                        <p style="font-size: 16px; margin-top: 20px;">Welcome! <strong>${appointment.user.name}</strong>,</p>
-                        <p style="font-size: 14px; color: #555; margin-bottom: 20px;">Your appointment status has been updated to: <strong style="color: ${statusColor};">${emailStatus}</strong></p>
+                        <p style="font-size: 16px; margin-top: 20px;">Welcome! <strong>${safeCustomerName}</strong>,</p>
+                        <p style="font-size: 14px; color: #555; margin-bottom: 20px;">Your appointment status has been updated to: <strong style="color: ${statusColor};">${safeEmailStatus}</strong></p>
                         <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
                             <tr><td style="padding: 10px; border: 1px solid #e0e0e0; background-color: #f5f5f5; font-weight: bold; width: 40%;">Services:</td><td style="padding: 10px; border: 1px solid #e0e0e0;">${serviceNames}</td></tr>
-                            <tr><td style="padding: 10px; border: 1px solid #e0e0e0; background-color: #f5f5f5; font-weight: bold;">Date:</td><td style="padding: 10px; border: 1px solid #e0e0e0;">${appointment.date}</td></tr>
-                            <tr><td style="padding: 10px; border: 1px solid #e0e0e0; background-color: #f5f5f5; font-weight: bold;">Time:</td><td style="padding: 10px; border: 1px solid #e0e0e0;">${appointment.startTime} - ${appointment.endTime}</td></tr>
-                            <tr><td style="padding: 10px; border: 1px solid #e0e0e0; background-color: #f5f5f5; font-weight: bold;">Duration:</td><td style="padding: 10px; border: 1px solid #e0e0e0;">${appointment.totalDuration} minutes</td></tr>
+                            <tr><td style="padding: 10px; border: 1px solid #e0e0e0; background-color: #f5f5f5; font-weight: bold;">Date:</td><td style="padding: 10px; border: 1px solid #e0e0e0;">${escapeHtml(appointment.date)}</td></tr>
+                            <tr><td style="padding: 10px; border: 1px solid #e0e0e0; background-color: #f5f5f5; font-weight: bold;">Time:</td><td style="padding: 10px; border: 1px solid #e0e0e0;">${escapeHtml(appointment.startTime)} - ${escapeHtml(appointment.endTime)}</td></tr>
+                            <tr><td style="padding: 10px; border: 1px solid #e0e0e0; background-color: #f5f5f5; font-weight: bold;">Duration:</td><td style="padding: 10px; border: 1px solid #e0e0e0;">${escapeHtml(`${appointment.totalDuration} minutes`)}</td></tr>
                             <tr><td style="padding: 10px; border: 1px solid #e0e0e0; background-color: #f5f5f5; font-weight: bold;">Total Amount:</td><td style="padding: 10px; border: 1px solid #e0e0e0; color: #27ae60; font-weight: bold;">Rs. ${appointment.totalAmount.toFixed(2)}</td></tr>
                         </table>
                         <p style="margin-top: 20px; font-size: 14px; color: #777; text-align: center;">
-                            Thank you for choosing ${salonName}!<br/><span style="font-size: 12px;">For assistance, contact us at ${supportEmail} or ${contactNumber}</span>
+                            Thank you for choosing ${safeSalonName}!<br/><span style="font-size: 12px;">For assistance, contact us at ${safeSupportEmail} or ${safeContactNumber}</span>
                         </p>
                     </div>
                 `;

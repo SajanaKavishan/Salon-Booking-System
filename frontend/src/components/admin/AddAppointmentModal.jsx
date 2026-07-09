@@ -513,7 +513,7 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
                 {hasConflict ? (
                   <div className="space-y-3 animate-fadeIn">
                     <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-400 shadow-[0_0_22px_rgba(245,158,11,0.08)]">
-                      <span>⚠️</span>
+                      <span aria-hidden="true">Warning!</span>
                       <div>
                         <p className="font-semibold">Schedule Conflict Detected</p>
                         <p className="mt-0.5 text-amber-400/70">
@@ -549,7 +549,7 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
                     </div>
                   </div>
                 ) : (
-                  <p className="text-xs font-medium text-emerald-400">✓ Schedule clear</p>
+                  <p className="text-xs font-medium text-emerald-400">Schedule clear</p>
                 )}
               </div>
 
