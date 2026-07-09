@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
+const Appointment = require('../models/appointmentModel');
 const Staff = require('../models/Staff');
 const User = require('../models/User');
 const { aggregateStaffPerformance } = require('./analyticsController');
@@ -78,10 +79,55 @@ const getStaff = async (req, res) => {
 // @route   GET /api/staff/public-list
 const getPublicStaffList = async (req, res) => {
   try {
-    const staff = await Staff.find({})
-      .select('_id userId name imageUrl specialty workingHours offDays')
-      .sort({ name: 1 })
-      .lean();
+    const staff = await Staff.aggregate([
+      {
+        $lookup: {
+          from: Appointment.collection.name,
+          let: { staffId: '$_id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ['$isReviewApproved', true] },
+                    { $ne: ['$rating', null] },
+                    {
+                      $or: [
+                        { $eq: ['$staffId', '$$staffId'] },
+                        { $eq: ['$stylist', '$$staffId'] },
+                      ],
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+          as: 'approvedReviews',
+        },
+      },
+      {
+        $addFields: {
+          totalReviewsCount: { $size: '$approvedReviews' },
+          averageRating: {
+            $cond: [
+              { $gt: [{ $size: '$approvedReviews' }, 0] },
+              { $round: [{ $avg: '$approvedReviews.rating' }, 1] },
+              0,
+            ],
+          },
+        },
+      },
+      {
+        $project: {
+          approvedReviews: 0,
+          createdAt: 0,
+          updatedAt: 0,
+          __v: 0,
+          imagePublicId: 0,
+        },
+      },
+      { $sort: { name: 1 } },
+    ]);
 
     res.status(200).json(staff.map((stylist) => ({
       _id: stylist._id,
@@ -92,6 +138,8 @@ const getPublicStaffList = async (req, res) => {
       workingHours: stylist.workingHours,
       offDays: stylist.offDays || [],
       experience: 'Expert Stylist',
+      averageRating: stylist.averageRating || 0,
+      totalReviewsCount: stylist.totalReviewsCount || 0,
     })));
   } catch (error) {
     sendControllerError(res, error);
