@@ -125,9 +125,13 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
 
         if (!isMounted) return;
 
-        setServices(servicesResponse.data || []);
-        setStaff(staffResponse.data || []);
-        setCustomers(customersResponse.data || []);
+        const servicesList = servicesResponse.data?.data || servicesResponse.data;
+        const staffList = staffResponse.data?.data || staffResponse.data;
+        const customersList = customersResponse.data?.data || customersResponse.data;
+
+        setServices(Array.isArray(servicesList) ? servicesList : []);
+        setStaff(Array.isArray(staffList) ? staffList : []);
+        setCustomers(Array.isArray(customersList) ? customersList : []);
       } catch (error) {
         if (axios.isCancel(error) || error.name === 'CanceledError' || controller.signal.aborted) {
           return;

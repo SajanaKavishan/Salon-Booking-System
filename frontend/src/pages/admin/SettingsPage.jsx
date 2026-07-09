@@ -688,12 +688,15 @@ function HolidaySelectedDateChips({ selectedDates = [], onRemove, disabled = fal
   );
   const selectedDateCount = sortedSelectedDates.length;
   const summaryText = `${selectedDateCount} Date${selectedDateCount === 1 ? '' : 's'} Selected`;
+  const isDateListExpanded = selectedDateCount > 0 && isExpanded;
 
-  useEffect(() => {
-    if (selectedDateCount === 0) {
+  const handleRemoveDate = (dateKey) => {
+    if (selectedDateCount <= 1) {
       setIsExpanded(false);
     }
-  }, [selectedDateCount]);
+
+    onRemove(dateKey);
+  };
 
   const renderDateChips = () => (
     sortedSelectedDates.length > 0 ? (
@@ -705,7 +708,7 @@ function HolidaySelectedDateChips({ selectedDates = [], onRemove, disabled = fal
           {format(new Date(`${dateKey}T00:00:00`), 'MMM d')}
           <button
             type="button"
-            onClick={() => onRemove(dateKey)}
+            onClick={() => handleRemoveDate(dateKey)}
             disabled={disabled}
             className="rounded-full p-0.5 text-[#f1d9ad] transition hover:bg-[#c5a880]/20 hover:text-white disabled:cursor-not-allowed"
             aria-label={`Remove ${format(new Date(`${dateKey}T00:00:00`), 'MMM d')}`}
@@ -737,13 +740,13 @@ function HolidaySelectedDateChips({ selectedDates = [], onRemove, disabled = fal
                 type="button"
                 onClick={() => setIsExpanded((current) => !current)}
                 className="shrink-0 rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-zinc-300 transition hover:border-[#d4af37]/40 hover:text-[#d4af37]"
-                aria-expanded={isExpanded}
+                aria-expanded={isDateListExpanded}
               >
-                {isExpanded ? 'Hide' : 'View All'}
+                {isDateListExpanded ? 'Hide' : 'View All'}
               </button>
             </div>
 
-            {isExpanded && (
+            {isDateListExpanded && (
               <div className="mt-3 flex flex-wrap items-start gap-2">
                 {renderDateChips()}
               </div>
