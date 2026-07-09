@@ -166,6 +166,18 @@
         background: rgba(255, 255, 255, 0.08);
     }
 
+    .luxury-pill {
+        @apply rounded-full border border-transparent bg-zinc-950/80 px-4 py-2.5 text-sm font-medium text-[#D4AF37] shadow-sm backdrop-blur-sm transition-all duration-300;
+    }
+
+    .luxury-pill:hover {
+        @apply scale-[1.02] border-[#D4AF37] bg-[#D4AF37] text-black shadow-[0_0_14px_rgba(212,175,55,0.24)];
+    }
+
+    .luxury-pill:active {
+        @apply scale-[0.98];
+    }
+
     .salon-field {
         @apply w-full rounded-xl border px-4 py-3 text-white placeholder-gray-500 transition focus:outline-none disabled:cursor-not-allowed disabled:opacity-60;
         border-color: var(--salon-border);
