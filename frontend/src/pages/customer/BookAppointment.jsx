@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 
 import axios from 'axios';
 
-import { CalendarDays, ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { CalendarDays, Check, ChevronLeft, ChevronRight, Search } from 'lucide-react';
 
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -2282,7 +2282,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                           </p>
 
-                          <label className="mt-4 flex cursor-pointer items-start gap-3">
+                          <label className="relative mt-4 flex cursor-pointer items-start gap-3">
 
                             <input
 
@@ -2292,13 +2292,19 @@ function BookAppointment({ userProfile, customerData }) {
 
                               onChange={(event) => setAgreedToPolicy(event.target.checked)}
 
-                              className="peer sr-only"
+                              className="peer absolute left-0 top-0 h-5 w-5 cursor-pointer opacity-0"
 
                             />
 
                             <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-zinc-700 bg-black/40 text-[0.65rem] font-bold text-black transition peer-checked:border-amber-400 peer-checked:bg-amber-400 peer-focus-visible:ring-2 peer-focus-visible:ring-amber-400/40">
 
-                              {agreedToPolicy ? 'OK' : ''}
+                              <Check
+
+                                aria-hidden="true"
+
+                                className={`h-3.5 w-3.5 stroke-[3] transition-opacity ${agreedToPolicy ? 'opacity-100' : 'opacity-0'}`}
+
+                              />
 
                             </span>
 
