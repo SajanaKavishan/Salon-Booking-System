@@ -295,7 +295,7 @@ function StaffProfile({ onClose }) {
             </div>
           </aside>
 
-          <section className="font-sans order-1 md:order-2 md:col-span-1">
+          <section className="order-2 font-sans md:col-span-1">
             <div className="flex items-center gap-3">
               <p className="text-sm font-bold uppercase leading-6 tracking-[0.12em] text-[#D4AF37]">Personal Information</p>
               {!isEditing && (
@@ -363,7 +363,7 @@ function StaffProfile({ onClose }) {
             </div>
 
             {isEditing && (
-              <div className="mt-12 flex flex-col gap-4 border-t border-[#D4AF37]/10 pt-7 min-[520px]:flex-row md:mt-7 md:gap-3 md:pt-5">
+              <div className="mb-2 mt-8 flex flex-col gap-4 border-t border-[#D4AF37]/10 pt-7 min-[520px]:flex-row md:mb-0 md:mt-7 md:gap-3 md:pt-5">
                 <button
                   type="button"
                   onClick={saveDetails}
@@ -385,13 +385,13 @@ function StaffProfile({ onClose }) {
           </section>
 
           {/* Left Column: Professional Details */}
-          <section className="font-sans order-2 md:order-1 md:col-span-1">
+          <section className="order-1 font-sans md:col-span-1">
             <div className="flex items-center gap-3 text-[#D4AF37]">
               <span className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#D4AF37]/40">
                 <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
               </span>
               <div>
-                <p className="text-[10px] uppercase tracking-widest text-[#D4AF37]/70">Professional Details</p>
+                <p className="text-sm font-bold uppercase tracking-[0.12em] text-[#D4AF37] md:text-sm">Professional Details</p>
                 <p className="text-sm text-white">Specialty, shift, and availability</p>
               </div>
             </div>
