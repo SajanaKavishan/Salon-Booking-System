@@ -28,10 +28,8 @@ const pickStaffProfileTextFields = (body = {}) => (
 );
 
 const isValidPhoneNumber = (phoneValue) => {
-  const trimmedPhone = String(phoneValue || '').trim();
-  const digitsOnly = trimmedPhone.replace(/\D/g, '');
-
-  return /^[+()\-\s\d]+$/.test(trimmedPhone) && digitsOnly.length >= 7 && digitsOnly.length <= 15;
+  const normalizedPhone = String(phoneValue || '').trim().replace(/[\s-]/g, '');
+  return /^(?:\+94|0)7\d{8}$/.test(normalizedPhone);
 };
 
 const validateLinkedStaffUser = async (userId, currentStaffId = null) => {
@@ -188,10 +186,17 @@ const registerStaffProfile = async (req, res) => {
     const normalizedPhone = String(req.body.phone || '').trim();
     const profileTextFields = pickStaffProfileTextFields(req.body);
 
-    if (!normalizedName || !normalizedEmail || !password || !normalizedSpecialty) {
+    if (!normalizedName || !normalizedEmail || !password || !normalizedSpecialty || !normalizedPhone) {
       await cleanupUploadedCloudinaryFile(req.file, 'Staff registration validation cleanup');
       return res.status(400).json({
-        message: 'Name, email, password, and specialty are required.',
+        message: 'Name, email, phone number, password, and specialty are required.',
+      });
+    }
+
+    if (!isValidPhoneNumber(normalizedPhone)) {
+      await cleanupUploadedCloudinaryFile(req.file, 'Staff registration phone validation cleanup');
+      return res.status(400).json({
+        message: 'Enter a valid Sri Lankan mobile number starting with +94 or 07.',
       });
     }
 
@@ -210,7 +215,7 @@ const registerStaffProfile = async (req, res) => {
         email: normalizedEmail,
         password: hashedPassword,
         role: 'staff',
-        phone: isValidPhoneNumber(normalizedPhone) ? normalizedPhone : DEFAULT_PHONE_FALLBACK,
+        phone: normalizedPhone.replace(/[\s-]/g, ''),
       }], { session }).then((users) => users[0]);
 
       staffProfile = await Staff.create([{
@@ -230,6 +235,7 @@ const registerStaffProfile = async (req, res) => {
         _id: staffUser._id,
         name: staffUser.name,
         email: staffUser.email,
+        phone: staffUser.phone,
         role: staffUser.role,
       },
       staff: staffProfile,

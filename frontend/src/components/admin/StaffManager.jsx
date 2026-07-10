@@ -11,6 +11,7 @@ import API_BASE_URL from "../../utils/apiConfig";
 const currentYear = new Date().getFullYear();
 const leaveYearOptions = Array.from({ length: 5 }, (_, index) => currentYear - 2 + index);
 const mutedGoldButtonClassName = "disabled:cursor-not-allowed disabled:border-[#756a1d] disabled:bg-[#756a1d] disabled:text-black/70 disabled:shadow-none disabled:brightness-75 disabled:hover:bg-[#756a1d] disabled:hover:text-black/70";
+const SRI_LANKAN_MOBILE_REGEX = /^(?:\+94|0)7\d{8}$/;
 const workingHourOptions = [
   "09:00 AM - 05:00 PM",
   "10:00 AM - 06:00 PM",
@@ -20,6 +21,7 @@ const workingHourOptions = [
 const initialStaffFormData = {
   name: "",
   email: "",
+  phone: "",
   password: "",
   specialty: "",
   offDays: "",
@@ -154,7 +156,7 @@ function SalonSelect({ id, label, value, onChange, options, placeholder = "Selec
             : "border-gray-700 hover:border-[#c5a880]/70"
         }`}
       >
-        <span className={selectedOption ? "truncate text-white" : "truncate text-gray-500"}>{visibleLabel}</span>
+        <span className={selectedOption ? "truncate text-white" : "truncate text-zinc-600"}>{visibleLabel}</span>
         <ChevronDown size={18} className={`shrink-0 text-[#d4af37] transition-transform ${isOpen ? "rotate-180" : ""}`} />
       </button>
       {required && (
@@ -206,7 +208,7 @@ function SalonSelect({ id, label, value, onChange, options, placeholder = "Selec
 }
 
 function StaffManager() {
-  const fieldClassName = "w-full bg-black/50 border border-gray-700 rounded-lg p-3 text-white focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] outline-none transition-all";
+  const fieldClassName = "w-full bg-black/50 border border-gray-700 rounded-lg p-3 text-white placeholder:text-zinc-600 focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] outline-none transition-all";
   const minimalSelectClassName = "w-full bg-transparent text-white border-b border-zinc-700 rounded-none px-2 py-1.5 text-sm font-medium outline-none transition focus:border-[#c5a880] sm:w-auto sm:py-1";
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(searchParams.get("tab") === "leaves" ? "leaves" : "directory");
@@ -236,6 +238,7 @@ function StaffManager() {
   const canAddStaff = Boolean(
     formData.name.trim() &&
     formData.email.trim() &&
+    SRI_LANKAN_MOBILE_REGEX.test(formData.phone.replace(/[\s-]/g, "")) &&
     formData.password &&
     formData.specialty &&
     formData.workingHours
@@ -398,6 +401,12 @@ function StaffManager() {
     e.preventDefault();
     if (isAddingStaff || !canAddStaff) return;
 
+    const normalizedPhone = formData.phone.replace(/[\s-]/g, "");
+    if (!SRI_LANKAN_MOBILE_REGEX.test(normalizedPhone)) {
+      toast.error("Enter a valid Sri Lankan mobile number starting with +94 or 07.");
+      return;
+    }
+
     setIsAddingStaff(true);
     try {
       const authHeaders = getAuthHeaders();
@@ -405,6 +414,7 @@ function StaffManager() {
       const payload = new FormData();
       payload.append("name", formData.name);
       payload.append("email", formData.email);
+      payload.append("phone", normalizedPhone);
       payload.append("password", formData.password);
       payload.append("specialty", formData.specialty);
       appendStaffProfileFields(payload, formData);
@@ -544,6 +554,23 @@ function StaffManager() {
           <div>
             <label htmlFor="staff-email" className="mb-1 block text-xs font-medium text-gray-400">Email Address</label>
             <input id="staff-email" type="email" name="email" placeholder="Email Address" value={formData.email} onChange={handleInputChange} required className={fieldClassName} autoComplete="email" />
+          </div>
+          <div>
+            <label htmlFor="staff-phone" className="mb-1 block text-xs font-medium text-gray-400">Mobile Number</label>
+            <input
+              id="staff-phone"
+              type="tel"
+              name="phone"
+              placeholder="+94......... or 07........"
+              value={formData.phone}
+              onChange={handleInputChange}
+              required
+              inputMode="tel"
+              autoComplete="tel"
+              pattern={String.raw`(?:\+94|0)7[0-9]{8}`}
+              title="Enter a Sri Lankan mobile number starting with +94 or 07"
+              className={fieldClassName}
+            />
           </div>
           <div>
             <label htmlFor="staff-password" className="mb-1 block text-xs font-medium text-gray-400">Temporary Password</label>

@@ -83,8 +83,8 @@ function SalonNumberField({
 
 function ServiceManager() {
   const fallbackServiceImage = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='400' height='300' viewBox='0 0 400 300'><rect width='400' height='300' fill='%23111111'/><rect x='24' y='24' width='352' height='252' rx='20' fill='%230a0a0a' stroke='%23d4af37' stroke-opacity='0.35'/><circle cx='200' cy='126' r='42' fill='%23d4af37' fill-opacity='0.18'/><path d='M200 92c-12 0-22 10-22 22s10 22 22 22 22-10 22-22-10-22-22-22Zm0 56c-26 0-60 13-60 38v10h120v-10c0-25-34-38-60-38Z' fill='%23d4af37'/><text x='200' y='232' text-anchor='middle' fill='%23cfcfcf' font-family='Arial, sans-serif' font-size='18'>Salon Service</text></svg>";
-  const fieldClassName = 'w-full bg-black/50 border border-gray-700 rounded-lg p-3 text-white focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] outline-none transition-all';
-  const labelClassName = 'mb-2 block text-xs font-bold uppercase tracking-[0.16em] text-zinc-500';
+  const fieldClassName = 'w-full bg-black/50 border border-gray-700 rounded-lg p-3 text-white placeholder:text-zinc-600 focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] outline-none transition-all';
+  const labelClassName = 'mb-2 block text-xs font-bold uppercase tracking-[0.16em] text-zinc-300';
   const [services, setServices] = useState([]);
   const [formData, setFormData] = useState({ name: '', price: '', duration: '', image: '' });
   const [selectedServiceImage, setSelectedServiceImage] = useState(null);
