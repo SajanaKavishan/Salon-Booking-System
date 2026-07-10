@@ -18,32 +18,37 @@ const escapeHtml = (value) => (
         .replace(/'/g, '&#39;')
 );
 
-// Utility functions to convert time formats for easier calculations when checking for overlapping appointments. The timeToMinutes function converts a time string (e.g., "10:30 AM") into total minutes, while the minutesToTime function converts total minutes back into a time string format. These functions are essential for accurately determining if appointment times overlap when creating or updating appointments.
 const timeToMinutes = (timeStr) => {
-    if (!timeStr) return 0;
-
     if (timeStr instanceof Date) {
         return timeStr.getHours() * 60 + timeStr.getMinutes();
     }
 
-    if (typeof timeStr !== 'string') return 0;
-
-    const parts = timeStr.trim().split(/\s+/);
-    if (parts.length === 1) {
-        const [hours, minutes] = parts[0].split(':').map(Number);
-        if (Number.isNaN(hours) || Number.isNaN(minutes)) return 0;
-        return hours * 60 + minutes;
+    if (typeof timeStr !== 'string') {
+        throw createAppointmentError('Invalid time slot format provided');
     }
 
-    const [time, modifier] = parts;
-    const timeParts = time.split(':');
-    if (timeParts.length < 2) return 0;
+    const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i);
+    if (!match) {
+        throw createAppointmentError('Invalid time slot format provided');
+    }
 
-    let [hours, minutes] = timeParts.map(Number);
-    if (Number.isNaN(hours) || Number.isNaN(minutes)) return 0;
+    let hours = Number(match[1]);
+    const minutes = Number(match[2]);
+    const modifier = match[3]?.toUpperCase();
 
-    if (hours === 12) hours = 0;
-    if (modifier === 'PM') hours += 12;
+    if (
+        Number.isNaN(hours)
+        || Number.isNaN(minutes)
+        || minutes > 59
+        || (modifier ? hours < 1 || hours > 12 : hours > 23)
+    ) {
+        throw createAppointmentError('Invalid time slot format provided');
+    }
+
+    if (modifier) {
+        if (hours === 12) hours = 0;
+        if (modifier === 'PM') hours += 12;
+    }
     return hours * 60 + minutes;
 };
 
@@ -70,21 +75,46 @@ const createAppointmentError = (message, statusCode = 400) => {
     return error;
 };
 
+const parseBookingDateKey = (dateValue) => {
+    const dateKey = String(dateValue || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+        throw createAppointmentError('Invalid appointment date.');
+    }
+
+    const parsedDate = new Date(`${dateKey}T00:00:00.000Z`);
+    if (Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== dateKey) {
+        throw createAppointmentError('Invalid appointment date.');
+    }
+
+    return { dateKey, parsedDate };
+};
+
+const assertNotPastDateTime = (dateKey, startMins) => {
+    const todayKey = getLocalDateKey();
+    const now = new Date();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+    if (dateKey < todayKey || (dateKey === todayKey && startMins <= currentMinutes)) {
+        throw createAppointmentError('Cannot book appointments for past dates or times');
+    }
+};
+
 const parseSlotRange = (slotRange) => {
     if (typeof slotRange !== 'string') {
-        throw createAppointmentError('Please select a valid appointment time slot.');
+        throw createAppointmentError('Invalid time slot format provided');
     }
 
-    const [startTime, endTime] = slotRange.split(/\s+-\s+/);
-    if (!startTime || !endTime) {
-        throw createAppointmentError('Please select a valid appointment time slot.');
+    const parts = slotRange.split(/\s+-\s+/);
+    if (parts.length !== 2 || !parts[0] || !parts[1]) {
+        throw createAppointmentError('Invalid time slot format provided');
     }
 
+    const [startTime, endTime] = parts;
     const start = timeToMinutes(startTime);
     const end = timeToMinutes(endTime);
 
     if (end <= start) {
-        throw createAppointmentError('Please select a valid appointment time slot.');
+        throw createAppointmentError('Invalid time slot format provided');
     }
 
     return { start, end };
@@ -130,6 +160,123 @@ const isDuplicateAppointmentKeyError = (error) => (
     )
 );
 
+const DAY_KEYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+const assertNoRangeOverlap = (ranges, message) => {
+    const sortedRanges = [...ranges].sort((first, second) => first.start - second.start);
+
+    for (let index = 1; index < sortedRanges.length; index += 1) {
+        if (sortedRanges[index].start < sortedRanges[index - 1].end) {
+            throw createAppointmentError(message, 409);
+        }
+    }
+};
+
+const validateShiftPlanBoundaries = async ({ stylistId, dateKey, bookingDate, shiftedPlans }) => {
+    if (shiftedPlans.length === 0) return;
+
+    const nextDate = new Date(bookingDate);
+    nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+
+    const [settings, staff, holiday, outsideAppointments] = await Promise.all([
+        ensureSettingsDocument(),
+        Staff.findById(stylistId).select('name userId workingHours offDays').lean(),
+        Holiday.findOne({ date: dateKey, isActive: { $ne: false } }).select('name isFullDay hours').lean(),
+        Appointment.find({
+            _id: { $nin: shiftedPlans.map((plan) => plan.appointment._id) },
+            $or: [
+                { date: dateKey, stylist: stylistId },
+                { date: dateKey, staffId: stylistId },
+                { bookingDate: { $gte: bookingDate, $lt: nextDate }, stylist: stylistId },
+                { bookingDate: { $gte: bookingDate, $lt: nextDate }, staffId: stylistId },
+            ],
+            status: { $in: ['pending', 'confirmed'] },
+        }).select('startTime endTime timeSlot').lean(),
+    ]);
+
+    if (!staff) {
+        throw createAppointmentError('Selected stylist was not found.', 404);
+    }
+
+    const dayKey = DAY_KEYS[bookingDate.getUTCDay()];
+    const openingHours = settings.openingHours?.[dayKey] || defaultSettings.openingHours?.[dayKey];
+    if (!openingHours?.isOpen) {
+        throw createAppointmentError('Cannot shift appointments because the salon is closed on this date.');
+    }
+
+    if (holiday && holiday.isFullDay !== false) {
+        throw createAppointmentError(`Cannot shift appointments because the salon is closed for ${holiday.name}.`);
+    }
+
+    const salonStart = timeToMinutes(openingHours?.start || '09:00');
+    const salonEnd = timeToMinutes(openingHours?.end || '22:00');
+    const staffStart = timeToMinutes(staff.workingHours?.start || '09:00');
+    const staffEnd = timeToMinutes(staff.workingHours?.end || '17:00');
+    const validStart = Math.max(salonStart, staffStart);
+    const validEnd = Math.min(salonEnd, staffEnd);
+
+    if (validEnd <= validStart) {
+        throw createAppointmentError('Cannot shift appointments because this stylist has no valid working window on this date.');
+    }
+
+    const offDaysList = Array.isArray(staff.offDays)
+        ? staff.offDays
+        : typeof staff.offDays === 'string'
+            ? staff.offDays.split(',').map((day) => day.trim()).filter(Boolean)
+            : [];
+    const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][bookingDate.getUTCDay()];
+    const isOffDay = offDaysList.some((offDay) => offDay.toLowerCase() === dayName.toLowerCase());
+    if (isOffDay) {
+        throw createAppointmentError('Cannot shift appointments because this stylist is off on this date.');
+    }
+
+    if (await isStaffOnApprovedLeave(staff, bookingDate, nextDate)) {
+        throw createAppointmentError('Cannot shift appointments because this stylist is on approved leave for this date.');
+    }
+
+    const outOfBoundsPlan = shiftedPlans.find((plan) => (
+        plan.start < validStart || plan.end > validEnd || plan.start < 0 || plan.end > 1440
+    ));
+    if (outOfBoundsPlan) {
+        throw createAppointmentError('Cannot shift appointments outside salon or stylist operating hours.');
+    }
+
+    if (holiday?.isFullDay === false) {
+        const closedStart = timeToMinutes(holiday.hours?.start);
+        const closedEnd = timeToMinutes(holiday.hours?.end);
+        const holidayConflict = shiftedPlans.find((plan) => (
+            plan.start < closedEnd && plan.end > closedStart
+        ));
+
+        if (holidayConflict) {
+            throw createAppointmentError(`Cannot shift appointments into the closure window for ${holiday.name}.`);
+        }
+    }
+
+    assertNoRangeOverlap(
+        shiftedPlans.map((plan) => ({ start: plan.start, end: plan.end })),
+        'Cannot shift appointments because the shifted appointments would overlap each other.'
+    );
+
+    const outsideRanges = outsideAppointments.map((appointment) => {
+        const [slotStartTime, slotEndTime] = typeof appointment.timeSlot === 'string'
+            ? appointment.timeSlot.split(/\s+-\s+/)
+            : [];
+
+        return {
+            start: timeToMinutes(appointment.startTime || slotStartTime),
+            end: timeToMinutes(appointment.endTime || slotEndTime),
+        };
+    });
+
+    const outsideConflict = shiftedPlans.some((plan) => (
+        outsideRanges.some((range) => plan.start < range.end && plan.end > range.start)
+    ));
+    if (outsideConflict) {
+        throw createAppointmentError('Cannot shift appointments because the new times would overlap existing appointments.', 409);
+    }
+};
+
 // @desc    Get available time slots for a staff member
 // @route   GET /api/appointments/availability
 // @access  Public
@@ -144,9 +291,17 @@ const getStaffAvailability = async (req, res) => {
             });
         }
 
+        const { dateKey } = parseBookingDateKey(date);
+        if (dateKey < getLocalDateKey()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Cannot book appointments for past dates or times'
+            });
+        }
+
         const availableSlots = await generateAvailableSlots({
             staffId,
-            date,
+            date: dateKey,
             serviceDuration: Number(duration)
         });
 
@@ -190,12 +345,6 @@ const createAppointment = async (req, res) => {
         const stylist = staffId || legacyStylist;
         const dateValue = bookingDate || legacyDate;
         const isAdminBypass = bypassBuffer === true && req.user?.role === 'admin';
-        const parsedBookingDate = dateValue ? new Date(dateValue) : null;
-        const date = legacyDate || (
-            parsedBookingDate && !Number.isNaN(parsedBookingDate.getTime())
-                ? parsedBookingDate.toISOString().slice(0, 10)
-                : ''
-        );
         const [slotStartTime] = typeof timeSlot === 'string'
             ? timeSlot.split(/\s+-\s+/)
             : [];
@@ -210,6 +359,8 @@ const createAppointment = async (req, res) => {
         if (!Array.isArray(services)) {
             return res.status(400).json({ message: 'Please provide at least one valid service.' });
         }
+
+        const { dateKey: date, parsedDate: appointmentDate } = parseBookingDateKey(dateValue);
 
         // Check if all required fields are provided
         if (!date || !startTime || services.length === 0) {
@@ -250,13 +401,6 @@ const createAppointment = async (req, res) => {
             return res.status(400).json({ message: 'Please provide a valid Sri Lankan mobile number.' });
         }
 
-        const appointmentDate = new Date(`${date}T00:00:00.000Z`);
-        if (Number.isNaN(appointmentDate.getTime())) {
-            return res.status(400).json({ message: 'Invalid appointment date.' });
-        }
-        const nextAppointmentDate = new Date(appointmentDate);
-        nextAppointmentDate.setUTCDate(nextAppointmentDate.getUTCDate() + 1);
-
         const holiday = await Holiday.findOne({ date, isActive: { $ne: false } }).select('name isFullDay hours').lean();
         if (holiday && holiday.isFullDay !== false) {
             return res.status(400).json({
@@ -288,6 +432,11 @@ const createAppointment = async (req, res) => {
         const startMins = timeToMinutes(startTime);
         const endMins = startMins + totalDuration;
         const serverSlotRange = { start: startMins, end: endMins };
+
+        assertNotPastDateTime(date, startMins);
+
+        const nextAppointmentDate = new Date(appointmentDate);
+        nextAppointmentDate.setUTCDate(nextAppointmentDate.getUTCDate() + 1);
 
         if (requestedSlotRange && !slotRangesMatch(requestedSlotRange, serverSlotRange)) {
             return res.status(400).json({
@@ -1508,11 +1657,37 @@ const shiftUpcomingAppointments = async (req, res) => {
             timeToMinutes(firstAppointment.startTime) - timeToMinutes(secondAppointment.startTime)
         ));
 
+        const shiftedPlans = remainingAppointments.map((appointment) => {
+            const shiftedStartMinutes = timeToMinutes(appointment.startTime) + shiftMinutes;
+            const shiftedEndMinutes = timeToMinutes(appointment.endTime) + shiftMinutes;
+
+            if (shiftedEndMinutes <= shiftedStartMinutes) {
+                throw createAppointmentError('Invalid time slot format provided');
+            }
+
+            const shiftedStartTime = minutesToTime(shiftedStartMinutes);
+            const shiftedEndTime = minutesToTime(shiftedEndMinutes);
+
+            return {
+                appointment,
+                start: shiftedStartMinutes,
+                end: shiftedEndMinutes,
+                shiftedStartTime,
+                shiftedEndTime,
+            };
+        });
+
+        await validateShiftPlanBoundaries({
+            stylistId,
+            dateKey,
+            bookingDate,
+            shiftedPlans,
+        });
+
         const shiftedAppointments = [];
 
-        for (const appointment of remainingAppointments) {
-            const shiftedStartTime = minutesToTime(timeToMinutes(appointment.startTime) + shiftMinutes);
-            const shiftedEndTime = minutesToTime(timeToMinutes(appointment.endTime) + shiftMinutes);
+        for (const plan of shiftedPlans) {
+            const { appointment, shiftedStartTime, shiftedEndTime } = plan;
 
             appointment.startTime = shiftedStartTime;
             appointment.endTime = shiftedEndTime;
@@ -1534,7 +1709,12 @@ const shiftUpcomingAppointments = async (req, res) => {
         });
     } catch (error) {
         console.error('Shift Slots Error:', error);
-        return res.status(500).json({ message: 'Server Error: Could not shift appointment slots.' });
+        const statusCode = error.statusCode || 500;
+        return res.status(statusCode).json({
+            message: statusCode >= 500
+                ? 'Server Error: Could not shift appointment slots.'
+                : error.message
+        });
     }
 };
 
