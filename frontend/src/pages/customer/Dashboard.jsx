@@ -69,10 +69,62 @@ const timeToMinutes = (timeValue) => {
   const minutes = Number(rawMinutes);
 
   if (Number.isNaN(hours) || Number.isNaN(minutes)) return 0;
-  if (hours === 12) hours = 0;
-  if (modifier === 'PM') hours += 12;
+  if (modifier) {
+    const normalizedModifier = modifier.toUpperCase();
+    if (hours === 12) hours = 0;
+    if (normalizedModifier === 'PM') hours += 12;
+  }
 
   return hours * 60 + minutes;
+};
+
+const getAppointmentDateKey = (dateValue) => {
+  if (!dateValue) return '';
+  if (dateValue instanceof Date) return dateValue.toISOString().slice(0, 10);
+  return String(dateValue).slice(0, 10);
+};
+
+const getAppointmentStartTime = (appointment) => {
+  if (appointment?.startTime) return appointment.startTime;
+  if (typeof appointment?.timeSlot === 'string') {
+    const [slotStartTime] = appointment.timeSlot.split(/\s+-\s+/);
+    return slotStartTime || '';
+  }
+  return '';
+};
+
+const getAppointmentStartTimestamp = (appointment) => {
+  const dateKey = getAppointmentDateKey(appointment?.date || appointment?.bookingDate);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return null;
+
+  const [year, month, day] = dateKey.split('-').map(Number);
+  const startTime = getAppointmentStartTime(appointment);
+  const startMinutes = startTime ? timeToMinutes(startTime) : 0;
+
+  return new Date(
+    year,
+    month - 1,
+    day,
+    Math.floor(startMinutes / 60),
+    startMinutes % 60,
+    0,
+    0
+  ).getTime();
+};
+
+const isUpcomingAppointment = (appointment, now = new Date()) => {
+  if (!UPCOMING_STATUSES.includes(normalizeAppointmentStatus(appointment?.status))) {
+    return false;
+  }
+
+  const appointmentStart = getAppointmentStartTimestamp(appointment);
+  if (appointmentStart === null) return false;
+
+  const comparisonTime = getAppointmentStartTime(appointment)
+    ? now.getTime()
+    : new Date(now).setHours(0, 0, 0, 0);
+
+  return appointmentStart >= comparisonTime;
 };
 
 const getStylistDisplayName = (appointment) => {
@@ -202,9 +254,13 @@ function Dashboard() {
   }, [user]);
 
   const upcomingAppointments = useMemo(
-    () => appointments
-      .filter((appt) => UPCOMING_STATUSES.includes(normalizeAppointmentStatus(appt?.status)))
-      .sort((a, b) => new Date(a?.date).getTime() - new Date(b?.date).getTime()),
+    () => {
+      const now = new Date();
+
+      return appointments
+        .filter((appt) => isUpcomingAppointment(appt, now))
+        .sort((a, b) => (getAppointmentStartTimestamp(a) ?? 0) - (getAppointmentStartTimestamp(b) ?? 0));
+    },
     [appointments]
   );
 

@@ -2298,7 +2298,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                             <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border border-zinc-700 bg-black/40 text-[0.65rem] font-bold text-black transition peer-checked:border-amber-400 peer-checked:bg-amber-400 peer-focus-visible:ring-2 peer-focus-visible:ring-amber-400/40">
 
-                              {agreedToPolicy ? '✓' : ''}
+                              {agreedToPolicy ? 'OK' : ''}
 
                             </span>
 

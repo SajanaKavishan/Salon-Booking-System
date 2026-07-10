@@ -369,7 +369,12 @@ const getTopServices = async (req, res) => {
     const window = getAnalyticsDateWindow(req.query);
 
     const topServices = await Appointment.aggregate([
-      { $match: buildAppointmentDateMatch(window) },
+      {
+        $match: {
+          ...buildAppointmentDateMatch(window),
+          status: { $in: ['completed', 'confirmed', 'Completed', 'Confirmed'] },
+        },
+      },
       { $unwind: '$services' },
       {
         $group: {
