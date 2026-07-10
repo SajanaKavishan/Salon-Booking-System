@@ -16,17 +16,15 @@ const configuredClientOrigins = (process.env.CLIENT_URL || "")
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean);
+const isProduction = process.env.NODE_ENV === "production";
 const fallbackClientOrigins = ["http://localhost:5173", "http://localhost:3000"];
 const allowedOrigins = Array.from(new Set([
     ...configuredClientOrigins,
-    ...fallbackClientOrigins,
+    ...(isProduction ? [] : fallbackClientOrigins),
 ]));
 
-if (process.env.NODE_ENV === "production" && configuredClientOrigins.length === 0) {
-    process.emitWarning(
-        "CLIENT_URL is not configured in production. Falling back to local development origins for CORS.",
-        { code: "MISSING_CLIENT_URL" }
-    );
+if (isProduction && configuredClientOrigins.length === 0) {
+    throw new Error("Critical configuration error: CLIENT_URL must be configured in production.");
 }
 
 const mongoOptions = { 

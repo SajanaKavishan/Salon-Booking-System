@@ -21,6 +21,14 @@ const formatLeaveDate = (startDate, endDate = startDate) => {
     return start === end ? start : `${start} - ${end}`;
 };
 
+const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+})[character]);
+
 const buildLeaveCancellationEmail = ({
     customerName,
     salonName,
@@ -30,35 +38,46 @@ const buildLeaveCancellationEmail = ({
     appointmentDate,
     appointmentTime,
     serviceNames
-}) => `
+}) => {
+    const safeSalonName = escapeHtml(salonName || 'Salon');
+    const safeCustomerName = escapeHtml(customerName || 'there');
+    const safeStylistName = escapeHtml(stylistName || 'your stylist');
+    const safeServiceNames = escapeHtml(serviceNames || 'Not specified');
+    const safeAppointmentDate = escapeHtml(appointmentDate || 'Not specified');
+    const safeAppointmentTime = escapeHtml(appointmentTime || 'Not specified');
+    const safeSupportEmail = escapeHtml(supportEmail || 'our support email');
+    const safeContactNumber = contactNumber ? escapeHtml(contactNumber) : '';
+
+    return `
     <div style="font-family: Arial, sans-serif; padding: 24px; border: 1px solid #262626; border-radius: 14px; max-width: 580px; margin: 0 auto; background: #0b0b0b; color: #f5f5f5;">
-        <h2 style="color:#d4af37; margin-top:0;">${salonName}</h2>
-        <p style="font-size:16px;">Hello <strong>${customerName || 'there'}</strong>,</p>
+        <h2 style="color:#d4af37; margin-top:0;">${safeSalonName}</h2>
+        <p style="font-size:16px;">Hello <strong>${safeCustomerName}</strong>,</p>
         <p style="font-size:14px; line-height:1.7; color:#d1d5db;">
-            We're sorry, but your appointment has been cancelled because your selected stylist, <strong>${stylistName || 'your stylist'}</strong>, is on leave.
+            We're sorry, but your appointment has been cancelled because your selected stylist, <strong>${safeStylistName}</strong>, is on leave.
         </p>
         <div style="margin-top:18px; border:1px solid #232323; border-radius:12px; overflow:hidden;">
             <div style="display:flex; justify-content:space-between; gap:16px; padding:12px 14px; border-bottom:1px solid #232323;">
                 <span style="color:#9ca3af; font-size:13px;">Services</span>
-                <span style="color:#ffffff; font-size:13px; font-weight:600; text-align:right;">${serviceNames || 'Not specified'}</span>
+                <span style="color:#ffffff; font-size:13px; font-weight:600; text-align:right;">${safeServiceNames}</span>
             </div>
             <div style="display:flex; justify-content:space-between; gap:16px; padding:12px 14px; border-bottom:1px solid #232323;">
                 <span style="color:#9ca3af; font-size:13px;">Date</span>
-                <span style="color:#ffffff; font-size:13px; font-weight:600; text-align:right;">${appointmentDate || 'Not specified'}</span>
+                <span style="color:#ffffff; font-size:13px; font-weight:600; text-align:right;">${safeAppointmentDate}</span>
             </div>
             <div style="display:flex; justify-content:space-between; gap:16px; padding:12px 14px;">
                 <span style="color:#9ca3af; font-size:13px;">Time</span>
-                <span style="color:#ffffff; font-size:13px; font-weight:600; text-align:right;">${appointmentTime || 'Not specified'}</span>
+                <span style="color:#ffffff; font-size:13px; font-weight:600; text-align:right;">${safeAppointmentTime}</span>
             </div>
         </div>
         <p style="margin-top:20px; font-size:14px; line-height:1.7; color:#d1d5db;">
             Please log in to your account and create a new booking for another suitable date or stylist.
         </p>
         <p style="margin-top:18px; font-size:13px; color:#9ca3af; text-align:center;">
-            Need help? Reach us at ${supportEmail || 'our support email'}${contactNumber ? ` or ${contactNumber}` : ''}
+            Need help? Reach us at ${safeSupportEmail}${safeContactNumber ? ` or ${safeContactNumber}` : ''}
         </p>
     </div>
 `;
+};
 const getLeaveRequests = async (req, res) => {
     try {
         let query = {};

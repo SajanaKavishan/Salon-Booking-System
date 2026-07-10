@@ -11,6 +11,9 @@ const weeklyOpeningHours = [
   'sunday',
 ];
 
+const MAX_DEFAULT_BUFFER_MINUTES = 240;
+const MAX_GRACE_PERIOD_MINUTES = 120;
+
 const defaultOpeningHours = weeklyOpeningHours.reduce((hours, day) => ({
   ...hours,
   [day]: {
@@ -48,10 +51,25 @@ const ensureSettingsDocument = async () => {
   return settings;
 };
 
-const parseMinutes = (value, fallback = 15) => {
+const parseBoundedMinutes = ({ value, fallback, fieldName, max }) => {
+  if (value === undefined) return fallback;
+
+  const isSupportedType = typeof value === 'number'
+    || (typeof value === 'string' && value.trim() !== '');
   const numericValue = Number(value);
-  const fallbackValue = Number.isFinite(Number(fallback)) ? Number(fallback) : 15;
-  return Number.isFinite(numericValue) && numericValue >= 0 ? numericValue : fallbackValue;
+
+  if (
+    !isSupportedType
+    || !Number.isInteger(numericValue)
+    || numericValue < 0
+    || numericValue > max
+  ) {
+    const error = new Error(`${fieldName} must be a whole number between 0 and ${max} minutes.`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return numericValue;
 };
 
 const isValidTime = (value) => typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
@@ -102,13 +120,27 @@ const updateSettings = async (req, res) => {
       customerEmails: settingsBody.customerEmails ?? settings.customerEmails,
       weekendBookings: settingsBody.weekendBookings ?? settings.weekendBookings,
       darkReceipts: settingsBody.darkReceipts ?? settings.darkReceipts,
-      defaultBufferTime: parseMinutes(settingsBody.defaultBufferTime, settings.defaultBufferTime),
-      gracePeriod: parseMinutes(settingsBody.gracePeriod, settings.gracePeriod),
+      defaultBufferTime: parseBoundedMinutes({
+        value: settingsBody.defaultBufferTime,
+        fallback: settings.defaultBufferTime,
+        fieldName: 'defaultBufferTime',
+        max: MAX_DEFAULT_BUFFER_MINUTES,
+      }),
+      gracePeriod: parseBoundedMinutes({
+        value: settingsBody.gracePeriod,
+        fallback: settings.gracePeriod,
+        fieldName: 'gracePeriod',
+        max: MAX_GRACE_PERIOD_MINUTES,
+      }),
     });
 
     const updatedSettings = await settings.save();
     res.status(200).json(updatedSettings);
   } catch (error) {
+    if (error?.statusCode === 400) {
+      return res.status(400).json({ message: error.message });
+    }
+
     if (error?.name === 'ValidationError') {
       return res.status(400).json({
         message: 'Invalid settings data.',

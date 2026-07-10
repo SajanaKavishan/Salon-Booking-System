@@ -948,9 +948,9 @@ function StaffDashboard() {
                   return (
                     <article
                       key={appointment._id}
-                      className="rounded-xl border border-white/10 bg-black/20 p-4 shadow-lg"
+                      className="min-w-0 rounded-xl border border-white/10 bg-black/20 p-3 shadow-lg min-[360px]:p-4"
                     >
-                      <div className="flex items-start justify-between gap-3">
+                      <div className="flex flex-col items-start gap-3 min-[360px]:flex-row min-[360px]:justify-between">
                         <div className="min-w-0">
                           <p className="text-xs font-bold uppercase tracking-[0.16em] text-gray-500">Customer</p>
                           <h3 className="mt-1 break-words text-lg font-bold leading-snug text-white">
@@ -960,7 +960,7 @@ function StaffDashboard() {
                             {appointment.user?.phone || appointment.user?.email || 'No contact details'}
                           </p>
                         </div>
-                        <div className="shrink-0">
+                        <div className="shrink-0 self-start">
                           <StatusBadge status={appointment.status} />
                         </div>
                       </div>
@@ -973,13 +973,13 @@ function StaffDashboard() {
                         <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2">
                           <div>
                             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Appt Time</p>
-                            <p className="mt-1 text-sm font-semibold text-white">
+                            <p className="mt-1 break-words text-sm font-semibold text-white">
                               {appointment.startTime} {appointment.endTime ? `- ${appointment.endTime}` : ''}
                             </p>
                           </div>
                           <div>
                             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-500">Slot</p>
-                            <p className="mt-1 text-sm font-semibold text-white">{formatRosterDate(appointment)}</p>
+                            <p className="mt-1 break-words text-sm font-semibold text-white">{formatRosterDate(appointment)}</p>
                           </div>
                         </div>
                       </div>

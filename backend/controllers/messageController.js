@@ -32,7 +32,10 @@ const createMessage = async (req, res) => {
 const getMessages = async (req, res) => {
   try {
     const page = Math.max(Number.parseInt(req.query.page, 10) || 1, 1);
-    const limit = Math.max(Number.parseInt(req.query.limit, 10) || 6, 1);
+    const limit = Math.min(
+      Math.max(Number.parseInt(req.query.limit, 10) || 6, 1),
+      100
+    );
     const skip = (page - 1) * limit;
     const year = Number.parseInt(req.query.year, 10);
     const month = Number.parseInt(req.query.month, 10);

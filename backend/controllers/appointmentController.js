@@ -1320,8 +1320,17 @@ const updateAppointmentStatus = async (req, res) => {
             }
         }
 
+        const previousStatus = Appointment.normalizeStatus(appointment.status);
         appointment.status = normalizedStatus;
         const updatedAppointment = await appointment.save();
+
+        console.log('[AUDIT] Admin appointment status override', {
+            adminId: req.user._id.toString(),
+            appointmentId: updatedAppointment._id.toString(),
+            previousStatus,
+            newStatus: normalizedStatus,
+            timestamp: new Date().toISOString()
+        });
 
         // Part of the code to send an email notification to the user about the status update of their appointment. The email includes the appointment details and a message indicating the new status of the appointment. This enhances the user experience by keeping them informed about the status of their appointments in a timely manner.
         if (settings.customerEmails && appointment.user && appointment.user.email) {

@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const router = express.Router();
 const {
   createAppointment,
@@ -36,32 +37,44 @@ router.post('/shift-slots', protect, admin, shiftUpcomingAppointments);
 router.get('/reviews/public', getPublicReviews);
 router.get('/reviews/all', protect, admin, getAppointmentsReviews);
 
+const createBadRequestError = (message) => {
+  const error = new Error(message);
+  error.statusCode = 400;
+  return error;
+};
+
 // Utility functions to convert time formats for easier calculations when checking for blocked time slots
 const timeToMins = (timeStr) => {
-  if (!timeStr) return 0;
-
   if (timeStr instanceof Date) {
     return timeStr.getHours() * 60 + timeStr.getMinutes();
   }
 
-  if (typeof timeStr !== 'string') return 0;
-
-  const parts = timeStr.trim().split(/\s+/);
-  if (parts.length === 1) {
-    const [hours, minutes] = parts[0].split(':').map(Number);
-    if (Number.isNaN(hours) || Number.isNaN(minutes)) return 0;
-    return hours * 60 + minutes;
+  if (typeof timeStr !== 'string') {
+    throw createBadRequestError('Invalid time slot format provided');
   }
 
-  const [time, modifier] = parts;
-  const timeParts = time.split(':');
-  if (timeParts.length < 2) return 0;
+  const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i);
+  if (!match) {
+    throw createBadRequestError('Invalid time slot format provided');
+  }
 
-  let [hours, minutes] = timeParts.map(Number);
-  if (Number.isNaN(hours) || Number.isNaN(minutes)) return 0;
+  let hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const modifier = match[3]?.toUpperCase();
 
-  if (hours === 12) hours = 0;
-  if (modifier === 'PM') hours += 12;
+  if (
+    Number.isNaN(hours)
+    || Number.isNaN(minutes)
+    || minutes > 59
+    || (modifier ? hours < 1 || hours > 12 : hours > 23)
+  ) {
+    throw createBadRequestError('Invalid time slot format provided');
+  }
+
+  if (modifier) {
+    if (hours === 12) hours = 0;
+    if (modifier === 'PM') hours += 12;
+  }
   return hours * 60 + minutes;
 };
 
@@ -82,6 +95,10 @@ router.get('/booked-times', async (req, res) => {
 
     if (!date || !stylistId) {
       return res.status(400).json({ message: 'Date and stylist ID are required' });
+    }
+
+    if (!mongoose.isValidObjectId(stylistId)) {
+      return res.status(400).json({ message: 'Invalid Stylist ID format' });
     }
 
     const bookingDate = new Date(`${String(date).slice(0, 10)}T00:00:00.000Z`);
@@ -108,6 +125,10 @@ router.get('/booked-times', async (req, res) => {
     // Return the list of blocked time slots
     res.json(blockedSlots);
   } catch (error) {
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
+
     console.error('Error fetching booked times:', error);
     res.status(500).json({ message: 'Error fetching booked times' });
   }

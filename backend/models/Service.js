@@ -16,6 +16,11 @@ const serviceSchema = new mongoose.Schema(
       type: Number,
       required: [true, 'Please add estimated duration in minutes'],
       min: [15, 'Service duration must be at least 15 minutes.'],
+      max: [480, 'Service duration cannot exceed 480 minutes.'],
+      validate: {
+        validator: Number.isInteger,
+        message: 'Service duration must be a whole number of minutes.',
+      },
     },
     image: {
       type: String,

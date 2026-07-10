@@ -2046,7 +2046,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                             <span className="text-xs uppercase tracking-[0.24em] text-white/35">
 
-                              {date && stylist ? 'Choose from available hours' : 'Select artist and date to unlock hours'}
+                              {date && stylist ? 'Choose from available hours' : 'Select date to unlock hours'}
 
                             </span>
 
@@ -2134,7 +2134,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                         ) : (
 
-                          <p className="text-sm text-white/40">Choose a stylist and date to unlock time slots.</p>
+                          <p className="text-sm text-white/40">Choose a date to unlock time slots.</p>
 
                         )}
 
