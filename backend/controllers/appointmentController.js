@@ -912,6 +912,10 @@ const submitAppointmentReview = async (req, res) => {
             return res.status(400).json({ message: 'Rating must be an integer between 1 and 5.' });
         }
 
+        if (feedback.length > 500) {
+            return res.status(400).json({ message: 'Feedback must be 500 characters or fewer.' });
+        }
+
         const appointment = await Appointment.findById(req.params.id);
 
         if (!appointment) {

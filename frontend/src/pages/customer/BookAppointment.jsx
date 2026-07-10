@@ -1038,6 +1038,19 @@ function BookAppointment({ userProfile, customerData }) {
     }, [phoneVerificationInput]);
     const isPhoneVerificationInputValid = Boolean(phoneVerificationInput.trim() && !phoneVerificationError);
 
+    useEffect(() => {
+      if (!isPhoneVerificationModalOpen) return undefined;
+
+      const handleEscapeKey = (event) => {
+        if (event.key === 'Escape' && !isPhoneVerificationLoading) {
+          setIsPhoneVerificationModalOpen(false);
+        }
+      };
+
+      window.addEventListener('keydown', handleEscapeKey);
+      return () => window.removeEventListener('keydown', handleEscapeKey);
+    }, [isPhoneVerificationLoading, isPhoneVerificationModalOpen]);
+
 
 
     useEffect(() => {
@@ -1281,7 +1294,7 @@ function BookAppointment({ userProfile, customerData }) {
 
 
 
-        toast.success('Booking Confirmed! Your appointment is locked into the calendar. 🎉');
+        toast.success('Booking Confirmed! Your appointment is locked into the calendar.');
 
         
 
@@ -2391,7 +2404,10 @@ function BookAppointment({ userProfile, customerData }) {
 
           <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/85 px-4 py-6 backdrop-blur-sm">
 
-            <motion.div 
+            <motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="phone-modal-title"
 
               className="w-full max-w-md rounded-[1.75rem] border border-[#D4AF37]/30 bg-[#0b0b0b] p-6 shadow-2xl"
 
@@ -2407,7 +2423,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                 <>
 
-                  <h3 className="font-brand text-xl text-[#D4AF37]">Verify Your Contact Number</h3>
+                  <h3 id="phone-modal-title" className="font-brand text-xl text-[#D4AF37]">Verify Your Contact Number</h3>
 
                   <p className="mt-3 text-sm leading-6 text-white/70">
 
@@ -2473,7 +2489,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                 <>
 
-                  <h3 className="font-brand text-xl text-[#D4AF37]">Update Mobile Number</h3>
+                  <h3 id="phone-modal-title" className="font-brand text-xl text-[#D4AF37]">Update Mobile Number</h3>
 
                   <p className="mt-3 text-sm leading-6 text-white/70">
 

@@ -16,6 +16,16 @@ const HIDEABLE_HISTORY_STATUSES = ['completed', 'cancelled', 'canceled'];
 const REVIEW_PROMPT_STORAGE_PREFIX = 'salonDismissedReviewPrompts';
 const MotionDiv = motion.div;
 
+const STATUS_ALIASES = {
+  approved: 'confirmed',
+  canceled: 'cancelled'
+};
+
+const normalizeAppointmentStatus = (status) => {
+  const normalizedStatus = String(status || '').trim().toLowerCase();
+  return STATUS_ALIASES[normalizedStatus] || normalizedStatus;
+};
+
 const formatServices = (services, fallback = 'Service not available') => {
   if (!Array.isArray(services) || services.length === 0) return fallback;
   return services.map((service) => service?.name || service).join(', ');
@@ -35,7 +45,7 @@ const formatDate = (date) => {
 };
 
 const statusClassName = (status) => {
-  const normalizedStatus = String(status || '').trim().toLowerCase();
+  const normalizedStatus = normalizeAppointmentStatus(status);
 
   if (normalizedStatus === 'approved' || normalizedStatus === 'confirmed') return 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300';
   if (normalizedStatus === 'pending') return 'border-amber-400/20 bg-amber-400/10 text-amber-300';
@@ -47,7 +57,7 @@ const statusClassName = (status) => {
 };
 
 const canHideFromHistory = (appointment) => (
-  HIDEABLE_HISTORY_STATUSES.includes(String(appointment?.status || '').trim().toLowerCase())
+  HIDEABLE_HISTORY_STATUSES.includes(normalizeAppointmentStatus(appointment?.status))
 );
 
 const timeToMinutes = (timeValue) => {
@@ -193,28 +203,28 @@ function Dashboard() {
 
   const upcomingAppointments = useMemo(
     () => appointments
-      .filter((appt) => UPCOMING_STATUSES.includes(String(appt?.status || '').trim().toLowerCase()))
+      .filter((appt) => UPCOMING_STATUSES.includes(normalizeAppointmentStatus(appt?.status)))
       .sort((a, b) => new Date(a?.date).getTime() - new Date(b?.date).getTime()),
     [appointments]
   );
 
   const pastAppointments = useMemo(
     () => appointments
-      .filter((appt) => HISTORY_STATUSES.includes(String(appt?.status || '').trim().toLowerCase()) && !appt?.isHiddenByCustomer)
+      .filter((appt) => HISTORY_STATUSES.includes(normalizeAppointmentStatus(appt?.status)) && !appt?.isHiddenByCustomer)
       .sort((a, b) => new Date(b?.date).getTime() - new Date(a?.date).getTime()),
     [appointments]
   );
 
   // Only count COMPLETED appointments for Total Visits metric
   const completedAppointments = useMemo(
-    () => appointments.filter((appt) => String(appt?.status || '').trim().toLowerCase() === 'completed'),
+    () => appointments.filter((appt) => normalizeAppointmentStatus(appt?.status) === 'completed'),
     [appointments]
   );
 
   const pendingReviewAppointment = useMemo(
     () => pastAppointments.find((appointment) => {
       const appointmentId = appointment?._id || appointment?.id;
-      const normalizedStatus = String(appointment?.status || '').trim().toLowerCase();
+      const normalizedStatus = normalizeAppointmentStatus(appointment?.status);
 
       return normalizedStatus === 'completed'
         && appointment?.rating == null
@@ -262,7 +272,7 @@ function Dashboard() {
         _id: appointmentId,
         id: appointmentId,
         ...(response.data?.appointment || {}),
-        status: 'Cancelled'
+        status: 'cancelled'
       });
       setAppointmentToCancel(null);
       toast.success('Your premium session has been cancelled.');

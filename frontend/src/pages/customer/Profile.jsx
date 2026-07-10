@@ -42,6 +42,20 @@ function Profile({ onClose }) {
     confirmPassword: ''
   });
 
+  useEffect(() => {
+    if (!isPasswordModalOpen) return undefined;
+
+    const handleEscapeKey = (event) => {
+      if (event.key === 'Escape' && !isPasswordSaving) {
+        setIsPasswordModalOpen(false);
+        setPasswordValues({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      }
+    };
+
+    window.addEventListener('keydown', handleEscapeKey);
+    return () => window.removeEventListener('keydown', handleEscapeKey);
+  }, [isPasswordModalOpen, isPasswordSaving]);
+
   // Get staff list from backend API
   useEffect(() => {
     let isMounted = true;
@@ -599,8 +613,13 @@ function Profile({ onClose }) {
 
       {isPasswordModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-[#D4AF37]/30 bg-[#0b0b0b] p-6 md:p-8 shadow-[0_0_40px_rgba(212,175,55,0.15)]">
-            <h3 className="font-serif text-2xl font-semibold text-white mb-2">Change Password</h3>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="password-modal-title"
+            className="w-full max-w-md rounded-2xl border border-[#D4AF37]/30 bg-[#0b0b0b] p-6 md:p-8 shadow-[0_0_40px_rgba(212,175,55,0.15)]"
+          >
+            <h3 id="password-modal-title" className="font-serif text-2xl font-semibold text-white mb-2">Change Password</h3>
             <p className="text-sm text-gray-400 mb-6">Ensure your account is using a secure password.</p>
             
             <div className="space-y-5">
