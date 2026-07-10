@@ -160,10 +160,12 @@ const forgotPassword = async (req, res) => {
       return res.status(200).json({ success: true, message: genericSuccessMessage });
     }
 
+    const frontendUrl = process.env.FRONTEND_URL || req.headers.origin || 'http://localhost:5173';
+
     if (!process.env.FRONTEND_URL) {
-      return res.status(500).json({
-        message: 'Password reset is not configured. Please set FRONTEND_URL.',
-      });
+      console.error(
+        `FRONTEND_URL is not configured. Falling back to ${frontendUrl} for password reset links.`
+      );
     }
 
     const resetToken = crypto.randomBytes(32).toString('hex');
@@ -175,7 +177,7 @@ const forgotPassword = async (req, res) => {
 
     await user.save();
 
-    const resetUrl = `${process.env.FRONTEND_URL.replace(/\/$/, '')}/reset-password/${resetToken}`;
+    const resetUrl = `${frontendUrl.replace(/\/$/, '')}/reset-password/${resetToken}`;
 
     const message = `
       <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111827;">

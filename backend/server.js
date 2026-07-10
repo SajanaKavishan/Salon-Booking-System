@@ -12,17 +12,19 @@ const app = express();
 
 mongoose.set("bufferCommands", false);
 
-const defaultClientUrl = process.env.NODE_ENV === "production"
-    ? ""
-    : "http://localhost:5173";
-const allowedOrigins = (process.env.CLIENT_URL || defaultClientUrl)
+const configuredClientOrigins = (process.env.CLIENT_URL || "")
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean);
+const fallbackClientOrigins = ["http://localhost:5173", "http://localhost:3000"];
+const allowedOrigins = Array.from(new Set([
+    ...configuredClientOrigins,
+    ...fallbackClientOrigins,
+]));
 
-if (process.env.NODE_ENV === "production" && allowedOrigins.length === 0) {
+if (process.env.NODE_ENV === "production" && configuredClientOrigins.length === 0) {
     process.emitWarning(
-        "CLIENT_URL is not configured in production. Browser requests with an Origin header will be rejected by CORS.",
+        "CLIENT_URL is not configured in production. Falling back to local development origins for CORS.",
         { code: "MISSING_CLIENT_URL" }
     );
 }
