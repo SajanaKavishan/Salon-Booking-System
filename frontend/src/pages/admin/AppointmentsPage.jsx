@@ -135,6 +135,7 @@ function AppointmentsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [updatingAppointmentId, setUpdatingAppointmentId] = useState('');
+  const [updatingStatus, setUpdatingStatus] = useState('');
   const [currentTime, setCurrentTime] = useState(() => new Date());
   const yearMenuRef = useRef(null);
   const monthMenuRef = useRef(null);
@@ -291,6 +292,7 @@ function AppointmentsPage() {
       }
 
       setUpdatingAppointmentId(id);
+      setUpdatingStatus(newStatus);
 
       const statusEndpoint = isAdmin
         ? `${API_BASE_URL}/api/appointments/${id}/status`
@@ -314,6 +316,7 @@ function AppointmentsPage() {
       toast.error('Oops! Failed to update the appointment status.');
     } finally {
       setUpdatingAppointmentId('');
+      setUpdatingStatus('');
     }
   };
 
@@ -398,7 +401,7 @@ function AppointmentsPage() {
             disabled={isUpdating}
             className="w-full rounded-lg px-4 py-2 text-sm sm:w-auto"
           >
-            {isUpdating ? 'Updating...' : 'Accept'}
+            {isUpdating && updatingStatus === 'Approved' ? 'Updating...' : 'Accept'}
           </GoldButton>
         )}
         {allowedStatuses.includes('Rejected') && (
@@ -409,7 +412,7 @@ function AppointmentsPage() {
             disabled={isUpdating}
             className="w-full rounded-lg border border-red-900/50 bg-[#1a1a1a] px-4 py-2 text-sm text-red-400 hover:border-transparent hover:bg-red-900/80 hover:text-white sm:w-auto"
           >
-            {isUpdating ? 'Updating...' : 'Reject'}
+            {isUpdating && updatingStatus === 'Rejected' ? 'Updating...' : 'Reject'}
           </GoldButton>
         )}
         {allowedStatuses.includes('Completed') && (
@@ -419,7 +422,7 @@ function AppointmentsPage() {
             disabled={isUpdating}
             className="w-full rounded-lg px-4 py-2 text-sm sm:w-auto"
           >
-            {isUpdating ? 'Updating...' : 'Complete'}
+            {isUpdating && updatingStatus === 'Completed' ? 'Updating...' : 'Complete'}
           </GoldButton>
         )}
         {allowedStatuses.includes('No-Show') && (
@@ -430,7 +433,7 @@ function AppointmentsPage() {
             disabled={isUpdating}
             className="w-full rounded-lg border border-white/10 bg-black/20 px-4 py-2 text-sm text-gray-300 hover:border-[#d4af37]/40 hover:text-[#d4af37] sm:w-auto"
           >
-            {isUpdating ? 'Updating...' : 'No-Show'}
+            {isUpdating && updatingStatus === 'No-Show' ? 'Updating...' : 'No-Show'}
           </GoldButton>
         )}
         {allowedStatuses.includes('Pending') && (
@@ -441,7 +444,7 @@ function AppointmentsPage() {
             disabled={isUpdating}
             className="w-full rounded-lg border border-white/10 bg-black/20 px-4 py-2 text-sm text-gray-300 hover:border-[#d4af37]/40 hover:text-[#d4af37] sm:w-auto"
           >
-            {isUpdating ? 'Updating...' : 'Mark Pending'}
+            {isUpdating && updatingStatus === 'Pending' ? 'Updating...' : 'Mark Pending'}
           </GoldButton>
         )}
       </div>
