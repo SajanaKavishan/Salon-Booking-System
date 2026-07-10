@@ -15,6 +15,7 @@ import API_BASE_URL from '../../utils/apiConfig';
 
 const BUFFER_MINUTES = 15;
 const BLOCKED_STATUSES = ['cancelled', 'rejected', 'completed', 'no-show'];
+const SRI_LANKAN_MOBILE_REGEX = /^(?:\+94|0)7[0-9]{8}$/;
 
 const initialForm = {
   customerId: '',
@@ -188,6 +189,8 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
     () => selectedServices.reduce((sum, service) => sum + (Number(service.price) || 0), 0),
     [selectedServices]
   );
+  const selectedCustomerPhone = String(selectedCustomer?.phone || '').trim();
+  const hasValidCustomerPhone = SRI_LANKAN_MOBILE_REGEX.test(selectedCustomerPhone);
 
   const proposedRange = useMemo(() => {
     if (!form.startTime || totalDuration <= 0) return null;
@@ -201,7 +204,7 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
 
   const canSubmit = Boolean(
     form.customerId &&
-    selectedCustomer?.phone &&
+    hasValidCustomerPhone &&
     form.staffId &&
     form.bookingDate &&
     form.startTime &&
@@ -265,6 +268,11 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    if (!hasValidCustomerPhone) {
+      toast.error('Selected customer needs a valid Sri Lankan mobile number, e.g. 0771234567 or +94771234567.');
+      return;
+    }
+
     if (!canSubmit) return;
 
     try {
@@ -285,7 +293,7 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
           staffId: form.staffId,
           stylist: form.staffId,
           customerId: selectedCustomer._id,
-          customerMobile: selectedCustomer.phone,
+          customerMobile: selectedCustomerPhone,
           bookingDate: form.bookingDate,
           date: form.bookingDate,
           startTime,
@@ -365,8 +373,10 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
                     </option>
                   ))}
                 </select>
-                {form.customerId && !selectedCustomer?.phone && (
-                  <p className="mt-2 text-xs text-red-300">Selected customer needs a mobile number before booking.</p>
+                {form.customerId && !hasValidCustomerPhone && (
+                  <p className="mt-2 text-xs text-red-300">
+                    Selected customer needs a valid Sri Lankan mobile number, e.g. 0771234567 or +94771234567.
+                  </p>
                 )}
               </label>
 
@@ -485,7 +495,7 @@ function AddAppointmentModal({ isOpen, onClose, appointments = [], onCreated }) 
                 <div>
                   <p className="text-[10px] uppercase tracking-widest text-neutral-500">Customer</p>
                   <p className="mt-2 text-sm font-semibold text-white">{selectedCustomer?.name || 'No customer selected'}</p>
-                  {selectedCustomer?.phone && <p className="mt-1 text-xs text-neutral-400">{selectedCustomer.phone}</p>}
+                  {selectedCustomerPhone && <p className="mt-1 text-xs text-neutral-400">{selectedCustomerPhone}</p>}
                 </div>
                 <div>
                   <p className="text-[10px] uppercase tracking-widest text-neutral-500">Stylist</p>

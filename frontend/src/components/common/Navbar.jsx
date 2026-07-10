@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Scissors } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -8,6 +8,15 @@ function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
   const userRole = localStorage.getItem('userRole');
+  const sectionScrollTimerRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (sectionScrollTimerRef.current) {
+        window.clearTimeout(sectionScrollTimerRef.current);
+      }
+    };
+  }, []);
 
   const handleLogout = () => {
     clearAuthStorage();
@@ -37,7 +46,11 @@ function Navbar() {
   const scrollToSection = (id) => {
     if (location.pathname !== '/') {
       navigate('/');
-      setTimeout(() => {
+      if (sectionScrollTimerRef.current) {
+        window.clearTimeout(sectionScrollTimerRef.current);
+      }
+
+      sectionScrollTimerRef.current = window.setTimeout(() => {
         const element = document.getElementById(id);
         if (element) {
           element.scrollIntoView({ behavior: 'smooth' });
