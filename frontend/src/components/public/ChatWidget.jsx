@@ -14,7 +14,7 @@ const initialMessages = [
 
 const rootActions = [
   { id: 'staff', label: 'How about your staff?', step: 'staff' },
-  { id: 'services', label: 'I want to know about Services and Prices', step: 'services' },
+  { id: 'services', label: 'I want to know about Services and Prices?', step: 'services' },
   { id: 'holidays', label: 'When are you closed?', step: 'holidays' },
   { id: 'booking-help', label: 'How Booking Works?', replyKey: 'bookingHelp' },
   { id: 'policies', label: 'What are Salon Policies?', step: 'policies' },
