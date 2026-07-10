@@ -423,7 +423,7 @@ function ChatWidget({ mode = 'desktop-floating' }) {
     try {
       const response = await axios.post(apiUrl('/api/chatbot'), {
         message: trimmedInput,
-        history: messages,
+        history: nextMessages,
       });
 
       setMessages((currentMessages) => [
@@ -699,11 +699,6 @@ function ChatWidget({ mode = 'desktop-floating' }) {
                     </div>
                     {!isUser && (
                       <p className="mt-1.5 px-1 text-[0.72rem] font-medium leading-none text-neutral-500">
-                        SalonDEES Concierge | AI Agent | {formatMessageTime(message.createdAt)}
-                      </p>
-                    )}
-                    {!isUser && (
-                      <p className="hidden">
                         SalonDEES Concierge • AI Agent • {formatMessageTime(message.createdAt)}
                       </p>
                     )}
@@ -760,6 +755,7 @@ function ChatWidget({ mode = 'desktop-floating' }) {
                 onFocus={() => setIsInputFocused(true)}
                 onBlur={() => setIsInputFocused(false)}
                 placeholder="Ask SalonDEES Concierge..."
+                aria-label="Ask SalonDEES Concierge"
                 className="min-w-0 flex-1 rounded-full border border-[#d4af37]/20 bg-[#101010] px-4 py-3 text-sm text-white outline-none transition placeholder:text-neutral-500 focus:border-[#d4af37] focus:ring-2 focus:ring-[#d4af37]/20 max-[360px]:px-3 max-[360px]:text-[0.82rem]"
                 disabled={isSending}
               />

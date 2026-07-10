@@ -15,6 +15,17 @@ const {
 } = require('../utils/staffSchedule');
 
 const DEFAULT_PHONE_FALLBACK = '0000000000';
+const STAFF_PROFILE_TEXT_FIELDS = ['description', 'bio', 'profileDescription', 'about', 'experience'];
+
+const pickStaffProfileTextFields = (body = {}) => (
+  STAFF_PROFILE_TEXT_FIELDS.reduce((fields, field) => {
+    if (body[field] !== undefined) {
+      fields[field] = String(body[field] || '').trim();
+    }
+
+    return fields;
+  }, {})
+);
 
 const isValidPhoneNumber = (phoneValue) => {
   const trimmedPhone = String(phoneValue || '').trim();
@@ -175,6 +186,7 @@ const registerStaffProfile = async (req, res) => {
     const normalizedEmail = String(email || '').trim().toLowerCase();
     const normalizedSpecialty = String(specialty || '').trim();
     const normalizedPhone = String(req.body.phone || '').trim();
+    const profileTextFields = pickStaffProfileTextFields(req.body);
 
     if (!normalizedName || !normalizedEmail || !password || !normalizedSpecialty) {
       await cleanupUploadedCloudinaryFile(req.file, 'Staff registration validation cleanup');
@@ -207,6 +219,7 @@ const registerStaffProfile = async (req, res) => {
         imageUrl: req.file?.path || req.body.imageUrl || '',
         imagePublicId: req.file?.filename || resolveCloudinaryPublicId('', req.body.imageUrl) || '',
         specialty: normalizedSpecialty,
+        ...profileTextFields,
         offDays: normalizeOffDays(offDays),
         workingHours: normalizeWorkingHours(workingHours),
       }], { session }).then((staffProfiles) => staffProfiles[0]);
@@ -239,6 +252,7 @@ const registerStaffProfile = async (req, res) => {
 const addStaff = async (req, res) => {
   try {
     const { name, specialty, offDays, workingHours, userId } = req.body;
+    const profileTextFields = pickStaffProfileTextFields(req.body);
     
     if (!name || !specialty) {
       await cleanupUploadedCloudinaryFile(req.file, 'Staff validation cleanup');
@@ -255,6 +269,7 @@ const addStaff = async (req, res) => {
       imageUrl, 
       imagePublicId: req.file?.filename || '',
       specialty,
+      ...profileTextFields,
       workingHours: normalizeWorkingHours(workingHours),
       offDays: normalizeOffDays(offDays),
     });
@@ -280,7 +295,7 @@ const updateStaff = async (req, res) => {
     }
 
     const updates = {};
-    const allowedFields = ['name', 'specialty'];
+    const allowedFields = ['name', 'specialty', ...STAFF_PROFILE_TEXT_FIELDS];
 
     allowedFields.forEach((field) => {
       if (req.body[field] !== undefined) updates[field] = req.body[field];

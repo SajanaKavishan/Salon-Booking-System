@@ -3,7 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import ProtectedRoute from "./routes/ProtectedRoute";
 import CustomerRoute from "./routes/CustomerRoute";
 import Navbar from "./components/common/Navbar";
-import { ToastContainer } from "react-toastify";
+import { ToastContainer, Zoom } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { AppointmentsProvider } from "./context/AppointmentsContext";
 
@@ -44,12 +44,91 @@ function RouteLoadingFallback() {
   );
 }
 
+function LuxuryToastIcon({ type, isLoading }) {
+  if (isLoading) {
+    return (
+      <svg
+        className="h-4 w-4 animate-spin text-amber-400 drop-shadow-[0_0_4px_rgba(251,191,36,0.4)]"
+        fill="none"
+        viewBox="0 0 24 24"
+        aria-hidden="true"
+      >
+        <circle className="opacity-25" cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" />
+        <path className="opacity-90" fill="currentColor" d="M21 12a9 9 0 0 0-9-9v3a6 6 0 0 1 6 6h3Z" />
+      </svg>
+    );
+  }
+
+  if (type === "error") {
+    return (
+      <svg
+        className="h-4 w-4 text-red-400 drop-shadow-[0_0_4px_rgba(248,113,113,0.4)]"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        aria-hidden="true"
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg
+      className="h-4 w-4 text-emerald-400 drop-shadow-[0_0_4px_rgba(52,211,153,0.4)]"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      aria-hidden="true"
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+    </svg>
+  );
+}
+
+function getLuxuryToastClassName({ type, isLoading }) {
+  if (isLoading) {
+    return "luxury-toast-capsule luxury-toast-loading";
+  }
+
+  if (type === "success") {
+    return "luxury-toast-capsule luxury-toast-success";
+  }
+
+  if (type === "error") {
+    return "luxury-toast-capsule luxury-toast-error";
+  }
+
+  return "luxury-toast-capsule";
+}
+
+function AppToastContainer() {
+  return (
+    <ToastContainer
+      position="top-center"
+      autoClose={3500}
+      toastClassName={getLuxuryToastClassName}
+      icon={LuxuryToastIcon}
+      closeButton={false}
+      pauseOnHover
+      pauseOnFocusLoss={false}
+      draggable={false}
+      closeOnClick={false}
+      transition={Zoom}
+      newestOnTop
+      limit={4}
+    />
+  );
+}
+
 function App() {
   return (
     <>
-      <ToastContainer position="top-right" autoClose={3000}  />
       <AppointmentsProvider>
         <BrowserRouter>
+          <AppToastContainer />
           <Navbar />
 
           <Suspense fallback={<RouteLoadingFallback />}>

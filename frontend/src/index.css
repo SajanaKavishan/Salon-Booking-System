@@ -60,6 +60,25 @@
 }
 
 @layer components {
+    /* Global Luxury Capsule Toast Container */
+    .luxury-toast-capsule {
+        @apply !mx-auto !flex !w-fit !max-w-[min(520px,calc(100vw-1.5rem))] !items-center !gap-3 !rounded-full !border !border-zinc-800 !bg-zinc-950/95 !px-5 !py-2.5 !text-sm !font-medium !text-zinc-200 !shadow-[0_10px_30px_rgba(0,0,0,0.7)] !backdrop-blur-md;
+    }
+
+    /* Success Specific Capsule Style overrides */
+    .luxury-toast-success {
+        @apply !border-emerald-500/30 !shadow-[0_10px_30px_rgba(0,0,0,0.7),0_0_20px_rgba(16,185,129,0.1)];
+    }
+
+    /* Error Specific Capsule Style overrides */
+    .luxury-toast-error {
+        @apply !border-red-500/30 !shadow-[0_10px_30px_rgba(0,0,0,0.7),0_0_20px_rgba(239,68,68,0.1)];
+    }
+
+    .luxury-toast-loading {
+        @apply !border-amber-500/30 !text-amber-400;
+    }
+
     .salon-page {
         @apply relative min-h-screen font-sans text-white selection:bg-[#d6b36a] selection:text-[#0f1115];
         background: radial-gradient(140% 140% at 20% 10%, rgba(124, 92, 252, 0.12) 0%, rgba(15, 17, 21, 0) 55%),
@@ -307,6 +326,96 @@
 
 .no-scrollbar::-webkit-scrollbar {
     display: none;
+}
+
+.Toastify__toast-container {
+    top: max(0.75rem, env(safe-area-inset-top));
+    left: 0;
+    right: 0;
+    display: flex;
+    width: 100%;
+    max-width: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0 0.75rem;
+    transform: none;
+    pointer-events: none;
+}
+
+.Toastify__toast {
+    width: fit-content;
+    max-width: min(520px, calc(100vw - 1.5rem));
+    min-height: auto;
+    margin-bottom: 0;
+    overflow: hidden;
+    pointer-events: auto;
+}
+
+.Toastify__toast-body {
+    margin: 0;
+    padding: 0;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.Toastify__toast-body > div:last-child {
+    min-width: 0;
+    overflow-wrap: break-word;
+    word-break: normal;
+    line-height: 1.35;
+}
+
+.Toastify__toast-icon {
+    flex: 0 0 auto;
+    width: auto;
+    margin-inline-end: 0;
+}
+
+.Toastify__close-button {
+    color: rgb(212 212 216);
+    opacity: 0.65;
+    align-self: center;
+}
+
+.Toastify__close-button:hover {
+    opacity: 1;
+}
+
+.Toastify__progress-bar,
+.Toastify__progress-bar--wrp,
+.Toastify__progress-bar--animated,
+.Toastify__progress-bar--controlled {
+    position: absolute !important;
+    inset: auto 0 0 0 !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    opacity: 0 !important;
+    filter: none !important;
+    pointer-events: none !important;
+}
+
+@media (max-width: 480px) {
+    .Toastify__toast-container {
+        top: max(0.5rem, env(safe-area-inset-top));
+        padding: 0 0.5rem;
+    }
+
+    .Toastify__toast {
+        max-width: calc(100vw - 1rem);
+    }
+
+    .luxury-toast-capsule {
+        @apply !w-fit !max-w-[calc(100vw-1rem)] !rounded-[1.35rem] !px-4 !py-2 !text-xs;
+    }
+
+    .Toastify__toast-body {
+        gap: 0.625rem;
+    }
 }
 
 .salon-scrollbar {

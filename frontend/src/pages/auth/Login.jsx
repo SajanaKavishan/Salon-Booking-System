@@ -119,7 +119,6 @@ function Login() {
         })
       );
 
-      toast.success('Welcome back to Salon DEES!');
       redirectAfterLogin(role, isFirstLogin);
     } catch (error) {
       toast.error(error.response?.data?.message || 'Login failed. Check your email and password.');
@@ -153,7 +152,6 @@ function Login() {
           })
         );
 
-        toast.success('Successfully logged in with Google!');
         redirectAfterLogin(response.data.role, response.data.isFirstLogin || false);
       } catch {
         toast.error('Google login failed on our server. Please try again.');

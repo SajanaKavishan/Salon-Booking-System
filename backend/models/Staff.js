@@ -24,6 +24,27 @@ const staffSchema = new mongoose.Schema(
       type: String,
       required: [true, 'Please add a specialty (e.g., Hair Stylist)'],
     },
+    description: {
+      type: String,
+      maxlength: 600,
+      default: '',
+    },
+    bio: {
+      type: String,
+      default: '',
+    },
+    profileDescription: {
+      type: String,
+      default: '',
+    },
+    about: {
+      type: String,
+      default: '',
+    },
+    experience: {
+      type: String,
+      default: '',
+    },
     workingHours: {
       start: {
         type: String,

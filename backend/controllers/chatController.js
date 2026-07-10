@@ -46,7 +46,7 @@ const formatOpeningHours = (openingHours = {}) => {
 const buildSalonContext = async () => {
   const [services, staff, settings] = await Promise.all([
     Service.find({}).select('name price duration').lean(),
-    Staff.find({}).select('name specialty workingHours offDays').lean(),
+    Staff.find({}).select('name specialty description workingHours offDays').lean(),
     SalonSettings.findOne({}).lean(),
   ]);
 
@@ -64,8 +64,10 @@ const buildSalonContext = async () => {
           const offDays = Array.isArray(member.offDays) && member.offDays.length
             ? member.offDays.join(', ')
             : 'None';
+          const description = String(member.description || '').trim().substring(0, 500);
+          const profileText = description ? ` Description: ${description}` : '';
 
-          return `- ${member.name}: ${member.specialty}, works ${start} - ${end}, off days: ${offDays}`;
+          return `- ${member.name}: ${member.specialty}, works ${start} - ${end}, off days: ${offDays}.${profileText}`;
         })
         .join('\n')
     : '- No stylists are currently listed in the system.';

@@ -17,6 +17,27 @@ const workingHourOptions = [
   "11:00 AM - 07:00 PM",
   "12:00 PM - 08:00 PM",
 ];
+const initialStaffFormData = {
+  name: "",
+  email: "",
+  password: "",
+  specialty: "",
+  offDays: "",
+  workingHours: "",
+  description: "",
+};
+const initialStaffEditData = {
+  name: "",
+  specialty: "",
+  workingHours: "",
+  offDays: "",
+  imageUrl: "",
+  description: "",
+};
+
+const appendStaffProfileFields = (payload, source) => {
+  payload.append("description", source.description || "");
+};
 
 const to12HourTime = (value) => {
   const [hourValue, minuteValue = "00"] = String(value || "").split(":");
@@ -191,7 +212,7 @@ function StaffManager() {
   const [activeTab, setActiveTab] = useState(searchParams.get("tab") === "leaves" ? "leaves" : "directory");
   const [staffList, setStaffList] = useState([]);
   const [leaveRequests, setLeaveRequests] = useState([]);
-  const [formData, setFormData] = useState({ name: "", email: "", password: "", specialty: "", offDays: "", workingHours: "" });
+  const [formData, setFormData] = useState(initialStaffFormData);
   const [showPassword, setShowPassword] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
   const [imagePreview, setImagePreview] = useState("");
@@ -204,8 +225,8 @@ function StaffManager() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
   const [isDeletingStaff, setIsDeletingStaff] = useState(false);
-  const [editData, setEditData] = useState({ name: "", specialty: "", workingHours: "", offDays: "", imageUrl: "" });
-  const [originalEditData, setOriginalEditData] = useState({ name: "", specialty: "", workingHours: "", offDays: "", imageUrl: "" });
+  const [editData, setEditData] = useState(initialStaffEditData);
+  const [originalEditData, setOriginalEditData] = useState(initialStaffEditData);
   const [selectedEditImage, setSelectedEditImage] = useState(null);
   const [editImagePreview, setEditImagePreview] = useState("");
   const editFileInputRef = useRef(null);
@@ -386,6 +407,7 @@ function StaffManager() {
       payload.append("email", formData.email);
       payload.append("password", formData.password);
       payload.append("specialty", formData.specialty);
+      appendStaffProfileFields(payload, formData);
       if (formData.offDays) {
         payload.append("offDays", formData.offDays);
       }
@@ -400,7 +422,7 @@ function StaffManager() {
 
       const response = await axios.post(`${API_BASE_URL}/api/staff/register`, payload, authHeaders);
       setStaffList((currentStaff) => [...currentStaff, response.data.staff]);
-      setFormData({ name: "", email: "", password: "", specialty: "", offDays: "", workingHours: "" });
+      setFormData(initialStaffFormData);
       clearSelectedImage();
       toast.success("Staff member added successfully!");
     } catch (error) {
@@ -435,6 +457,7 @@ function StaffManager() {
       workingHours: getWorkingHoursValue(staff.workingHours),
       offDays: getOffDayValue(staff.offDays),
       imageUrl: staff.imageUrl || "",
+      description: staff.description || "",
     };
     clearSelectedEditImage();
     setEditData(nextEditData);
@@ -455,6 +478,7 @@ function StaffManager() {
       payload.append("specialty", editData.specialty);
       payload.append("workingHours", editData.workingHours);
       payload.append("offDays", editData.offDays);
+      appendStaffProfileFields(payload, editData);
       if (selectedEditImage) {
         payload.append("image", selectedEditImage);
       }
@@ -466,6 +490,7 @@ function StaffManager() {
         workingHours: getWorkingHoursValue(response.data.workingHours),
         offDays: getOffDayValue(response.data.offDays),
         imageUrl: response.data.imageUrl || "",
+        description: response.data.description || "",
       };
       setStaffList((currentStaff) => currentStaff.map((staff) => (staff._id === editingId ? response.data : staff)));
       setIsEditModalOpen(false);
@@ -571,6 +596,23 @@ function StaffManager() {
             onChange={(value) => setFormData((current) => ({ ...current, offDays: value }))}
             options={offDayOptions}
           />
+
+          <div className="md:col-span-2 xl:col-span-3">
+            <label htmlFor="staff-description" className="mb-1 block text-xs font-medium text-gray-400">Description</label>
+            <textarea
+              id="staff-description"
+              name="description"
+              placeholder="Add everything customers should know: experience, personality, specialties, strengths, preferred services, and any short notes for the AI concierge."
+              value={formData.description}
+              onChange={handleInputChange}
+              rows={5}
+              maxLength={600}
+              className={`${fieldClassName} resize-none leading-6`}
+            />
+            <p className="mt-1.5 text-xs leading-5 text-gray-500">
+              This is used by the concierge when users ask about staff.
+            </p>
+          </div>
 
           <div className="md:col-span-2 xl:col-span-3">
             <input
@@ -907,6 +949,21 @@ function StaffManager() {
                 onChange={(value) => setEditData((current) => ({ ...current, offDays: value }))}
                 options={offDayOptions}
               />
+              <div>
+                <label htmlFor="edit-staff-description" className="mb-1 block text-xs font-medium text-gray-400">Description</label>
+                <textarea
+                  id="edit-staff-description"
+                  value={editData.description}
+                  onChange={(event) => setEditData((current) => ({ ...current, description: event.target.value }))}
+                  rows={5}
+                  maxLength={600}
+                  placeholder="Add everything customers should know: experience, personality, specialties, strengths, preferred services, and any short notes for the AI concierge."
+                  className={`${fieldClassName} resize-none leading-6`}
+                />
+                <p className="mt-1.5 text-xs leading-5 text-gray-500">
+                  This is used by the concierge when users ask about staff.
+                </p>
+              </div>
               <div>
                 <input
                   id="edit-staff-image"
