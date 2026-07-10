@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { Check, Loader2, Sparkles, Star, X } from 'lucide-react';
 import { toast } from 'react-toastify';
@@ -31,6 +31,7 @@ function AppointmentReviewModal({ appointment, user, onClose, onReviewSubmitted,
   const [makePreferred, setMakePreferred] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isClosed, setIsClosed] = useState(false);
+  const successTimerRef = useRef(null);
 
   const appointmentId = getAppointmentId(appointment);
   const resolvedUser = useMemo(() => user || getStoredUser(), [user]);
@@ -62,6 +63,14 @@ function AppointmentReviewModal({ appointment, user, onClose, onReviewSubmitted,
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleClose]);
 
+  useEffect(() => {
+    return () => {
+      if (successTimerRef.current) {
+        window.clearTimeout(successTimerRef.current);
+      }
+    };
+  }, []);
+
   const handleDismissPermanently = () => {
     if (isSubmitting) return;
     setIsClosed(true);
@@ -91,7 +100,11 @@ function AppointmentReviewModal({ appointment, user, onClose, onReviewSubmitted,
       );
 
       toast.success('Thank you for your feedback!');
-      window.setTimeout(() => {
+      if (successTimerRef.current) {
+        window.clearTimeout(successTimerRef.current);
+      }
+
+      successTimerRef.current = window.setTimeout(() => {
         resetFormState();
         setIsSubmitting(false);
         onReviewSubmitted?.(response.data?.appointment);

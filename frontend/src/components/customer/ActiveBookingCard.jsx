@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, Clock, UserRound } from 'lucide-react';
 import ReportDelayModal from './ReportDelayModal';
 
-const REPORTABLE_STATUSES = ['pending', 'confirmed', 'approved'];
+const REPORTABLE_STATUSES = ['confirmed'];
 
 const getDateKey = (value) => {
   if (!value) return '';
