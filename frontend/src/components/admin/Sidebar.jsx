@@ -116,6 +116,10 @@ function Sidebar({ isOpen = false, onClose = () => { } }) {
   const userStorageId = storedUser?._id || storedUser?.id || userRole || 'user';
   const appointmentsSeenKey = `sidebar:appointments-seen:${userStorageId}`;
   const reviewsSeenKey = `sidebar:reviews-seen:${userStorageId}`;
+  const isAppointmentsPage = location.pathname.startsWith(`/${userRole}/appointments`);
+  const isReviewsPage = userRole === 'admin' && location.pathname.startsWith('/admin/reviews');
+  const visiblePendingCount = isAppointmentsPage ? 0 : pendingCount;
+  const visiblePendingReviewsCount = isReviewsPage ? 0 : pendingReviewsCount;
   const sidebarItems = userRole === 'admin'
     ? adminSidebarItems
     : userRole === 'staff'
@@ -139,8 +143,11 @@ function Sidebar({ isOpen = false, onClose = () => { } }) {
     if (!token) return;
 
     const controller = new AbortController();
+    let isCurrent = true;
 
-    const fetchPendingCount = async () => {
+    const fetchAppointmentsCount = async () => {
+      if (isAppointmentsPage) return;
+
       try {
         const since = localStorage.getItem(appointmentsSeenKey);
         const response = await axios.get(`${API_BASE_URL}/api/appointments/pending/count`, {
@@ -149,48 +156,65 @@ function Sidebar({ isOpen = false, onClose = () => { } }) {
           signal: controller.signal
         });
 
-        setPendingCount(Number(response.data?.count || 0));
-
-        if (userRole === 'admin') {
-          const reviewsSince = localStorage.getItem(reviewsSeenKey);
-          const reviewsResponse = await axios.get(`${API_BASE_URL}/api/appointments/reviews/pending-count`, {
-            headers: { Authorization: `Bearer ${token}` },
-            params: reviewsSince ? { since: reviewsSince } : undefined,
-            signal: controller.signal
-          });
-          setPendingReviewsCount(Number(reviewsResponse.data?.count || 0));
+        if (isCurrent) {
+          setPendingCount(Number(response.data?.count || 0));
         }
       } catch (error) {
-        if (error.name !== 'CanceledError') {
+        if (error.name !== 'CanceledError' && isCurrent) {
           console.warn('Could not fetch pending appointments count:', error);
         }
       }
     };
 
-    fetchPendingCount();
-    const refreshTimer = window.setInterval(fetchPendingCount, 30000);
-    window.addEventListener(PENDING_APPOINTMENTS_REFRESH_EVENT, fetchPendingCount);
+    const fetchReviewsCount = async () => {
+      if (userRole !== 'admin' || isReviewsPage) return;
+
+      try {
+        const reviewsSince = localStorage.getItem(reviewsSeenKey);
+        const response = await axios.get(`${API_BASE_URL}/api/appointments/reviews/pending-count`, {
+          headers: { Authorization: `Bearer ${token}` },
+          params: reviewsSince ? { since: reviewsSince } : undefined,
+          signal: controller.signal
+        });
+
+        if (isCurrent) {
+          setPendingReviewsCount(Number(response.data?.count || 0));
+        }
+      } catch (error) {
+        if (error.name !== 'CanceledError' && isCurrent) {
+          console.warn('Could not fetch pending reviews count:', error);
+        }
+      }
+    };
+
+    const fetchCounters = () => {
+      void fetchAppointmentsCount();
+      void fetchReviewsCount();
+    };
+
+    fetchCounters();
+    const refreshTimer = window.setInterval(fetchCounters, 30000);
+    window.addEventListener(PENDING_APPOINTMENTS_REFRESH_EVENT, fetchCounters);
 
     return () => {
+      isCurrent = false;
       controller.abort();
       window.clearInterval(refreshTimer);
-      window.removeEventListener(PENDING_APPOINTMENTS_REFRESH_EVENT, fetchPendingCount);
+      window.removeEventListener(PENDING_APPOINTMENTS_REFRESH_EVENT, fetchCounters);
     };
-  }, [appointmentsSeenKey, reviewsSeenKey, userRole]);
+  }, [appointmentsSeenKey, isAppointmentsPage, isReviewsPage, reviewsSeenKey, userRole]);
 
   useEffect(() => {
     const viewedAt = new Date().toISOString();
 
-    if (location.pathname.startsWith(`/${userRole}/appointments`)) {
+    if (isAppointmentsPage) {
       localStorage.setItem(appointmentsSeenKey, viewedAt);
-      setPendingCount(0);
     }
 
-    if (userRole === 'admin' && location.pathname.startsWith('/admin/reviews')) {
+    if (isReviewsPage) {
       localStorage.setItem(reviewsSeenKey, viewedAt);
-      setPendingReviewsCount(0);
     }
-  }, [appointmentsSeenKey, location.pathname, reviewsSeenKey, userRole]);
+  }, [appointmentsSeenKey, isAppointmentsPage, isReviewsPage, reviewsSeenKey]);
 
   const handleLogout = () => {
     clearAuthStorage();
@@ -263,14 +287,14 @@ function Sidebar({ isOpen = false, onClose = () => { } }) {
                       </motion.svg>
                       <span className="relative z-10 flex min-w-0 items-center gap-2">
                         <span className="min-w-0 truncate">{item.label}</span>
-                        {item.label === 'Appointments' && pendingCount > 0 && (
-                          <span className="flex h-5 w-5 shrink-0 animate-pulse items-center justify-center rounded-full bg-amber-500 text-[10px] font-bold leading-none text-neutral-950">
-                            {pendingCount > 99 ? '99+' : pendingCount}
+                        {item.label === 'Appointments' && visiblePendingCount > 0 && (
+                          <span className="flex h-5 min-w-5 shrink-0 animate-pulse items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold leading-none text-neutral-950">
+                            {visiblePendingCount > 99 ? '99+' : visiblePendingCount}
                           </span>
                         )}
-                        {item.label === 'Reviews' && pendingReviewsCount > 0 && (
+                        {item.label === 'Reviews' && visiblePendingReviewsCount > 0 && (
                           <span className="flex h-5 min-w-5 shrink-0 animate-pulse items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold leading-none text-neutral-950">
-                            {pendingReviewsCount > 99 ? '99+' : pendingReviewsCount}
+                            {visiblePendingReviewsCount > 99 ? '99+' : visiblePendingReviewsCount}
                           </span>
                         )}
                       </span>

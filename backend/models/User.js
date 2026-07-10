@@ -30,13 +30,11 @@ const userSchema = new mongoose.Schema(
 			default: '',
 			validate: {
 				validator(value) {
-					if (value === undefined || value === null || value === '') return true;
-					const trimmedPhone = String(value).trim();
-					const digitsOnly = trimmedPhone.replace(/\D/g, '');
-
-					return /^[+()\-\s\d]+$/.test(trimmedPhone) && digitsOnly.length >= 7 && digitsOnly.length <= 15;
+					if (value === undefined || value === null || String(value).trim() === '') return true;
+					if (!this.isNew && !this.isModified('phone')) return true;
+					return /^(?:\+94|0)7[0-9]{8}$/.test(String(value).trim());
 				},
-				message: 'Please enter a valid phone number.',
+				message: 'Enter a valid Sri Lankan mobile number starting with +94 or 07.',
 			},
 		},
 		preferredStylist: {

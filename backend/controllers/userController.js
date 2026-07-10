@@ -177,7 +177,7 @@ const isValidPhoneNumber = (phoneValue) => {
   return /^(?:\+94|0)7\d{8}$/.test(normalizedPhone);
 };
 
-const OAUTH_PHONE_FALLBACK = '0000000000';
+const OAUTH_PHONE_FALLBACK = '';
 
 const isValidEmail = (emailValue) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(emailValue || '').trim());
 
@@ -192,7 +192,7 @@ const registerUser = async (req, res) => { // Register a new user
 
         const normalizedName = String(name).trim();
         const normalizedEmail = String(email).trim().toLowerCase();
-        const normalizedPhone = String(phone).trim();
+        const normalizedPhone = String(phone).trim().replace(/[\s-]/g, '');
 
         if (String(password).length < 6) {
             return res.status(400).json({ message: 'Password must be at least 6 characters long.' });

@@ -33,9 +33,7 @@ const getRoleRedirectPath = (role, isFirstLogin = false) => {
 
 const isValidPhoneNumber = (phoneValue) => {
   const trimmedPhone = phoneValue.trim();
-  const digitsOnly = trimmedPhone.replace(/\D/g, '');
-
-  return /^[+()\-\s\d]+$/.test(trimmedPhone) && digitsOnly.length >= 7 && digitsOnly.length <= 15;
+  return /^(?:\+94|0)7[0-9]{8}$/.test(trimmedPhone);
 };
 
 function Register() {
@@ -85,7 +83,7 @@ function Register() {
     }
 
     if (!isValidPhoneNumber(phone)) {
-      toast.error('Please enter a valid phone number.');
+      toast.error('Enter a valid Sri Lankan mobile number, such as 0771234567 or +94771234567.');
       return;
     }
 
@@ -254,11 +252,11 @@ function Register() {
                 name="phone"
                 value={phone}
                 onChange={onChange}
-                placeholder="Enter your phone number"
+                placeholder="0771234567 or +94771234567"
                 required
                 autoComplete="tel"
-                pattern="[+()\-\s0-9]{7,20}"
-                title="Enter a valid phone number using 7 to 15 digits."
+                pattern={String.raw`(?:\+94|0)7[0-9]{8}`}
+                title="Enter a valid Sri Lankan mobile number, such as 0771234567 or +94771234567."
                 className="w-full rounded-md bg-slate-100 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/40 focus:border-[#D4AF37] transition-all duration-300"
               />
             </div>

@@ -320,16 +320,7 @@ function ServiceManager() {
             labelClassName={labelClassName}
             fieldClassName={fieldClassName}
           />
-          <button
-            type="button"
-            onClick={() => serviceFileInputRef.current?.click()}
-            onDrop={(e) => {
-              e.preventDefault();
-              selectImageFile(e.dataTransfer.files?.[0] || null, setSelectedServiceImage, setServiceImagePreview, serviceImagePreview);
-            }}
-            onDragOver={(e) => e.preventDefault()}
-            className="flex min-h-36 flex-col items-center justify-center rounded-xl border border-dashed border-[#d4af37]/35 bg-black/30 p-4 text-center transition hover:border-[#d4af37]/70 hover:bg-[#d4af37]/5 md:col-span-3"
-          >
+          <div className="md:col-span-3">
             <input
               ref={serviceFileInputRef}
               type="file"
@@ -337,36 +328,34 @@ function ServiceManager() {
               className="hidden"
               onChange={(e) => selectImageFile(e.target.files?.[0] || null, setSelectedServiceImage, setServiceImagePreview, serviceImagePreview)}
             />
-            {serviceImagePreview ? (
-              <span className="flex w-full flex-col items-center gap-3">
-                <img src={serviceImagePreview} alt="Service preview" className="h-32 w-full max-w-sm rounded-lg border border-[#d4af37]/30 object-cover" />
-                <span className="text-sm font-semibold text-white">{selectedServiceImage?.name}</span>
-                <span
-                  role="button"
-                  tabIndex={0}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    clearSelectedServiceImage();
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      clearSelectedServiceImage();
-                    }
-                  }}
-                  className="rounded-md border border-white/10 px-3 py-1 text-xs font-semibold text-gray-300 hover:bg-white/10 hover:text-white"
-                >
-                  Remove image
+            <button
+              type="button"
+              onClick={() => serviceFileInputRef.current?.click()}
+              onDrop={(e) => {
+                e.preventDefault();
+                selectImageFile(e.dataTransfer.files?.[0] || null, setSelectedServiceImage, setServiceImagePreview, serviceImagePreview);
+              }}
+              onDragOver={(e) => e.preventDefault()}
+              className="flex min-h-36 w-full flex-col items-center justify-center rounded-xl border border-dashed border-[#d4af37]/35 bg-black/30 p-4 text-center transition hover:border-[#d4af37]/70 hover:bg-[#d4af37]/5"
+            >
+              {serviceImagePreview ? (
+                <span className="flex w-full flex-col items-center gap-3">
+                  <img src={serviceImagePreview} alt="Service preview" className="h-32 w-full max-w-sm rounded-lg border border-[#d4af37]/30 object-cover" />
+                  <span className="text-sm font-semibold text-white">{selectedServiceImage?.name}</span>
                 </span>
-              </span>
-            ) : (
-              <span>
-                <span className="block font-semibold text-white">Drag and drop a service image here</span>
-                <span className="mt-1 block text-xs text-gray-400">or click to choose a file from your device</span>
-              </span>
+              ) : (
+                <span>
+                  <span className="block font-semibold text-white">Drag and drop a service image here</span>
+                  <span className="mt-1 block text-xs text-gray-400">or click to choose a file from your device</span>
+                </span>
+              )}
+            </button>
+            {serviceImagePreview && (
+              <button type="button" onClick={clearSelectedServiceImage} className="mx-auto mt-3 block rounded-md border border-white/10 px-3 py-1 text-xs font-semibold text-gray-300 hover:bg-white/10 hover:text-white">
+                Remove image
+              </button>
             )}
-          </button>
+          </div>
           <div className="md:col-span-3">
             <GoldButton
               type="submit"
@@ -621,6 +610,13 @@ function ServiceManager() {
                 labelClassName={labelClassName}
                 fieldClassName={fieldClassName}
               />
+              <input
+                ref={editFileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={(e) => selectImageFile(e.target.files?.[0] || null, setSelectedEditImage, setEditImagePreview, editImagePreview)}
+              />
               <button
                 type="button"
                 onClick={() => editFileInputRef.current?.click()}
@@ -631,13 +627,6 @@ function ServiceManager() {
                 onDragOver={(e) => e.preventDefault()}
                 className="flex min-h-36 flex-col items-center justify-center rounded-xl border border-dashed border-[#d4af37]/35 bg-black/30 p-4 text-center transition hover:border-[#d4af37]/70 hover:bg-[#d4af37]/5"
               >
-                <input
-                  ref={editFileInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  className="hidden"
-                  onChange={(e) => selectImageFile(e.target.files?.[0] || null, setSelectedEditImage, setEditImagePreview, editImagePreview)}
-                />
                 {editImagePreview || editData.image ? (
                   <span className="flex w-full flex-col items-center gap-3">
                     <img
@@ -652,26 +641,6 @@ function ServiceManager() {
                     <span className="text-sm font-semibold text-white">
                       {selectedEditImage?.name || 'Current service image'}
                     </span>
-                    {selectedEditImage && (
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          clearSelectedEditImage();
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            clearSelectedEditImage();
-                          }
-                        }}
-                        className="rounded-md border border-white/10 px-3 py-1 text-xs font-semibold text-gray-300 hover:bg-white/10 hover:text-white"
-                      >
-                        Remove new image
-                      </span>
-                    )}
                   </span>
                 ) : (
                   <span>
@@ -680,6 +649,15 @@ function ServiceManager() {
                   </span>
                 )}
               </button>
+              {selectedEditImage && (
+                <button
+                  type="button"
+                  onClick={clearSelectedEditImage}
+                  className="mx-auto block rounded-md border border-white/10 px-3 py-1 text-xs font-semibold text-gray-300 hover:bg-white/10 hover:text-white"
+                >
+                  Remove new image
+                </button>
+              )}
 
               <div className="mt-4 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                 <GoldButton type="button" variant="ghost" onClick={() => setIsEditModalOpen(false)} disabled={isUpdatingService} className="bg-gray-800 px-4 py-2 text-white hover:bg-gray-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-60">

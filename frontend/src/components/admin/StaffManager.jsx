@@ -215,6 +215,7 @@ function StaffManager() {
   const [staffList, setStaffList] = useState([]);
   const [leaveRequests, setLeaveRequests] = useState([]);
   const [formData, setFormData] = useState(initialStaffFormData);
+  const [phoneError, setPhoneError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
   const [imagePreview, setImagePreview] = useState("");
@@ -238,7 +239,7 @@ function StaffManager() {
   const canAddStaff = Boolean(
     formData.name.trim() &&
     formData.email.trim() &&
-    SRI_LANKAN_MOBILE_REGEX.test(formData.phone.replace(/[\s-]/g, "")) &&
+    formData.phone.trim() &&
     formData.password &&
     formData.specialty &&
     formData.workingHours
@@ -319,6 +320,9 @@ function StaffManager() {
   };
 
   const handleInputChange = (e) => {
+    if (e.target.name === "phone" && phoneError) {
+      setPhoneError("");
+    }
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
@@ -403,9 +407,13 @@ function StaffManager() {
 
     const normalizedPhone = formData.phone.replace(/[\s-]/g, "");
     if (!SRI_LANKAN_MOBILE_REGEX.test(normalizedPhone)) {
-      toast.error("Enter a valid Sri Lankan mobile number starting with +94 or 07.");
+      const message = "Enter a valid Sri Lankan mobile number, such as 0771234567 or +94771234567.";
+      setPhoneError(message);
+      toast.error(message);
       return;
     }
+
+    setPhoneError("");
 
     setIsAddingStaff(true);
     try {
@@ -433,6 +441,7 @@ function StaffManager() {
       const response = await axios.post(`${API_BASE_URL}/api/staff/register`, payload, authHeaders);
       setStaffList((currentStaff) => [...currentStaff, response.data.staff]);
       setFormData(initialStaffFormData);
+      setPhoneError("");
       clearSelectedImage();
       toast.success("Staff member added successfully!");
     } catch (error) {
@@ -567,10 +576,15 @@ function StaffManager() {
               required
               inputMode="tel"
               autoComplete="tel"
-              pattern={String.raw`(?:\+94|0)7[0-9]{8}`}
-              title="Enter a Sri Lankan mobile number starting with +94 or 07"
-              className={fieldClassName}
+              aria-invalid={Boolean(phoneError)}
+              aria-describedby={phoneError ? "staff-phone-error" : undefined}
+              className={`${fieldClassName} ${phoneError ? "border-red-400 focus:border-red-400 focus:ring-red-400/30" : ""}`}
             />
+            {phoneError && (
+              <p id="staff-phone-error" role="alert" className="mt-1.5 text-xs leading-5 text-red-300">
+                {phoneError}
+              </p>
+            )}
           </div>
           <div>
             <label htmlFor="staff-password" className="mb-1 block text-xs font-medium text-gray-400">Temporary Password</label>

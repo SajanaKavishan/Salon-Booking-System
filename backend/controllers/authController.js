@@ -1,23 +1,12 @@
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
-const mongoose = require('mongoose');
 const User = require('../models/User');
 const Staff = require('../models/Staff');
 const sendEmail = require('../utils/sendEmail');
 const {
-  normalizeOffDays,
   normalizeWorkingHours,
 } = require('../utils/staffSchedule');
-
-const DEFAULT_PHONE_FALLBACK = '0000000000';
-
-const isValidPhoneNumber = (phoneValue) => {
-  const trimmedPhone = String(phoneValue || '').trim();
-  const digitsOnly = trimmedPhone.replace(/\D/g, '');
-
-  return /^[+()\-\s\d]+$/.test(trimmedPhone) && digitsOnly.length >= 7 && digitsOnly.length <= 15;
-};
 
 const generateToken = (user) => {
   return jwt.sign(
@@ -30,61 +19,6 @@ const generateToken = (user) => {
       expiresIn: '30d'
     }
   );
-};
-
-const registerStaff = async (req, res) => {
-  const session = await mongoose.startSession();
-
-  try {
-    const { name, email, password, specialty, offDays, workingHours } = req.body;
-
-    if (!name || !email || !password || !specialty) {
-      return res.status(400).json({ message: 'Name, email, password, and specialty are required.' });
-    }
-
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
-    if (existingUser) {
-      return res.status(400).json({ message: 'User with this email already exists.' });
-    }
-
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-    const normalizedPhone = String(req.body.phone || '').trim();
-
-    let staffUser = null;
-    let staffProfile = null;
-
-    await session.withTransaction(async () => {
-      staffUser = await User.create([{
-        name,
-        email: email.toLowerCase(),
-        password: hashedPassword,
-        role: 'staff',
-        phone: isValidPhoneNumber(normalizedPhone) ? normalizedPhone : DEFAULT_PHONE_FALLBACK
-      }], { session }).then((users) => users[0]);
-
-      staffProfile = await Staff.create([{
-        userId: staffUser._id,
-        name: staffUser.name,
-        imageUrl: req.body.imageUrl || req.body.profileImage || '',
-        specialty,
-        offDays: normalizeOffDays(offDays),
-        workingHours: normalizeWorkingHours(workingHours),
-      }], { session }).then((staffProfiles) => staffProfiles[0]);
-    });
-
-    return res.status(201).json({
-      _id: staffUser._id,
-      name: staffUser.name,
-      email: staffUser.email,
-      role: staffUser.role,
-      staffDetails: staffProfile,
-    });
-  } catch (error) {
-    return res.status(500).json({ message: error.message });
-  } finally {
-    await session.endSession();
-  }
 };
 
 const login = async (req, res) => {
@@ -270,7 +204,6 @@ const resetPassword = async (req, res) => {
 };
 
 module.exports = {
-  registerStaff,
   login,
   forgotPassword,
   resetPassword
