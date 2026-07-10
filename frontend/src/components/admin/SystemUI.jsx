@@ -110,7 +110,7 @@ export function AuthShell({ backgroundImage = '', backgroundStyle, children }) {
 
   return (
     <div
-      className={`salon-page relative flex min-h-screen w-full flex-col items-center justify-center bg-cover bg-center bg-no-repeat bg-scroll p-4 md:bg-fixed lg:flex-row lg:p-8 ${backgroundImage}`}
+      className={`salon-page relative flex min-h-[calc(100vh-4rem)] w-full flex-col items-center justify-center bg-cover bg-center bg-no-repeat bg-scroll p-4 md:bg-fixed lg:flex-row lg:p-8 ${backgroundImage}`}
       style={resolvedStyle}
     >
       <div className="salon-page-overlay fixed inset-0"></div>

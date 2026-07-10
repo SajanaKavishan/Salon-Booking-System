@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
@@ -22,6 +22,15 @@ function ResetPassword() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const redirectTimerRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (redirectTimerRef.current) {
+        clearTimeout(redirectTimerRef.current);
+      }
+    };
+  }, []);
 
   const onChange = (event) => {
     setFormData((current) => ({
@@ -60,9 +69,13 @@ function ResetPassword() {
       setResetSucceeded(true);
       toast.success(successMessage);
 
-      setTimeout(() => {
+      if (redirectTimerRef.current) {
+        clearTimeout(redirectTimerRef.current);
+      }
+
+      redirectTimerRef.current = setTimeout(() => {
         navigate('/login', { replace: true });
-      }, 1200);
+      }, 3000);
     } catch (requestError) {
       const errorMessage = requestError.response?.data?.message || 'Unable to reset password. Please request a new link.';
       setError(errorMessage);
@@ -81,7 +94,7 @@ function ResetPassword() {
         backgroundRepeat: 'no-repeat'
       }}
     >
-      <div className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-6xl items-center justify-center px-4 py-10">
+      <div className="mx-auto flex w-full max-w-6xl items-center justify-center px-4 py-10">
         <motion.div
           className="w-full max-w-md rounded-2xl border border-white/10 bg-[#111111]/80 p-8 shadow-[0_8px_32px_0_rgba(0,0,0,0.5)] backdrop-blur-xl sm:p-10"
           initial={{ opacity: 0, y: 24 }}
