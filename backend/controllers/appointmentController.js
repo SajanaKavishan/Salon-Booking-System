@@ -99,6 +99,25 @@ const assertNotPastDateTime = (dateKey, startMins) => {
     }
 };
 
+const getAppointmentScheduleStart = (appointment) => {
+    const dateValue = appointment?.date || appointment?.bookingDate;
+    const dateKey = dateValue instanceof Date
+        ? dateValue.toISOString().slice(0, 10)
+        : String(dateValue || '').slice(0, 10);
+    const [slotStartTime] = typeof appointment?.timeSlot === 'string'
+        ? appointment.timeSlot.split(/\s+-\s+/)
+        : [];
+    const startTime = appointment?.startTime || slotStartTime;
+    const [year, month, day] = dateKey.split('-').map(Number);
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey) || [year, month, day].some(Number.isNaN) || !startTime) {
+        throw createAppointmentError('Appointment date and start time are required to update this status.');
+    }
+
+    const startMinutes = timeToMinutes(startTime);
+    return new Date(year, month - 1, day, Math.floor(startMinutes / 60), startMinutes % 60, 0, 0);
+};
+
 const parseSlotRange = (slotRange) => {
     if (typeof slotRange !== 'string') {
         throw createAppointmentError('Invalid time slot format provided');
@@ -1317,6 +1336,24 @@ const updateAppointmentStatus = async (req, res) => {
 
             if (!isAssignedStaff) {
                 return res.status(403).json({ message: "Unauthorized: You are not assigned to this appointment." });
+            }
+        }
+
+        if (['completed', 'no-show'].includes(normalizedStatus)) {
+            let appointmentStart;
+
+            try {
+                appointmentStart = getAppointmentScheduleStart(appointment);
+            } catch (scheduleError) {
+                return res.status(scheduleError.statusCode || 400).json({
+                    message: scheduleError.message || 'Appointment date and start time are required to update this status.',
+                });
+            }
+
+            if (appointmentStart.getTime() > Date.now()) {
+                return res.status(400).json({
+                    message: 'Cannot mark a future appointment as completed or no-show',
+                });
             }
         }
 

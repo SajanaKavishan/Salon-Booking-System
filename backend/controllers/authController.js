@@ -160,23 +160,23 @@ const forgotPassword = async (req, res) => {
       return res.status(200).json({ success: true, message: genericSuccessMessage });
     }
 
-    const configuredFrontendUrl = String(process.env.FRONTEND_URL || '').trim();
+    const configuredFrontendUrl = String(process.env.FRONTEND_URL || process.env.CLIENT_URL || '')
+      .split(',')
+      .map((origin) => origin.trim())
+      .filter(Boolean)[0] || '';
     const isProduction = process.env.NODE_ENV === 'production';
 
     if (isProduction && !configuredFrontendUrl) {
-      console.error(
-        'Critical configuration error: FRONTEND_URL must be configured for password reset links in production.'
+      throw new Error(
+        'Critical configuration error: FRONTEND_URL or CLIENT_URL must be configured for password reset links in production.'
       );
-      return res.status(500).json({
-        message: 'Password reset is temporarily unavailable. Please try again later.',
-      });
     }
 
     const frontendUrl = configuredFrontendUrl || req.headers.origin || 'http://localhost:5173';
 
     if (!configuredFrontendUrl) {
       console.error(
-        `FRONTEND_URL is not configured. Falling back to ${frontendUrl} for password reset links.`
+        `FRONTEND_URL and CLIENT_URL are not configured. Falling back to ${frontendUrl} for password reset links.`
       );
     }
 
