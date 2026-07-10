@@ -788,6 +788,11 @@ const getPendingAppointmentsCount = async (req, res) => {
             status: Appointment.normalizeStatus('Pending')
         };
 
+        const since = req.query.since ? new Date(req.query.since) : null;
+        if (since && !Number.isNaN(since.getTime())) {
+            query.createdAt = { $gt: since };
+        }
+
         if (req.user.role === 'staff') {
             const staffIds = await getStaffAssignmentIdsForUser(req.user);
             Object.assign(query, buildStaffAssignmentQuery(staffIds));
@@ -803,6 +808,26 @@ const getPendingAppointmentsCount = async (req, res) => {
                 ? error.message
                 : 'Server Error: Could not fetch pending appointments count.'
         });
+    }
+};
+
+// @desc    Get reviews submitted since the admin last opened review management
+// @route   GET /api/appointments/reviews/pending-count
+// @access  Private/Admin
+const getPendingReviewsCount = async (req, res) => {
+    try {
+        const query = { rating: { $exists: true, $ne: null } };
+        const since = req.query.since ? new Date(req.query.since) : null;
+
+        if (since && !Number.isNaN(since.getTime())) {
+            query.reviewSubmittedAt = { $gt: since };
+        }
+
+        const count = await Appointment.countDocuments(query);
+        res.status(200).json({ count });
+    } catch (error) {
+        console.error('Get Pending Reviews Count Error:', error);
+        res.status(500).json({ message: 'Server Error: Could not fetch new reviews count.' });
     }
 };
 
@@ -1124,6 +1149,7 @@ const submitAppointmentReview = async (req, res) => {
         appointment.rating = numericRating;
         appointment.feedback = feedback;
         appointment.isReviewApproved = isFiveStarReview;
+        appointment.reviewSubmittedAt = new Date();
 
         const updatedAppointment = await appointment.save();
 
@@ -1799,6 +1825,7 @@ module.exports = {
     getMyAppointments,
     getAllAppointments,
     getPendingAppointmentsCount,
+    getPendingReviewsCount,
     getStaffAppointments,
     getStaffEarningsSummary,
     submitAppointmentReview,

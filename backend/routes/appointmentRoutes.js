@@ -7,6 +7,7 @@ const {
   getMyAppointments,
   getAllAppointments,
   getPendingAppointmentsCount,
+  getPendingReviewsCount,
   getStaffAppointments,
   getStaffEarningsSummary,
   submitAppointmentReview,
@@ -29,6 +30,7 @@ const Appointment = require('../models/appointmentModel'); // Import the Appoint
 router.route('/').post(protect, createAppointment).get(protect, getMyAppointments);
 router.get('/all', protect, admin, getAllAppointments);
 router.get('/pending/count', protect, staffOrAdmin, getPendingAppointmentsCount);
+router.get('/reviews/pending-count', protect, admin, getPendingReviewsCount);
 router.get('/staff/earnings-summary', protect, staffOrAdmin, getStaffEarningsSummary);
 router.get('/staff', protect, getStaffAppointments);
 router.get('/staff-schedule', protect, getStaffAppointments);

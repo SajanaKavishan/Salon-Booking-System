@@ -114,6 +114,9 @@ const appointmentSchema = new mongoose.Schema({
         trim: true,
         maxlength: 500,
     },
+    reviewSubmittedAt: {
+        type: Date,
+    },
     // Reviews rated five stars can be published immediately; all others wait for admin moderation.
     isReviewApproved: {
         type: Boolean,
