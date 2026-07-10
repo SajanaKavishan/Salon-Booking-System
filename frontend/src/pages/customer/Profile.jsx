@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
+import { toast } from 'react-toastify';
 import { X } from 'lucide-react';
 import BACKEND_BASE_URL from '../../utils/apiConfig';
 import { getStoredSession } from '../../utils/auth';
 
 const DEFAULT_STYLISTS = [];
+const SRI_LANKAN_MOBILE_REGEX = /^(?:\+94|0)7\d{8}$/;
 
 const formLabelClassName = 'text-xs font-bold uppercase leading-5 tracking-[0.12em] text-gray-400';
 const formValueClassName = 'mt-2 text-base leading-6 text-white';
@@ -218,6 +220,12 @@ function Profile({ onClose }) {
   const saveDetails = async () => {
     if (!isDirty || isSaving) return;
 
+    const normalizedPhone = formValues.phone.trim().replace(/[\s-]/g, '');
+    if (!SRI_LANKAN_MOBILE_REGEX.test(normalizedPhone)) {
+      toast.error('Enter a valid Sri Lankan mobile number starting with +94 or 07.');
+      return;
+    }
+
     try {
       setIsSaving(true);
       const token = localStorage.getItem('token');
@@ -232,7 +240,7 @@ function Profile({ onClose }) {
         ...user,
         name: formValues.name.trim() || user?.name || '',
         email: formValues.email.trim() || user?.email || '',
-        phone: formValues.phone.trim() || user?.phone || '',
+        phone: normalizedPhone,
         preferredStylist: formValues.preferredStylist.trim() || user?.preferredStylist || '',
       };
 

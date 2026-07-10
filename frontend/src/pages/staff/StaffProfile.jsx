@@ -5,6 +5,8 @@ import { X } from 'lucide-react';
 import BACKEND_BASE_URL from '../../utils/apiConfig';
 import { getStoredSession } from '../../utils/auth';
 
+const SRI_LANKAN_MOBILE_REGEX = /^(?:\+94|0)7\d{8}$/;
+
 const formLabelClassName = 'text-xs font-bold uppercase leading-5 tracking-[0.12em] text-gray-400';
 const formValueClassName = 'mt-2 text-base leading-6 text-white';
 const formInputClassName = 'mt-2 w-full bg-transparent pb-2 text-base font-medium leading-6 text-white outline-none border-b border-[#D4AF37]/40 transition focus:border-[#D4AF37]';
@@ -164,6 +166,12 @@ function StaffProfile({ onClose }) {
   const saveDetails = async () => {
     if (!isDirty || isSaving) return;
 
+    const normalizedPhone = formValues.phone.trim().replace(/[\s-]/g, '');
+    if (!SRI_LANKAN_MOBILE_REGEX.test(normalizedPhone)) {
+      toast.error('Enter a valid Sri Lankan mobile number starting with +94 or 07.');
+      return;
+    }
+
     try {
       setIsSaving(true);
       const token = localStorage.getItem('token');
@@ -172,7 +180,7 @@ function StaffProfile({ onClose }) {
       const updatedUser = {
         name: formValues.name.trim(),
         email: formValues.email.trim(),
-        phone: formValues.phone.trim()
+        phone: normalizedPhone
       };
 
       const payload = new FormData();

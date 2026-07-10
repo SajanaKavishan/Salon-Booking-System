@@ -173,10 +173,8 @@ const resolvePreferredStylistId = async (preferredStylist) => {
 };
 
 const isValidPhoneNumber = (phoneValue) => {
-  const trimmedPhone = String(phoneValue || '').trim();
-  const digitsOnly = trimmedPhone.replace(/\D/g, '');
-
-  return /^[+()\-\s\d]+$/.test(trimmedPhone) && digitsOnly.length >= 7 && digitsOnly.length <= 15;
+  const normalizedPhone = String(phoneValue || '').trim().replace(/[\s-]/g, '');
+  return /^(?:\+94|0)7\d{8}$/.test(normalizedPhone);
 };
 
 const OAUTH_PHONE_FALLBACK = '0000000000';
@@ -417,7 +415,7 @@ const updateUserProfile = async (req, res) => {
 
     const normalizedName = name !== undefined ? String(name).trim() : undefined;
     const normalizedEmail = email !== undefined ? String(email).trim().toLowerCase() : undefined;
-    const normalizedPhone = phone !== undefined ? String(phone).trim() : undefined;
+    const normalizedPhone = phone !== undefined ? String(phone).trim().replace(/[\s-]/g, '') : undefined;
     const nextPassword = newPassword || password;
     const uploadedProfileImage = req.file?.path;
     const uploadedProfileImagePublicId = req.file?.filename || '';
@@ -442,7 +440,7 @@ const updateUserProfile = async (req, res) => {
     }
 
     if (normalizedPhone !== undefined && normalizedPhone && !isValidPhoneNumber(normalizedPhone)) {
-      return res.status(400).json({ message: 'Please enter a valid phone number.' });
+      return res.status(400).json({ message: 'Enter a valid Sri Lankan mobile number starting with +94 or 07.' });
     }
 
     if (nextPassword) {
