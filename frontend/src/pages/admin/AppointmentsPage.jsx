@@ -482,7 +482,7 @@ function AppointmentsPage() {
 
       <section className="rounded-2xl border border-white/10 bg-[#111111]/70 p-3 shadow-xl backdrop-blur-md sm:p-6">
         <div className="flex flex-col gap-5 border-b border-white/10 pb-5 sm:gap-6 sm:pb-6 xl:flex-row xl:items-start xl:justify-between">
-          <div className="grid grid-cols-2 gap-2 sm:hidden">
+          <div className="grid grid-cols-1 gap-2 min-[380px]:grid-cols-2 sm:hidden">
             <div ref={mobileYearMenuRef} className="relative min-w-0">
               <button
                 type="button"

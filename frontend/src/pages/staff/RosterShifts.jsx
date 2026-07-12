@@ -437,8 +437,37 @@ export default function RosterShifts() {
                 <GoldButton onClick={() => setCurrentWeek(addDays(currentWeek, 7))} variant="outline" className="px-3 py-2 text-sm">Next</GoldButton>
               </div>
             </div>
-            <div className="w-full overflow-x-auto scrollbar-none pb-2">
-              <div className="mb-4 grid min-w-[600px] grid-cols-7 text-center text-sm font-medium text-gray-400 lg:min-w-0">
+            <div className="grid gap-2 sm:hidden" aria-label="Weekly roster agenda">
+              {getWeekDays().map((date) => {
+                const dayStatus = getDayStatus(date);
+                const dayClass = getWeekDayCardClass(dayStatus, date);
+                const statusTextClass = getStatusTextClass(dayStatus, date);
+
+                return (
+                  <div
+                    key={getSelectedDateKey(date)}
+                    className={`flex min-w-0 items-center justify-between gap-3 rounded-xl border p-3 ${dayClass}`}
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-lg border border-white/10 bg-black/20">
+                        <span className="text-[10px] font-semibold uppercase text-gray-400">{format(date, 'MMM')}</span>
+                        <span className="text-base font-bold leading-none text-white">{format(date, 'dd')}</span>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-white">{format(date, 'EEEE')}</p>
+                        <p className="mt-0.5 text-xs text-gray-400">{format(date, 'MMMM d, yyyy')}</p>
+                      </div>
+                    </div>
+                    <span className={`shrink-0 text-right text-[10px] font-bold uppercase tracking-tight ${statusTextClass}`}>
+                      {dayStatus}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="hidden w-full overflow-x-auto scrollbar-none pb-2 sm:block">
+              <div className="sticky top-0 z-10 mb-4 grid min-w-[600px] grid-cols-7 bg-[#111111] py-2 text-center text-sm font-medium text-gray-400 lg:min-w-0">
                 {daysOfWeek.map(day => <div key={day}>{day}</div>)}
               </div>
               <div className="grid min-w-[650px] grid-cols-7 gap-2 lg:min-w-0">
@@ -532,31 +561,31 @@ export default function RosterShifts() {
                   aria-labelledby="leave-date-selector-label"
                   className="rounded-xl border border-slate-800 bg-[#07090d] p-2.5 sm:p-3"
                 >
-                  <div className="mb-3 flex items-center justify-between">
+                  <div className="mb-3 grid grid-cols-[44px_minmax(0,1fr)_44px] items-center gap-1.5">
                     <button
                       type="button"
                       onClick={() => setCalendarMonth((prev) => addDays(startOfMonth(prev), -1))}
-                      className="rounded-lg border border-slate-800 p-1.5 text-slate-400 transition hover:border-[#d4af37]/60 hover:text-[#d4af37]"
+                      className="flex h-11 w-11 items-center justify-center rounded-lg border border-slate-800 text-slate-400 transition hover:border-[#d4af37]/60 hover:text-[#d4af37] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#d4af37]/50"
                       aria-label="Previous month"
                     >
                       <ChevronLeft className="h-4 w-4" />
                     </button>
-                    <p className="text-sm font-semibold text-slate-100">{format(calendarMonth, "MMMM yyyy")}</p>
+                    <p className="min-w-0 truncate text-center text-xs font-semibold text-slate-100 min-[360px]:text-sm">{format(calendarMonth, "MMMM yyyy")}</p>
                     <button
                       type="button"
                       onClick={() => setCalendarMonth((prev) => addDays(endOfMonth(prev), 1))}
-                      className="rounded-lg border border-slate-800 p-1.5 text-slate-400 transition hover:border-[#d4af37]/60 hover:text-[#d4af37]"
+                      className="flex h-11 w-11 items-center justify-center rounded-lg border border-slate-800 text-slate-400 transition hover:border-[#d4af37]/60 hover:text-[#d4af37] focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#d4af37]/50"
                       aria-label="Next month"
                     >
                       <ChevronRight className="h-4 w-4" />
                     </button>
                   </div>
-                  <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  <div className="grid grid-cols-7 gap-0.5 text-center text-[9px] font-bold uppercase tracking-normal text-slate-500 min-[360px]:gap-1 min-[360px]:text-[10px] min-[360px]:tracking-wider">
                     {calendarDaysOfWeek.map((day, index) => (
                       <span key={`${day}-${index}`}>{day}</span>
                     ))}
                   </div>
-                  <div className="mt-2 grid grid-cols-7 gap-1">
+                  <div className="mt-2 grid grid-cols-7 gap-0.5 min-[360px]:gap-1">
                     {calendarDays.map((calendarDay) => {
                       if (calendarDay.type === "blank") {
                         return <div key={calendarDay.id} className="aspect-square" />;
@@ -577,7 +606,7 @@ export default function RosterShifts() {
                           onClick={() => toggleSelectedDate(calendarDay.date)}
                           disabled={isUnavailable}
                           aria-label={`Select leave date ${dateString}`}
-                          className={`aspect-square min-h-9 rounded-lg text-xs font-semibold transition ${
+                          className={`aspect-square min-h-9 rounded-md text-[11px] font-semibold transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#d4af37]/60 min-[360px]:rounded-lg min-[360px]:text-xs ${
                             isUnavailable
                               ? isHoliday
                                 ? "opacity-50 cursor-not-allowed pointer-events-none text-red-300 bg-red-500/10"

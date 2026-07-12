@@ -34,6 +34,7 @@ function Profile({ onClose }) {
 
   const [stylistQuery, setStylistQuery] = useState(formValues.preferredStylist);
   const [isStylistOpen, setIsStylistOpen] = useState(false);
+  const [activeStylistIndex, setActiveStylistIndex] = useState(0);
 
   // State for password change modal
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
@@ -352,6 +353,36 @@ function Profile({ onClose }) {
     updateField('preferredStylist', stylist.userId);
     setStylistQuery(stylist.name);
     setIsStylistOpen(false);
+    setActiveStylistIndex(0);
+  };
+
+  const handleStylistKeyDown = (event) => {
+    if (!isEditing) return;
+
+    if (event.key === 'Escape') {
+      setIsStylistOpen(false);
+      return;
+    }
+
+    if (!['ArrowDown', 'ArrowUp', 'Enter'].includes(event.key)) return;
+
+    if (!isStylistOpen) {
+      event.preventDefault();
+      setIsStylistOpen(true);
+      setActiveStylistIndex(0);
+      return;
+    }
+
+    if (filteredStylists.length === 0) return;
+    event.preventDefault();
+
+    if (event.key === 'ArrowDown') {
+      setActiveStylistIndex((current) => (current + 1) % filteredStylists.length);
+    } else if (event.key === 'ArrowUp') {
+      setActiveStylistIndex((current) => (current - 1 + filteredStylists.length) % filteredStylists.length);
+    } else {
+      handleStylistSelect(filteredStylists[activeStylistIndex] || filteredStylists[0]);
+    }
   };
 
   return (
@@ -432,30 +463,45 @@ function Profile({ onClose }) {
                     onFocus={() => {
                       if (!isEditing) startEditing();
                       setIsStylistOpen(true);
+                      setActiveStylistIndex(0);
                     }}
                     onChange={(event) => {
                       if (!isEditing) return;
                       setStylistQuery(event.target.value);
                       updateField('preferredStylist', event.target.value);
                       setIsStylistOpen(true);
+                      setActiveStylistIndex(0);
                     }}
+                    onKeyDown={handleStylistKeyDown}
                     onBlur={() => {
                       window.setTimeout(() => setIsStylistOpen(false), 140);
                     }}
                     placeholder="Search stylists"
                     autoComplete="off"
+                    role="combobox"
+                    aria-autocomplete="list"
+                    aria-expanded={isEditing && isStylistOpen}
+                    aria-controls="customer-profile-stylist-listbox-desktop"
+                    aria-activedescendant={
+                      isEditing && isStylistOpen && filteredStylists[activeStylistIndex]
+                        ? `customer-profile-stylist-option-desktop-${filteredStylists[activeStylistIndex].userId}`
+                        : undefined
+                    }
                     readOnly={!isEditing}
                     className="w-full rounded-2xl border border-[#D4AF37]/60 bg-transparent px-4 py-3 text-base font-medium text-white outline-none transition focus:border-[#D4AF37]"
                   />
                   {isEditing && isStylistOpen && (
-                    <div className="absolute z-10 mt-2 w-full rounded-2xl border border-[#D4AF37]/30 bg-[#0b0b0b] shadow-[0_0_30px_rgba(212,175,55,0.12)]">
+                    <div id="customer-profile-stylist-listbox-desktop" role="listbox" className="absolute z-10 mt-2 w-full rounded-2xl border border-[#D4AF37]/30 bg-[#0b0b0b] shadow-[0_0_30px_rgba(212,175,55,0.12)]">
                       {filteredStylists.length > 0 ? (
-                        filteredStylists.map((stylist) => (
+                        filteredStylists.map((stylist, index) => (
                           <button
                             type="button"
                             key={stylist.userId}
+                            id={`customer-profile-stylist-option-desktop-${stylist.userId}`}
+                            role="option"
+                            aria-selected={index === activeStylistIndex}
                             onMouseDown={() => handleStylistSelect(stylist)}
-                            className="w-full px-4 py-2 text-left text-sm text-neutral-200 transition hover:text-white"
+                            className={`w-full px-4 py-2 text-left text-sm transition hover:text-white ${index === activeStylistIndex ? 'bg-[#D4AF37]/10 text-white' : 'text-neutral-200'}`}
                           >
                             {stylist.name}
                           </button>
@@ -544,30 +590,45 @@ function Profile({ onClose }) {
                     onFocus={() => {
                       if (!isEditing) startEditing();
                       setIsStylistOpen(true);
+                      setActiveStylistIndex(0);
                     }}
                     onChange={(event) => {
                       if (!isEditing) return;
                       setStylistQuery(event.target.value);
                       updateField('preferredStylist', event.target.value);
                       setIsStylistOpen(true);
+                      setActiveStylistIndex(0);
                     }}
+                    onKeyDown={handleStylistKeyDown}
                     onBlur={() => {
                       window.setTimeout(() => setIsStylistOpen(false), 140);
                     }}
                     placeholder="Search stylists"
                     autoComplete="off"
+                    role="combobox"
+                    aria-autocomplete="list"
+                    aria-expanded={isEditing && isStylistOpen}
+                    aria-controls="customer-profile-stylist-listbox-mobile"
+                    aria-activedescendant={
+                      isEditing && isStylistOpen && filteredStylists[activeStylistIndex]
+                        ? `customer-profile-stylist-option-mobile-${filteredStylists[activeStylistIndex].userId}`
+                        : undefined
+                    }
                     readOnly={!isEditing}
                     className="w-full rounded-2xl border border-[#D4AF37]/60 bg-transparent px-4 py-3 text-base font-medium text-white outline-none transition focus:border-[#D4AF37]"
                   />
                   {isEditing && isStylistOpen && (
-                    <div className="absolute z-10 mt-2 w-full rounded-2xl border border-[#D4AF37]/30 bg-[#0b0b0b] shadow-[0_0_30px_rgba(212,175,55,0.12)]">
+                    <div id="customer-profile-stylist-listbox-mobile" role="listbox" className="absolute z-10 mt-2 w-full rounded-2xl border border-[#D4AF37]/30 bg-[#0b0b0b] shadow-[0_0_30px_rgba(212,175,55,0.12)]">
                       {filteredStylists.length > 0 ? (
-                        filteredStylists.map((stylist) => (
+                        filteredStylists.map((stylist, index) => (
                           <button
                             type="button"
                             key={stylist.userId}
+                            id={`customer-profile-stylist-option-mobile-${stylist.userId}`}
+                            role="option"
+                            aria-selected={index === activeStylistIndex}
                             onMouseDown={() => handleStylistSelect(stylist)}
-                            className="w-full px-4 py-2 text-left text-sm text-neutral-200 transition hover:text-white"
+                            className={`w-full px-4 py-2 text-left text-sm transition hover:text-white ${index === activeStylistIndex ? 'bg-[#D4AF37]/10 text-white' : 'text-neutral-200'}`}
                           >
                             {stylist.name}
                           </button>
@@ -632,7 +693,7 @@ function Profile({ onClose }) {
             
             <div className="space-y-5">
               <div>
-                <label htmlFor="customer-profile-current-password" className="mb-2 block text-[10px] uppercase tracking-widest text-gray-500">Current Password</label>
+                <label htmlFor="customer-profile-current-password" className="mb-2 block text-sm font-medium text-gray-400">Current password</label>
                 <input
                   id="customer-profile-current-password"
                   type="password"
@@ -644,7 +705,7 @@ function Profile({ onClose }) {
                 />
               </div>
               <div>
-                <label htmlFor="customer-profile-new-password" className="mb-2 block text-[10px] uppercase tracking-widest text-gray-500">New Password</label>
+                <label htmlFor="customer-profile-new-password" className="mb-2 block text-sm font-medium text-gray-400">New password</label>
                 <input
                   id="customer-profile-new-password"
                   type="password"
@@ -656,7 +717,7 @@ function Profile({ onClose }) {
                 />
               </div>
               <div>
-                <label htmlFor="customer-profile-confirm-password" className="mb-2 block text-[10px] uppercase tracking-widest text-gray-500">Confirm New Password</label>
+                <label htmlFor="customer-profile-confirm-password" className="mb-2 block text-sm font-medium text-gray-400">Confirm new password</label>
                 <input
                   id="customer-profile-confirm-password"
                   type="password"
@@ -669,7 +730,7 @@ function Profile({ onClose }) {
               </div>
             </div>
 
-            <div className="mt-8 flex items-center justify-end gap-4 text-[10px] uppercase tracking-widest">
+            <div className="mt-8 flex items-center justify-end gap-4 text-sm font-medium">
               <button
                 type="button"
                 onClick={() => {

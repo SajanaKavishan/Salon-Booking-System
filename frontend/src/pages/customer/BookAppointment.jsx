@@ -1838,7 +1838,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                           <div className="relative">
 
-                            <label htmlFor="stylist-search" className="text-[0.65rem] uppercase tracking-[0.35em] text-white/40">Search Artist</label>
+                            <label htmlFor="stylist-search" className="text-sm font-medium text-white/60">Search artist</label>
 
                             <input
 
@@ -2019,7 +2019,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                           <div>
 
-                            <label htmlFor="appointment-date-picker" className="text-[0.65rem] uppercase tracking-[0.35em] text-white/40">Select Date</label>
+                            <label htmlFor="appointment-date-picker" className="text-sm font-medium text-white/60">Select date</label>
 
                             <BookingCalendarPicker
                               id="appointment-date-picker"

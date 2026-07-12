@@ -944,6 +944,7 @@ function StaffDashboard() {
                 {todayAppointments.map((appointment) => {
                   const services = getServicesLabel(appointment);
                   const actions = renderAppointmentActions(appointment, { stacked: true });
+                  const customerPhone = appointment.user?.phone;
 
                   return (
                     <article
@@ -984,8 +985,23 @@ function StaffDashboard() {
                         </div>
                       </div>
 
-                      {actions && (
+                      {(customerPhone || actions) && (
                         <div className="mt-4 border-t border-white/10 pt-4">
+                          <p className="mb-3 text-xs font-bold uppercase tracking-[0.16em] text-[#d4af37]">
+                            Actions
+                          </p>
+                          {customerPhone && (
+                            <a
+                              href={`tel:${customerPhone}`}
+                              aria-label={`Call ${appointment.user?.name || 'customer'} at ${customerPhone}`}
+                              className="mb-2 flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-[#d4af37]/30 bg-[#d4af37]/10 px-4 py-2.5 text-sm font-semibold text-[#f3d878] transition hover:border-[#d4af37]/60 hover:bg-[#d4af37]/20 focus:outline-none focus:ring-2 focus:ring-[#d4af37]/40"
+                            >
+                              <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <path d="M6.6 10.8a15.5 15.5 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.24c1.1.37 2.3.56 3.6.56a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1C10.6 21 3 13.4 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.26.2 2.47.56 3.6a1 1 0 0 1-.25 1.02L6.6 10.8Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                              <span className="min-w-0 truncate">Call customer</span>
+                            </a>
+                          )}
                           {actions}
                         </div>
                       )}

@@ -143,7 +143,7 @@ function ReportDelayModal({ appointment, onClose, onSuccess }) {
           Stuck in traffic or running behind? Let us know how many minutes you'll be late so we can adjust the stylist's timeline.
         </p>
 
-        <div className="mt-6 grid grid-cols-3 gap-3">
+        <div className="mt-6 grid grid-cols-1 gap-2.5 min-[340px]:grid-cols-3 min-[340px]:gap-3">
           {DELAY_OPTIONS.map((minutes) => {
             const isSelected = selectedValue === minutes;
 
@@ -154,7 +154,7 @@ function ReportDelayModal({ appointment, onClose, onSuccess }) {
                 onClick={() => setSelectedValue(minutes)}
                 disabled={isSubmitting}
                 aria-pressed={isSelected}
-                className={`rounded-full border px-3 py-2.5 text-xs font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
+                className={`min-h-11 rounded-full border px-3 py-2.5 text-xs font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
                   isSelected
                     ? 'border-amber-500 bg-amber-500/5 text-amber-400 shadow-[0_0_18px_rgba(245,158,11,0.18)]'
                     : 'border-zinc-800 bg-zinc-900/50 text-zinc-400 hover:border-amber-500/40 hover:text-amber-300'
