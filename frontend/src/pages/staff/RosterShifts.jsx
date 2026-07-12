@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "react-toastify";
 import { Calendar, Briefcase, PlusCircle, NotebookText, Loader2, Palmtree, ChevronLeft, ChevronRight, X } from "lucide-react";
@@ -20,6 +20,8 @@ const getLeaveYear = (leave) => {
 };
 
 export default function RosterShifts() {
+  const mobileWeekScrollerRef = useRef(null);
+  const todayRosterCardRef = useRef(null);
   const [metrics, setMetrics] = useState({
     leaveBalance: 12,
   });
@@ -273,6 +275,21 @@ export default function RosterShifts() {
       ))
   ), [fullLeaveHistory, selectedLeaveYear]);
 
+  useEffect(() => {
+    if (isLoading || !mobileWeekScrollerRef.current) return;
+
+    const scroller = mobileWeekScrollerRef.current;
+    const todayCard = todayRosterCardRef.current;
+    const frameId = window.requestAnimationFrame(() => {
+      scroller.scrollTo({
+        left: todayCard ? todayCard.offsetLeft - scroller.offsetLeft : 0,
+        behavior: todayCard ? 'smooth' : 'auto',
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [currentWeek, isLoading]);
+
   const toggleSelectedDate = (date) => {
     if (isStaffOffDay(date)) {
       toast.error("You cannot apply leave on a scheduled off day.");
@@ -437,16 +454,22 @@ export default function RosterShifts() {
                 <GoldButton onClick={() => setCurrentWeek(addDays(currentWeek, 7))} variant="outline" className="px-3 py-2 text-sm">Next</GoldButton>
               </div>
             </div>
-            <div className="grid gap-2 sm:hidden" aria-label="Weekly roster agenda">
+            <div
+              ref={mobileWeekScrollerRef}
+              className="-mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-3 scrollbar-none sm:hidden"
+              aria-label="Weekly roster. Swipe horizontally to view other days."
+            >
               {getWeekDays().map((date) => {
                 const dayStatus = getDayStatus(date);
                 const dayClass = getWeekDayCardClass(dayStatus, date);
                 const statusTextClass = getStatusTextClass(dayStatus, date);
+                const isToday = isSameDay(date, new Date());
 
                 return (
                   <div
                     key={getSelectedDateKey(date)}
-                    className={`flex min-w-0 items-center justify-between gap-3 rounded-xl border p-3 ${dayClass}`}
+                    ref={isToday ? todayRosterCardRef : null}
+                    className={`flex min-w-[82%] snap-start items-center justify-between gap-3 rounded-xl border p-4 min-[380px]:min-w-[72%] ${dayClass}`}
                   >
                     <div className="flex min-w-0 items-center gap-3">
                       <div className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-lg border border-white/10 bg-black/20">
@@ -455,7 +478,6 @@ export default function RosterShifts() {
                       </div>
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold text-white">{format(date, 'EEEE')}</p>
-                        <p className="mt-0.5 text-xs text-gray-400">{format(date, 'MMMM d, yyyy')}</p>
                       </div>
                     </div>
                     <span className={`shrink-0 text-right text-[10px] font-bold uppercase tracking-tight ${statusTextClass}`}>
