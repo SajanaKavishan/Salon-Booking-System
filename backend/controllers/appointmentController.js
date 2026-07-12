@@ -119,6 +119,29 @@ const getAppointmentScheduleStart = (appointment) => {
     return new Date(year, month - 1, day, Math.floor(startMinutes / 60), startMinutes % 60, 0, 0);
 };
 
+const getAppointmentScheduleEnd = (appointment) => {
+    const dateValue = appointment?.date || appointment?.bookingDate;
+    const dateKey = dateValue instanceof Date
+        ? dateValue.toISOString().slice(0, 10)
+        : String(dateValue || '').slice(0, 10);
+    const slotParts = typeof appointment?.timeSlot === 'string'
+        ? appointment.timeSlot.split(/\s+-\s+/)
+        : [];
+    const endTime = appointment?.adjustedEndTime || appointment?.endTime || slotParts[1];
+    const [year, month, day] = dateKey.split('-').map(Number);
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey) || [year, month, day].some(Number.isNaN) || !endTime) {
+        return null;
+    }
+
+    try {
+        const endMinutes = timeToMinutes(endTime);
+        return new Date(year, month - 1, day, Math.floor(endMinutes / 60), endMinutes % 60, 0, 0);
+    } catch {
+        return null;
+    }
+};
+
 const parseSlotRange = (slotRange) => {
     if (typeof slotRange !== 'string') {
         throw createAppointmentError('Invalid time slot format provided');
@@ -803,23 +826,46 @@ const buildStaffAssignmentQuery = (staffIds) => ({
 
 const getPendingAppointmentsCount = async (req, res) => {
     try {
-        const query = {
-            status: Appointment.normalizeStatus('Pending')
-        };
-
-        const since = req.query.since ? new Date(req.query.since) : null;
-        if (since && !Number.isNaN(since.getTime())) {
-            query.createdAt = { $gt: since };
-        }
+        const query = { status: { $in: ['pending', 'confirmed'] } };
+        const parsedSince = req.query.since ? new Date(req.query.since) : null;
+        const since = parsedSince && !Number.isNaN(parsedSince.getTime()) ? parsedSince : null;
 
         if (req.user.role === 'staff') {
             const staffIds = await getStaffAssignmentIdsForUser(req.user);
             Object.assign(query, buildStaffAssignmentQuery(staffIds));
         }
 
-        const count = await Appointment.countDocuments(query);
+        const actionableAppointments = await Appointment.find(query)
+            .select('status createdAt date bookingDate endTime adjustedEndTime timeSlot')
+            .lean();
+        const now = new Date();
+        let pendingApprovalCount = 0;
+        let overdueCompletionCount = 0;
 
-        res.status(200).json({ count });
+        actionableAppointments.forEach((appointment) => {
+            const normalizedStatus = Appointment.normalizeStatus(appointment.status);
+
+            if (normalizedStatus === 'pending') {
+                if (!since || (appointment.createdAt && appointment.createdAt > since)) {
+                    pendingApprovalCount += 1;
+                }
+                return;
+            }
+
+            const scheduledEnd = getAppointmentScheduleEnd(appointment);
+            if (
+                normalizedStatus === 'confirmed'
+                && scheduledEnd
+                && scheduledEnd <= now
+                && (!since || scheduledEnd > since)
+            ) {
+                overdueCompletionCount += 1;
+            }
+        });
+
+        const count = pendingApprovalCount + overdueCompletionCount;
+
+        res.status(200).json({ count, pendingApprovalCount, overdueCompletionCount });
     } catch (error) {
         console.error('Get Pending Appointments Count Error:', error);
         res.status(error.statusCode || 500).json({
