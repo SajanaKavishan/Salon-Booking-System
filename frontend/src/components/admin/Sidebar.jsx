@@ -170,10 +170,20 @@ function Sidebar({ isOpen = false, onClose = () => { } }) {
       if (userRole !== 'admin' || isReviewsPage) return;
 
       try {
-        const reviewsSince = localStorage.getItem(reviewsSeenKey);
+        let reviewsSince = localStorage.getItem(reviewsSeenKey);
+
+        // On first use, establish a baseline instead of treating every
+        // historical review as a new notification.
+        if (!reviewsSince) {
+          reviewsSince = new Date().toISOString();
+          localStorage.setItem(reviewsSeenKey, reviewsSince);
+          if (isCurrent) setPendingReviewsCount(0);
+          return;
+        }
+
         const response = await axios.get(`${API_BASE_URL}/api/appointments/reviews/pending-count`, {
           headers: { Authorization: `Bearer ${token}` },
-          params: reviewsSince ? { since: reviewsSince } : undefined,
+          params: { since: reviewsSince },
           signal: controller.signal
         });
 

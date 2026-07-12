@@ -881,15 +881,20 @@ const getPendingAppointmentsCount = async (req, res) => {
 // @access  Private/Admin
 const getPendingReviewsCount = async (req, res) => {
     try {
-        const query = { rating: { $exists: true, $ne: null } };
         const since = req.query.since ? new Date(req.query.since) : null;
 
-        if (since && !Number.isNaN(since.getTime())) {
-            query.reviewSubmittedAt = { $gt: since };
+        // This endpoint represents unseen/new reviews, never the historical
+        // total. A client without a baseline has no earlier review to count.
+        if (!since || Number.isNaN(since.getTime())) {
+            return res.status(200).json({ count: 0 });
         }
 
+        const query = {
+            rating: { $exists: true, $ne: null },
+            reviewSubmittedAt: { $gt: since },
+        };
         const count = await Appointment.countDocuments(query);
-        res.status(200).json({ count });
+        return res.status(200).json({ count });
     } catch (error) {
         console.error('Get Pending Reviews Count Error:', error);
         res.status(500).json({ message: 'Server Error: Could not fetch new reviews count.' });
