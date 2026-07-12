@@ -4,6 +4,7 @@ const dns = require("dns");
 const path = require("path");
 const dotenv = require("dotenv");
 const cors = require("cors");
+const helmet = require("helmet");
 const { startHolidaySyncScheduler } = require("./services/holidaySyncService");
 
 dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
@@ -11,6 +12,8 @@ dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
 const app = express();
 
 mongoose.set("bufferCommands", false);
+
+app.use(helmet());
 
 const configuredClientOrigins = (process.env.CLIENT_URL || "")
     .split(",")

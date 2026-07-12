@@ -28,6 +28,17 @@ const registerRateLimiter = rateLimit({
   },
 });
 
+const passwordResetRateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many password reset attempts. Please try again later.',
+  },
+});
+
 const handleProfileImageUpload = (req, res, next) => {
   uploadProfileImage.single('profileImage')(req, res, (error) => {
     if (!error) {
@@ -46,8 +57,8 @@ const handleProfileImageUpload = (req, res, next) => {
 // Routes
 router.post('/register', registerRateLimiter, registerUser); // Route for user registration, handled by the registerUser controller function
 router.post('/login', loginRateLimiter, login); // Route for user login, handled by the login controller function
-router.post('/forgot-password', forgotPassword);
-router.put('/reset-password/:token', resetPassword);
+router.post('/forgot-password', passwordResetRateLimiter, forgotPassword);
+router.put('/reset-password/:token', passwordResetRateLimiter, resetPassword);
 router.post('/google-login', loginRateLimiter, googleLogin); // New route for handling Google login requests
 
 // This route is protected by the protect middleware, which means that only authenticated users can access it. The getMe function will return the profile information of the logged-in user.

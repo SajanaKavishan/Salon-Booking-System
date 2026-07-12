@@ -2,6 +2,7 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const router = express.Router();
 const { protect, admin } = require('../middleware/authMiddleware');
+const validateObjectId = require('../middleware/validateObjectId');
 const {
   createMessage,
   deleteMessage,
@@ -27,9 +28,9 @@ router.post('/', contactMessageRateLimiter, createMessage);
 router.get('/', protect, admin, getMessages);
 
 // Mark a message as read
-router.put('/:id/read', protect, admin, markAsRead);
+router.put('/:id/read', validateObjectId(), protect, admin, markAsRead);
 
 // 3. DELETE messages
-router.delete('/:id', protect, admin, deleteMessage);
+router.delete('/:id', validateObjectId(), protect, admin, deleteMessage);
 
 module.exports = router;
