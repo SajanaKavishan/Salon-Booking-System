@@ -346,9 +346,15 @@ const getStaffAvailability = async (req, res) => {
 
 // @desc    Create new appointment
 // @route   POST /api/appointments
-// @access  Private
+// @access  Private/Customer or Admin
 const createAppointment = async (req, res) => {
     try {
+        if (req.user?.role === 'staff') {
+            return res.status(403).json({
+                message: 'Staff accounts cannot create customer bookings directly.'
+            });
+        }
+
         const {
             staffId,
             stylist: legacyStylist,
