@@ -1,4 +1,5 @@
 const Appointment = require('../models/appointmentModel');
+const AppointmentScheduleLock = require('../models/AppointmentScheduleLock');
 const mongoose = require('mongoose');
 const Service = require('../models/Service'); // Import the Service model to interact with the services collection in the database
 const Staff = require('../models/Staff'); // Import the Staff model to interact with the staff collection
@@ -144,20 +145,37 @@ const slotRangesMatch = (firstSlotRange, secondSlotRange) => (
     && firstSlotRange.end === secondSlotRange.end
 );
 
-const findOverlappingAppointmentForStaff = async ({ date, staffId, startMins, endMins }) => {
+const findOverlappingAppointmentForStaff = async ({ date, staffId, startMins, endMins, session }) => {
     const startDate = new Date(`${date}T00:00:00.000Z`);
     const endDate = new Date(startDate);
     endDate.setUTCDate(endDate.getUTCDate() + 1);
 
-    const appointments = await Appointment.find({
-        status: { $nin: ['cancelled', 'canceled', 'rejected', 'completed', 'no-show', 'Cancelled', 'Canceled', 'Rejected', 'Completed', 'No-Show'] },
+    const appointmentScope = {
+        status: { $nin: ['cancelled', 'canceled', 'rejected', 'Cancelled', 'Canceled', 'Rejected'] },
         $or: [
             { date, stylist: staffId },
             { date, staffId },
             { bookingDate: { $gte: startDate, $lt: endDate }, stylist: staffId },
             { bookingDate: { $gte: startDate, $lt: endDate }, staffId },
         ],
-    }).select('startTime endTime timeSlot status').lean();
+    };
+
+    const numericOverlap = await Appointment.findOne({
+        ...appointmentScope,
+        startMinutes: { $lt: endMins },
+        endMinutes: { $gt: startMins },
+    }).select('_id').session(session || null).lean();
+
+    if (numericOverlap) return numericOverlap;
+
+    // Appointments created before numeric interval fields were introduced still
+    // participate in conflict detection until a data migration backfills them.
+    const appointments = await Appointment.find({
+        ...appointmentScope,
+        $and: [
+            { $or: [{ startMinutes: { $exists: false } }, { endMinutes: { $exists: false } }] },
+        ],
+    }).select('startTime endTime timeSlot status').session(session || null).lean();
 
     return appointments.find((appointment) => {
         const [slotStartTime, slotEndTime] = typeof appointment.timeSlot === 'string'
@@ -537,31 +555,6 @@ const createAppointment = async (req, res) => {
             }
 
             stylistId = assignedStaff._id;
-        } else {
-            // Admin force bookings intentionally skip the normal overlap/buffer guard.
-            // The flag is ignored for customers and staff so public booking rules remain intact.
-            if (!isAdminBypass) {
-                const existingAppointments = await Appointment.find({
-                    date: date,
-                    stylist: stylistId,
-                    status: { $nin: ['cancelled', 'rejected', 'Rejected', 'Cancelled'] }
-                });
-
-                let hasOverlap = false;
-                for (let appt of existingAppointments) {
-                    const existingStart = timeToMinutes(appt.startTime);
-                    const existingEnd = timeToMinutes(appt.endTime);
-
-                    if ((startMins < existingEnd) && (endMins > existingStart)) {
-                        hasOverlap = true;
-                        break;
-                    }
-                }
-
-                if (hasOverlap) {
-                    return res.status(400).json({ message: "Appointment overlaps with an existing appointment." });
-                }
-            }
         }
 
         if (!stylistId || !mongoose.isValidObjectId(stylistId)) {
@@ -574,23 +567,6 @@ const createAppointment = async (req, res) => {
         }
 
         const stylistName = finalStylist.name;
-
-        if (isAdminBypass) {
-            const overlappingAppointment = await findOverlappingAppointmentForStaff({
-                date,
-                staffId: stylistId,
-                startMins,
-                endMins,
-            });
-
-            if (overlappingAppointment) {
-                return res.status(409).json({
-                    message: 'This stylist already has an overlapping appointment at this time. Please refresh appointments and try again.',
-                    conflict: true,
-                    reason: 'STALE_APPOINTMENT_DATA',
-                });
-            }
-        }
 
         if (!isAdminBypass && await isStaffOnApprovedLeave(finalStylist, appointmentDate, nextAppointmentDate)) {
             return res.status(400).json({ message: 'This stylist is on approved leave for the selected date.' });
@@ -613,21 +589,58 @@ const createAppointment = async (req, res) => {
             }
         }
 
-        const appointment = await Appointment.create({
-            user: bookingUser._id,
-            services: requestedServiceIds,
-            date: date,
-            startTime: formattedStartTime,
-            endTime: formattedEndTime,
-            totalDuration: totalDuration,
-            totalAmount: totalAmount,
-            customerMobile: normalizedCustomerMobile,
-            staffId: stylistId,
-            bookingDate: appointmentDate,
-            timeSlot: `${formattedStartTime} - ${formattedEndTime}`,
-            stylist: stylistId,
-            status: 'pending'
-        });
+        const session = await mongoose.startSession();
+        let appointment;
+
+        try {
+            await session.withTransaction(async () => {
+                // MongoDB transactions do not predicate-lock an empty overlap query.
+                // Updating this deterministic staff/day document makes concurrent
+                // booking transactions contend on the same document and serialize.
+                await AppointmentScheduleLock.findOneAndUpdate(
+                    { _id: `${stylistId}:${date}` },
+                    { $inc: { revision: 1 } },
+                    { upsert: true, new: true, session, setDefaultsOnInsert: true }
+                );
+
+                const overlappingAppointment = await findOverlappingAppointmentForStaff({
+                    date,
+                    staffId: stylistId,
+                    startMins,
+                    endMins,
+                    session,
+                });
+
+                if (overlappingAppointment) {
+                    throw createAppointmentError(
+                        'This time slot overlaps with an existing booking',
+                        409
+                    );
+                }
+
+                appointment = new Appointment({
+                    user: bookingUser._id,
+                    services: requestedServiceIds,
+                    date,
+                    startTime: formattedStartTime,
+                    endTime: formattedEndTime,
+                    startMinutes: startMins,
+                    endMinutes: endMins,
+                    totalDuration,
+                    totalAmount,
+                    customerMobile: normalizedCustomerMobile,
+                    staffId: stylistId,
+                    bookingDate: appointmentDate,
+                    timeSlot: `${formattedStartTime} - ${formattedEndTime}`,
+                    stylist: stylistId,
+                    status: 'pending'
+                });
+
+                await appointment.save({ session });
+            });
+        } finally {
+            await session.endSession();
+        }
 
         if (settings.bookingAlerts && supportEmail) {
             const serviceNames = selectedServices.map((service) => escapeHtml(service.name)).join(', ');
