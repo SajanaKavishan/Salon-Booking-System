@@ -9,7 +9,11 @@ const protect = async (req, res, next) => {
 
     try {
         // Get the token from the header
-        const token = req.headers.authorization.split(' ')[1];
+        const token = req.headers.authorization.split(' ')[1]?.trim();
+
+        if (!token || token.split('.').length !== 3) {
+            return res.status(401).json({ message: 'Invalid token' });
+        }
 
         // Verify the token
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
@@ -23,8 +27,14 @@ const protect = async (req, res, next) => {
 
         return next();
     } catch (error) {
-        console.log(error);
-        return res.status(401).json({ message: 'Unauthorized' });
+        const knownJwtErrors = ['JsonWebTokenError', 'TokenExpiredError', 'NotBeforeError'];
+        if (knownJwtErrors.includes(error.name)) {
+            console.warn(`Authentication failed: ${error.message}`);
+            return res.status(401).json({ message: 'Unauthorized' });
+        }
+
+        console.error('Authentication middleware error:', error);
+        return res.status(500).json({ message: 'Server error during authentication' });
     }
 };
 
