@@ -270,7 +270,7 @@ function OpeningHoursScheduler({ value, onChange }) {
                           key={day.key}
                           type="button"
                           onClick={() => handleDayToggle(slot.id, day.key)}
-                          className={`flex aspect-square min-h-8 items-center justify-center rounded-full border text-xs font-bold transition focus:outline-none focus:ring-2 focus:ring-[#d4af37]/40 sm:min-h-10 sm:text-sm ${
+                          className={`flex aspect-square w-full items-center justify-center rounded-full border text-xs font-bold transition focus:outline-none focus:ring-2 focus:ring-[#d4af37]/40 sm:text-sm ${
                             isActive
                               ? 'border-[#d4af37] bg-[#d4af37] text-black shadow-[0_0_22px_rgba(212,175,55,0.22)]'
                               : 'border-white/10 bg-white/[0.03] text-zinc-400 hover:border-[#d4af37]/50 hover:text-[#d4af37]'
