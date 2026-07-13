@@ -39,6 +39,7 @@ const defaultSettings = {
 
 export function useSalonSettings() {
   const [settings, setSettings] = useState(defaultSettings);
+  const [originalSettings, setOriginalSettings] = useState(defaultSettings);
   const [isLoading, setIsLoading] = useState(true);
   const [settingsError, setSettingsError] = useState(null);
 
@@ -52,14 +53,17 @@ export function useSalonSettings() {
           signal: controller.signal
         });
 
-        setSettings((current) => ({
-          ...current,
+        const loadedSettings = {
+          ...defaultSettings,
           ...response.data,
           openingHours: {
             ...defaultOpeningHours,
             ...(response.data?.openingHours || {})
           }
-        }));
+        };
+
+        setSettings(loadedSettings);
+        setOriginalSettings(loadedSettings);
       } catch (error) {
         if (axios.isCancel(error) || error.name === 'CanceledError' || controller.signal.aborted) {
           return;
@@ -81,5 +85,9 @@ export function useSalonSettings() {
     };
   }, []);
 
-  return { settings, setSettings, isLoading, settingsError };
+  const cancelChanges = () => {
+    setSettings(originalSettings);
+  };
+
+  return { settings, setSettings, isLoading, settingsError, cancelChanges };
 }

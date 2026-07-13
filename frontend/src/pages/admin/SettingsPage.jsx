@@ -256,7 +256,7 @@ function OpeningHoursScheduler({ value, onChange }) {
                 hasInvalidTime ? 'border-red-400/40' : 'border-white/10 hover:border-[#d4af37]/35'
               }`}
             >
-              <div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-end xl:flex-nowrap">
+              <div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-end">
                 <div className="w-full min-w-0 lg:min-w-[18rem] lg:flex-1">
                   <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
                     Slot {slotIndex + 1}
@@ -767,7 +767,7 @@ function HolidaySelectedDateChips({ selectedDates = [], onRemove, disabled = fal
 }
 
 function SettingsPage() {
-  const { settings, setSettings, isLoading, settingsError } = useSalonSettings();
+  const { settings, setSettings, isLoading, settingsError, cancelChanges } = useSalonSettings();
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
   const [savedSettingsSignature, setSavedSettingsSignature] = useState('');
@@ -1223,7 +1223,7 @@ function SettingsPage() {
           <p className="mt-2 text-sm text-red-100/70">{settingsError}</p>
         </GlassCard>
       ) : (
-        <section className="grid gap-5 sm:gap-8 xl:grid-cols-[1.05fr_0.95fr]">
+        <section className="grid gap-5 sm:gap-8 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
           <SectionPanel className="p-4 sm:p-8">
             <div className="border-b border-white/10 pb-5">
               <h2 className="salon-heading">Brand Profile Info</h2>
@@ -1549,7 +1549,17 @@ function SettingsPage() {
       )}
 
       {showGlobalSaveBar && (
-        <div className="fixed bottom-0 left-0 right-0 z-20 flex items-center justify-end border-t border-zinc-800/80 bg-[#0a0a0c]/90 px-4 py-3 backdrop-blur-md sm:px-6 sm:py-4 md:left-80 md:z-40">
+        <div className="fixed bottom-0 left-0 right-0 z-20 flex flex-col-reverse items-center justify-end gap-3 border-t border-zinc-800/80 bg-[#0a0a0c]/90 px-4 py-3 backdrop-blur-md sm:flex-row sm:px-6 sm:py-4 md:left-80 md:z-40">
+          {hasSettingsChanges && (
+            <button
+              type="button"
+              onClick={cancelChanges}
+              disabled={isSaving}
+              className="w-full px-4 py-2.5 text-center text-sm font-semibold text-zinc-400 transition-colors hover:text-white disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:text-base"
+            >
+              Cancel
+            </button>
+          )}
           <GoldButton type="button" onClick={handleSave} disabled={isSaving || isLoading || !hasSettingsChanges} className="w-full px-6 py-3 text-sm disabled:opacity-45 sm:w-fit sm:text-base">
             {isSaving ? 'Saving...' : 'Save Changes'}
           </GoldButton>
