@@ -466,9 +466,9 @@ function ChatWidget({ mode = 'desktop-floating' }) {
   const isMobileTrigger = mode === 'mobile-trigger';
   const rootClassName = isMobileTrigger
     ? 'w-full sm:hidden'
-    : 'fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+1rem)] z-50 hidden flex-col items-end gap-3 sm:inset-x-auto sm:bottom-8 sm:right-8 sm:flex sm:gap-4';
+    : 'fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+1rem)] z-[60] hidden flex-col items-end gap-3 sm:inset-x-auto sm:bottom-8 sm:right-8 sm:flex sm:gap-4';
   const panelPositionClassName = isMobileTrigger
-    ? `fixed inset-x-3 top-[calc(env(safe-area-inset-top)+4.25rem)] z-50 max-[360px]:inset-x-2 ${
+    ? `fixed inset-x-3 top-[calc(env(safe-area-inset-top)+5.5rem)] z-[70] max-[360px]:inset-x-2 ${
         isInputFocused
           ? 'bottom-[calc(env(safe-area-inset-bottom)+0.5rem)]'
           : 'bottom-[calc(env(safe-area-inset-bottom)+5.25rem)]'
@@ -476,7 +476,7 @@ function ChatWidget({ mode = 'desktop-floating' }) {
     : '';
   const panelSizeClassName = isMobileTrigger
     ? 'h-auto w-auto'
-    : 'h-[min(560px,calc(100svh-112px))] w-full sm:h-[min(600px,calc(100vh-110px))] sm:w-[410px]';
+    : 'h-[min(560px,calc(100svh-12rem))] max-h-[calc(100svh-12rem)] w-full sm:h-[min(600px,calc(100vh-13rem))] sm:max-h-[calc(100vh-13rem)] sm:w-[410px]';
   const monthOptions = getMonthOptions();
   const visibleQuickActions = (() => {
     if (currentStep === 'custom_input') return [];
@@ -612,7 +612,7 @@ function ChatWidget({ mode = 'desktop-floating' }) {
       </style>
       {shouldRenderChat && (
         <div
-          className={`fixed inset-0 z-40 bg-black/45 backdrop-blur-sm transition-opacity duration-260 sm:hidden ${
+          className={`fixed inset-0 z-[65] bg-black/45 backdrop-blur-sm transition-opacity duration-260 sm:hidden ${
             isOpen ? 'opacity-100' : 'opacity-0'
           }`}
           aria-hidden="true"
