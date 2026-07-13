@@ -3,6 +3,7 @@ const Service = require('../models/Service');
 const Staff = require('../models/Staff');
 const User = require('../models/User');
 
+// Constants for month names
 const MONTH_NAMES = [
   'Jan',
   'Feb',
@@ -18,6 +19,7 @@ const MONTH_NAMES = [
   'Dec',
 ];
 
+// Constants for appointment statuses and their labels
 const FINAL_STATUSES = ['completed', 'rejected', 'cancelled'];
 const STATUS_LABELS = {
   completed: 'Completed',
@@ -25,6 +27,7 @@ const STATUS_LABELS = {
   cancelled: 'Cancelled',
 };
 
+// Constants for date range labels
 const RANGE_LABELS = {
   YTD: 'Year to date',
   FULL_YEAR: 'Full year',
@@ -32,6 +35,7 @@ const RANGE_LABELS = {
   LAST_30_DAYS: 'Last 30 days',
 };
 
+// Utility functions for date formatting and range calculations
 const formatDate = (date) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -40,18 +44,21 @@ const formatDate = (date) => {
   return `${year}-${month}-${day}`;
 };
 
+// Utility functions for date calculations
 const startOfDay = (date) => {
   const nextDate = new Date(date);
   nextDate.setHours(0, 0, 0, 0);
   return nextDate;
 };
 
+// Utility function to get the end of the day for a given date
 const endOfDay = (date) => {
   const nextDate = new Date(date);
   nextDate.setHours(23, 59, 59, 999);
   return nextDate;
 };
 
+// Function to normalize the range input
 const normalizeRange = (range) => {
   const normalizedRange = String(range || 'YTD')
     .trim()
@@ -64,12 +71,14 @@ const normalizeRange = (range) => {
   return 'YTD';
 };
 
+// Function to get the number of days for rolling ranges
 const getRollingRangeDays = (range) => {
   if (range === 'LAST_7_DAYS') return 7;
   if (range === 'LAST_30_DAYS') return 30;
   return null;
 };
 
+// Function to calculate the analytics date window based on the year and range
 const getAnalyticsDateWindow = ({ year, range, now = new Date() }) => {
   const currentYear = now.getFullYear();
   const requestedYear = Number(year ?? currentYear);
@@ -114,6 +123,7 @@ const getAnalyticsDateWindow = ({ year, range, now = new Date() }) => {
   };
 };
 
+// Function to build the appointment date match condition for MongoDB aggregation
 const buildAppointmentDateMatch = (window) => ({
   $or: [
     {
@@ -131,6 +141,7 @@ const buildAppointmentDateMatch = (window) => ({
   ],
 });
 
+// Function to build the createdAt match condition for MongoDB aggregation
 const buildCreatedAtMatch = (window) => ({
   createdAt: {
     $gte: window.startDate,
@@ -138,6 +149,7 @@ const buildCreatedAtMatch = (window) => ({
   },
 });
 
+// Function to build the list of available years based on completed appointments
 const buildAvailableYears = async (currentYear) => {
   const completedYears = await Appointment.aggregate([
     {
@@ -162,6 +174,7 @@ const buildAvailableYears = async (currentYear) => {
   ).sort((firstYear, secondYear) => secondYear - firstYear);
 };
 
+// Function to build monthly revenue trends based on the revenue by month and the selected window
 const buildMonthlyRevenueTrends = (revenueByMonth, window) => {
   const revenueMap = new Map(
     revenueByMonth.map(({ monthNumber, revenue }) => [monthNumber, revenue])
@@ -176,6 +189,7 @@ const buildMonthlyRevenueTrends = (revenueByMonth, window) => {
   }));
 };
 
+// Function to build daily revenue trends based on the revenue by day and the selected window
 const buildDailyRevenueTrends = (revenueByDay, window) => {
   const revenueMap = new Map(
     revenueByDay.map(({ day, revenue }) => [day, revenue])
@@ -195,6 +209,7 @@ const buildDailyRevenueTrends = (revenueByDay, window) => {
   return trends;
 };
 
+// Function to aggregate staff performance based on approved reviews and ratings
 const aggregateStaffPerformance = async (query = {}) => {
   const window = getAnalyticsDateWindow(query);
 
@@ -252,6 +267,7 @@ const aggregateStaffPerformance = async (query = {}) => {
   ]);
 };
 
+// Controller function to get the analytics summary based on the selected year and range
 const getAnalyticsSummary = async (req, res) => {
   try {
     const window = getAnalyticsDateWindow(req.query);
@@ -364,6 +380,7 @@ const getAnalyticsSummary = async (req, res) => {
   }
 };
 
+// Controller function to get the top services based on completed and confirmed appointments
 const getTopServices = async (req, res) => {
   try {
     const window = getAnalyticsDateWindow(req.query);
@@ -415,6 +432,7 @@ const getTopServices = async (req, res) => {
   }
 };
 
+// Controller function to get the appointment status counts based on completed, rejected, and cancelled appointments
 const getAppointmentStatus = async (req, res) => {
   try {
     const window = getAnalyticsDateWindow(req.query);
@@ -472,6 +490,7 @@ const getAppointmentStatus = async (req, res) => {
   }
 };
 
+// Controller function to get staff performance analytics based on approved reviews and ratings
 const getStaffPerformanceAnalytics = async (req, res) => {
   try {
     const staff = await aggregateStaffPerformance(req.query);
