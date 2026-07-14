@@ -4,6 +4,7 @@ const CLOUDINARY_HOST_PATTERN = /(^|\.)res\.cloudinary\.com$/i;
 
 const stripExtension = (value) => value.replace(/\.[a-zA-Z0-9]+$/, '');
 
+// Extracts the public ID from a Cloudinary image URL.
 const extractCloudinaryPublicId = (imageUrl = '') => {
   if (!imageUrl || typeof imageUrl !== 'string') return '';
 
@@ -31,10 +32,12 @@ const extractCloudinaryPublicId = (imageUrl = '') => {
   return publicIdSegments.join('/');
 };
 
+// Resolves the public ID for a Cloudinary asset, either from the stored public ID or by extracting it from the image URL.
 const resolveCloudinaryPublicId = (storedPublicId, imageUrl) => (
   storedPublicId || extractCloudinaryPublicId(imageUrl)
 );
 
+// Deletes a Cloudinary asset using its public ID, which can be provided directly or extracted from the image URL.
 const destroyCloudinaryAsset = async (storedPublicId, imageUrl) => {
   const publicId = resolveCloudinaryPublicId(storedPublicId, imageUrl);
   if (!publicId) return;
@@ -42,6 +45,7 @@ const destroyCloudinaryAsset = async (storedPublicId, imageUrl) => {
   await cloudinary.uploader.destroy(publicId);
 };
 
+// Cleans up a Cloudinary uploaded file by deleting it using its filename. This is useful for removing temporary files after processing.
 const cleanupUploadedCloudinaryFile = async (file, context = 'Cloudinary uploaded file cleanup') => {
   if (!file?.filename) return;
 

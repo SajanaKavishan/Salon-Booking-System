@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 
+// Define status aliases to normalize different representations of booking statuses
 const STATUS_ALIASES = {
     pending: 'pending',
     confirmed: 'confirmed',
@@ -12,6 +13,7 @@ const STATUS_ALIASES = {
     noshow: 'no-show',
 };
 
+// Define display names for booking statuses to provide user-friendly representations
 const STATUS_DISPLAY_NAMES = {
     pending: 'Pending',
     confirmed: 'Approved',
@@ -21,16 +23,19 @@ const STATUS_DISPLAY_NAMES = {
     'no-show': 'No-Show',
 };
 
+// Function to normalize booking status values, ensuring consistent representation
 const normalizeBookingStatus = (status) => {
     if (typeof status !== 'string') return status;
     return STATUS_ALIASES[status.trim().toLowerCase()] || status.trim().toLowerCase();
 };
 
+// Helper function to convert a Date object to a legacy date string format (YYYY-MM-DD)
 const toLegacyDateString = (bookingDate) => {
     if (!(bookingDate instanceof Date) || Number.isNaN(bookingDate.getTime())) return undefined;
     return bookingDate.toISOString().slice(0, 10);
 };
 
+// Define the schema for the Appointment model, including fields for user, services, staff, booking date, time slot, status, and other relevant information
 const appointmentSchema = new mongoose.Schema({
     user: {
         type: mongoose.Schema.Types.ObjectId,
@@ -142,6 +147,7 @@ const appointmentSchema = new mongoose.Schema({
     },
 });
 
+// Pre-validation hook to synchronize legacy fields with the new schema fields, ensuring consistency between them
 appointmentSchema.pre('validate', function synchronizeBookingFields() {
     if (!this.staffId && this.stylist) this.staffId = this.stylist;
     if (!this.stylist && this.staffId) this.stylist = this.staffId;

@@ -1,17 +1,21 @@
 const axios = require('axios');
 const Holiday = require('../models/Holiday');
 
+// Sri Lankan public holiday calendar URL from Google Calendar API
 const GOOGLE_SRI_LANKA_HOLIDAY_CALENDAR_URL =
   'https://www.googleapis.com/calendar/v3/calendars/en.lk%23holiday%40group.v.calendar.google.com/events';
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
 
+// Helper function to get the current year
 const getCurrentYear = () => new Date().getFullYear();
 
+// Helper function to get the start and end of the year in ISO format
 const getYearBounds = (year) => ({
   timeMin: `${year}-01-01T00:00:00Z`,
   timeMax: `${year}-12-31T23:59:59Z`,
 });
 
+// Fetch Sri Lankan public holidays from Google Calendar API for a given year
 const fetchSriLankanPublicHolidays = async (year = getCurrentYear()) => {
   const apiKey = process.env.GOOGLE_CALENDAR_API_KEY;
 
@@ -34,6 +38,7 @@ const fetchSriLankanPublicHolidays = async (year = getCurrentYear()) => {
   return Array.isArray(response.data?.items) ? response.data.items : [];
 };
 
+// Normalize the public holiday data fetched from Google Calendar API
 const normalizePublicHoliday = (calendarEvent) => {
   const date = String(calendarEvent?.start?.date || '').slice(0, 10);
   const name = String(calendarEvent?.summary || 'Public Holiday').trim();
@@ -51,6 +56,7 @@ const normalizePublicHoliday = (calendarEvent) => {
   };
 };
 
+// Sync Sri Lankan public holidays for a given year and update the database
 const syncSriLankanPublicHolidays = async (year = getCurrentYear()) => {
   const publicHolidays = await fetchSriLankanPublicHolidays(year);
   const normalizedHolidays = publicHolidays
@@ -101,6 +107,7 @@ const syncSriLankanPublicHolidays = async (year = getCurrentYear()) => {
   return result;
 };
 
+// Start a scheduler to sync Sri Lankan public holidays daily
 const startHolidaySyncScheduler = () => {
   const runSync = async () => {
     try {

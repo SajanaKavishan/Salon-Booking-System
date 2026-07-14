@@ -9,6 +9,7 @@ const createScheduleError = (message) => {
   return error;
 };
 
+// Normalizes the off days input, which can be an array, string, or undefined, into a validated array of off days.
 const normalizeOffDays = (offDays) => {
   if (offDays === undefined) return undefined;
   if (offDays === null || offDays === '') return [];
@@ -31,6 +32,7 @@ const normalizeOffDays = (offDays) => {
   return [];
 };
 
+// Converts a time string in 12-hour format (e.g., "02:30 PM") to 24-hour format (e.g., "14:30"). If the input is already in 24-hour format, it returns it unchanged.
 const to24HourTime = (value) => {
   const time = String(value || '').trim();
   const twelveHourMatch = time.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
@@ -51,6 +53,7 @@ const to24HourTime = (value) => {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 };
 
+// Converts a time string in HH:mm format to the total number of minutes since midnight.
 const timeToMinutes = (value) => {
   const time = to24HourTime(value);
 
@@ -62,6 +65,7 @@ const timeToMinutes = (value) => {
   return hours * 60 + minutes;
 };
 
+// Validates that the working hours range has a start time that is before the end time.
 const validateWorkingHoursRange = (workingHours) => {
   const start = timeToMinutes(workingHours.start);
   const end = timeToMinutes(workingHours.end);
@@ -73,6 +77,7 @@ const validateWorkingHoursRange = (workingHours) => {
   return workingHours;
 };
 
+// Normalizes the working hours input, which can be an object, string, or undefined, into a validated working hours range.
 const normalizeWorkingHours = (workingHours) => {
   if (workingHours === undefined) return undefined;
   if (!workingHours) return { ...DEFAULT_WORKING_HOURS };

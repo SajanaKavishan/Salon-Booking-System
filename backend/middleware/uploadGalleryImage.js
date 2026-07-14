@@ -2,6 +2,7 @@ const multer = require('multer');
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const cloudinary = require('../config/cloudinary');
 
+// Configure Cloudinary storage for gallery image uploads, specifying the folder, allowed formats, and transformation settings
 const storage = new CloudinaryStorage({
   cloudinary,
   params: {
@@ -11,6 +12,7 @@ const storage = new CloudinaryStorage({
   },
 });
 
+// Define the set of allowed image MIME types
 const allowedImageTypes = new Set([
   'image/jpeg',
   'image/png',
@@ -18,6 +20,7 @@ const allowedImageTypes = new Set([
   'image/gif',
 ]);
 
+// File filter function to validate uploaded image files
 const fileFilter = (_req, file, cb) => {
   if (allowedImageTypes.has(file.mimetype)) {
     cb(null, true);
@@ -29,6 +32,7 @@ const fileFilter = (_req, file, cb) => {
   cb(error);
 };
 
+// Configure multer middleware for handling gallery image uploads, including storage, file size limits, and file type filtering
 const uploadGalleryImage = multer({
   storage,
   limits: { fileSize: 5 * 1024 * 1024 },

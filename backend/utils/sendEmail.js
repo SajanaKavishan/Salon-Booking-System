@@ -5,7 +5,7 @@ const nodemailer = require('nodemailer');
 const BRAND_NAME = 'Salon DEES';
 const LOGO_CID = 'salon-dees-logo';
 const localLogoPath = path.resolve(__dirname, '..', '..', 'frontend', 'public', 'logo.jpeg');
-
+// Retrieves the public logo URL from environment variables or constructs it based on the frontend URL.
 const getPublicLogoUrl = () => {
     const explicitLogoUrl = String(process.env.EMAIL_LOGO_URL || '').trim();
     if (explicitLogoUrl) return explicitLogoUrl;
@@ -18,13 +18,14 @@ const getPublicLogoUrl = () => {
     return frontendUrl ? `${frontendUrl.replace(/\/$/, '')}/logo.jpeg` : '';
 };
 
+// Removes HTML tags, script, and style content from a string to produce plain text.
 const stripHtml = (html = '') => String(html)
     .replace(/<style[\s\S]*?<\/style>/gi, '')
     .replace(/<script[\s\S]*?<\/script>/gi, '')
     .replace(/<[^>]+>/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-
+// Builds a branded HTML email template with the provided content and logo.
 const buildBrandedEmailHtml = (contentHtml = '', logoSrc = '') => `
 <!doctype html>
 <html>
@@ -59,6 +60,7 @@ const buildBrandedEmailHtml = (contentHtml = '', logoSrc = '') => `
 </html>
 `;
 
+// Sends an email using nodemailer with the provided options, including support for branded HTML emails and attachments.
 const sendEmail = async (options) => {
     try {
         const transporterOptions = process.env.EMAIL_HOST
