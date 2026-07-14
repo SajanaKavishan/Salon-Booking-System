@@ -570,11 +570,11 @@ function StaffDashboard() {
     const isProcessingAppointment = processingAppointmentId === appointment._id;
     const canComplete = canCompleteAppointment(appointment, currentTime);
     const actionWrapperClass = stacked
-      ? 'grid gap-2'
-      : 'flex flex-wrap justify-end gap-2';
+      ? 'grid gap-3'
+      : 'flex flex-wrap justify-end gap-3';
     const buttonClass = stacked
-      ? 'w-full rounded-lg px-4 py-2.5 text-sm'
-      : 'rounded-lg px-4 py-2 text-sm';
+      ? 'w-full rounded-lg px-5 py-2.5 text-sm font-medium'
+      : 'rounded-lg px-5 py-2.5 text-sm font-medium';
 
     if (!['Pending', 'Approved', 'Completed'].includes(appointment.status)) return null;
 
@@ -1013,14 +1013,14 @@ function StaffDashboard() {
 
             <div className="hidden md:block">
               <div className="salon-scrollbar overflow-x-auto">
-                <table className="min-w-[760px] text-left">
+                <table className="w-full min-w-[760px] text-left">
                   <thead>
                     <tr className="border-b border-white/10 text-xs uppercase tracking-[0.16em] text-[#d4af37]">
-                      <th className="px-4 py-4 font-medium">Time</th>
-                      <th className="px-4 py-4 font-medium">Client Name</th>
-                      <th className="px-4 py-4 font-medium">Service</th>
-                      <th className="px-4 py-4 font-medium">Status</th>
-                      <th className="px-4 py-4 font-medium text-right">Actions</th>
+                      <th className="px-8 py-5 font-medium tracking-[0.16em]">Time</th>
+                      <th className="px-8 py-5 font-medium tracking-[0.16em]">Client Name</th>
+                      <th className="px-8 py-5 font-medium tracking-[0.16em]">Service</th>
+                      <th className="px-8 py-5 font-medium tracking-[0.16em]">Status</th>
+                      <th className="px-8 py-5 font-medium tracking-[0.16em] text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1028,24 +1028,24 @@ function StaffDashboard() {
                       const services = getServicesLabel(appointment);
 
                       return (
-                        <tr key={appointment._id} className="border-b border-white/10 last:border-b-0 hover:bg-white/5">
-                          <td className="px-4 py-4 align-middle">
-                            <div className="text-sm font-semibold text-white">
+                        <tr key={appointment._id} className="border-b border-white/10 last:border-b-0 hover:bg-white/5 transition-colors">
+                          <td className="px-8 py-6 align-middle">
+                            <div className="text-base font-semibold text-white">
                               {appointment.startTime} {appointment.endTime ? `- ${appointment.endTime}` : ''}
                             </div>
-                            <div className="mt-0.5 text-xs text-zinc-500">
+                            <div className="mt-1.5 text-sm text-zinc-400">
                               {formatRosterDate(appointment)}
                             </div>
                           </td>
-                          <td className="px-4 py-4">
-                            <div className="font-semibold text-white">{appointment.user?.name || 'Client'}</div>
-                            <div className="mt-1 text-xs text-gray-400">{appointment.user?.phone || appointment.user?.email || 'No contact details'}</div>
+                          <td className="px-8 py-6 align-middle">
+                            <div className="text-base font-semibold text-white">{appointment.user?.name || 'Client'}</div>
+                            <div className="mt-1.5 text-sm text-gray-400">{appointment.user?.phone || appointment.user?.email || 'No contact details'}</div>
                           </td>
-                          <td className="px-4 py-4 text-sm text-gray-300">{services}</td>
-                          <td className="px-4 py-4">
+                          <td className="px-8 py-6 align-middle text-base text-gray-300">{services}</td>
+                          <td className="px-8 py-6 align-middle">
                             <StatusBadge status={appointment.status} />
                           </td>
-                          <td className="px-4 py-4">
+                          <td className="px-8 py-6 align-middle text-right">
                             {renderAppointmentActions(appointment)}
                           </td>
                         </tr>
