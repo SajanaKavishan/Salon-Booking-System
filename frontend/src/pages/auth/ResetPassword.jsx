@@ -9,6 +9,11 @@ import Spinner from '../../components/common/Spinner';
 import { AuthShell } from '../../components/admin/SystemUI';
 import { apiUrl } from '../../utils/apiConfig';
 
+const itemVariants = {
+  hidden: { opacity: 0, y: 25 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: 'easeOut' } }
+};
+
 function ResetPassword() {
   const { token } = useParams();
   const navigate = useNavigate();
@@ -78,7 +83,6 @@ function ResetPassword() {
       }, 3000);
     } catch (requestError) {
       const errorMessage = requestError.response?.data?.message || 'Unable to reset password. Please request a new link.';
-      setError(errorMessage);
       toast.error(errorMessage);
     } finally {
       setIsLoading(false);
@@ -101,16 +105,24 @@ function ResetPassword() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.55, ease: 'easeOut' }}
         >
-          <div className="mb-8 text-center">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-black/50 text-[#d4af37]">
-              <Scissors className="h-5 w-5" />
-            </div>
-            <p className="text-[11px] uppercase tracking-[0.35em] text-[#d4af37]">Secure Reset</p>
-            <h1 className="mt-3 text-3xl font-serif text-white">Create New Password</h1>
-            <p className="mt-3 text-sm leading-6 text-gray-400">
-              Choose a new password for your Salon DEES account.
+          <motion.div variants={itemVariants} className="mb-8 flex flex-col gap-3 text-center">
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              className="mx-auto flex items-center justify-center gap-3 text-2xl font-serif tracking-[0.2em] text-white sm:text-3xl"
+            >
+              <span className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-black/40 text-[#d4af37] shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
+                <Scissors className="h-5 w-5" />
+              </span>
+              <span>
+                Salon<span className="text-[#d4af37]">DEES</span>
+              </span>
+            </button>
+            <span className="text-[11px] uppercase tracking-[0.35em] text-[#d4af37]">Secure Reset</span>
+            <p className="pt-2 text-sm leading-6 text-gray-400">
+              Create a new password for your Salon DEES account.
             </p>
-          </div>
+          </motion.div>
 
           <form onSubmit={onSubmit} className="space-y-5">
             <div>

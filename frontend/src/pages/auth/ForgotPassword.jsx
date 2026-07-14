@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import axios from 'axios';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Mail, Scissors } from 'lucide-react';
@@ -8,13 +8,18 @@ import Spinner from '../../components/common/Spinner';
 import { AuthShell } from '../../components/admin/SystemUI';
 import { apiUrl } from '../../utils/apiConfig';
 
+const itemVariants = {
+  hidden: { opacity: 0, y: 25 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: 'easeOut' } }
+};
+
 const GENERIC_RECOVERY_MESSAGE = 'If an account exists with that email, a password reset link has been sent.';
 
 function ForgotPassword() {
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
 
   const onSubmit = async (event) => {
     event.preventDefault();
@@ -23,7 +28,6 @@ function ForgotPassword() {
 
     setIsLoading(true);
     setMessage('');
-    setError('');
 
     try {
       await axios.post(apiUrl('/api/users/forgot-password'), {
@@ -40,7 +44,6 @@ function ForgotPassword() {
       }
 
       const errorMessage = requestError.response?.data?.message || 'Unable to send reset link. Please try again.';
-      setError(errorMessage);
       toast.error(errorMessage);
     } finally {
       setIsLoading(false);
@@ -63,16 +66,24 @@ function ForgotPassword() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.55, ease: 'easeOut' }}
         >
-          <div className="mb-8 text-center">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-black/50 text-[#d4af37]">
-              <Scissors className="h-5 w-5" />
-            </div>
-            <p className="text-[11px] uppercase tracking-[0.35em] text-[#d4af37]">Account Recovery</p>
-            <h1 className="mt-3 text-3xl font-serif text-white">Forgot Password</h1>
-            <p className="mt-3 text-sm leading-6 text-gray-400">
+          <motion.div variants={itemVariants} className="mb-8 flex flex-col gap-3 text-center">
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              className="mx-auto flex items-center justify-center gap-3 text-2xl font-serif tracking-[0.2em] text-white sm:text-3xl"
+            >
+              <span className="flex h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-black/40 text-[#d4af37] shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
+                <Scissors className="h-5 w-5" />
+              </span>
+              <span>
+                Salon<span className="text-[#d4af37]">DEES</span>
+              </span>
+            </button>
+            <span className="text-[11px] uppercase tracking-[0.35em] text-[#d4af37]">Account Recovery</span>
+            <p className="pt-2 text-sm leading-6 text-gray-400">
               Enter your account email and we will send you a secure reset link.
             </p>
-          </div>
+          </motion.div>
 
           <form onSubmit={onSubmit} className="space-y-5">
             <div>
@@ -81,6 +92,7 @@ function ForgotPassword() {
                 <input
                   id="forgot-password-email"
                   type="email"
+                  autoComplete="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   placeholder="you@email.com"
@@ -94,12 +106,6 @@ function ForgotPassword() {
             {message && (
               <div className="rounded-md border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm leading-6 text-emerald-200">
                 {message}
-              </div>
-            )}
-
-            {error && (
-              <div className="rounded-md border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm leading-6 text-red-200">
-                {error}
               </div>
             )}
 

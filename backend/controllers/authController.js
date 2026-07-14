@@ -1,4 +1,5 @@
 const bcrypt = require('bcryptjs');
+const path = require('path');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
@@ -97,6 +98,12 @@ const forgotPassword = async (req, res) => {
       return res.status(200).json({ success: true, message: genericSuccessMessage });
     }
 
+    if (user.resetPasswordExpire && (user.resetPasswordExpire.getTime() - Date.now() > 5 * 60 * 1000)) {
+      return res.status(429).json({
+        message: 'A password reset email was recently sent. Please wait 5 minutes before trying again.',
+      });
+    }
+
     const configuredFrontendUrl = String(process.env.FRONTEND_URL || process.env.CLIENT_URL || '')
       .split(',')
       .map((origin) => origin.trim())
@@ -109,11 +116,11 @@ const forgotPassword = async (req, res) => {
       );
     }
 
-    const frontendUrl = configuredFrontendUrl || req.headers.origin || 'http://localhost:5173';
+    const clientUrl = process.env.FRONTEND_URL || process.env.CLIENT_URL || req.headers.origin || 'http://localhost:5173';
 
     if (!configuredFrontendUrl) {
       console.error(
-        `FRONTEND_URL and CLIENT_URL are not configured. Falling back to ${frontendUrl} for password reset links.`
+        `FRONTEND_URL and CLIENT_URL are not configured. Falling back to ${clientUrl} for password reset links.`
       );
     }
 
@@ -126,29 +133,101 @@ const forgotPassword = async (req, res) => {
 
     await user.save();
 
-    const resetUrl = `${frontendUrl.replace(/\/$/, '')}/reset-password/${resetToken}`;
+    const resetUrl = `${clientUrl.replace(/\/$/, '')}/reset-password/${resetToken}`;
 
     const message = `
-      <div style="font-family:Arial,sans-serif;line-height:1.6;color:#111827;">
-        <h2 style="color:#111827;">Reset your Salon DEES password</h2>
-        <p>You requested a password reset. This secure link will expire in 10 minutes.</p>
-        <p>
-          <a href="${resetUrl}" style="display:inline-block;background:#d4af37;color:#111827;padding:12px 18px;text-decoration:none;border-radius:6px;font-weight:700;">
-            Reset Password
-          </a>
-        </p>
-        <p>If the button does not work, copy and paste this URL into your browser:</p>
-        <p style="word-break:break-all;">${resetUrl}</p>
-        <p>If you did not request this, you can safely ignore this email.</p>
-      </div>
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Salon DEES Password Reset</title>
+      </head>
+      <body style="background-color: #f4f5f7; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 40px 15px; -webkit-font-smoothing: antialiased;">
+
+        <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f4f5f7; padding: 20px 0;">
+          <tr>
+            <td align="center">
+              
+              <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 580px; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.03);">
+                
+                <!-- Full-Width Banner Header -->
+                <tr>
+                  <td align="center" style="padding: 0; margin: 0; background-color: #070708; border-bottom: 1px solid #e5e7eb;">
+                    <img src="https://i.imgur.com/pM8tFyY.jpeg" alt="Salon DEES Banner" width="580" style="width: 100%; max-width: 580px; height: auto; display: block; border: 0; margin: 0; padding: 0;" />
+                  </td>
+                </tr>
+
+                <!-- Content Section -->
+                <tr>
+                  <td align="left" style="padding: 35px 40px 30px 40px;">
+                    <p style="color: #6b7280; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; margin: 0 0 10px 0;">
+                      Account Security
+                    </p>
+                    
+                    <h1 style="color: #111827; font-size: 22px; font-weight: 700; margin: 0 0 16px 0;">
+                      Reset your password
+                    </h1>
+                    
+                    <p style="color: #374151; font-size: 15px; line-height: 24px; margin: 0 0 25px 0;">
+                      Hello, we received a request to reset the password for your Salon DEES account. Click the button below to securely set up a new password:
+                    </p>
+
+                    <!-- Action Button (Gold & Black) -->
+                    <table border="0" cellpadding="0" cellspacing="0" style="margin: 30px 0;">
+                      <tr>
+                        <td align="center" bgcolor="#d4af37" style="border-radius: 6px;">
+                          <a href="${resetUrl}" target="_blank" style="display: inline-block; padding: 13px 32px; font-size: 14px; font-weight: 700; color: #000000; text-decoration: none; border-radius: 6px;">
+                            Reset Password
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <p style="color: #6b7280; font-size: 14px; line-height: 22px; margin: 0 0 20px 0;">
+                      For security reasons, this link will expire in <b>10 minutes</b>. If you did not request this change, please ignore this email or contact our support team immediately.
+                    </p>
+
+                    <!-- Troubleshooting Link -->
+                    <p style="color: #9ca3af; font-size: 12px; line-height: 18px; margin: 25px 0 5px 0; border-top: 1px solid #f0f0f0; padding-top: 20px;">
+                      If you're having trouble clicking the button, copy and paste this URL into your web browser:
+                    </p>
+                    <p style="margin: 0; word-break: break-all;">
+                      <a href="${resetUrl}" target="_blank" style="color: #2563eb; font-size: 12px; text-decoration: underline;">
+                        ${resetUrl}
+                      </a>
+                    </p>
+                  </td>
+                </tr>
+
+                <!-- Footer Section -->
+                <tr>
+                  <td align="left" style="background-color: #f9fafb; padding: 20px 40px; border-top: 1px solid #e5e7eb;">
+                    <p style="color: #6b7280; font-size: 12px; margin: 0;">
+                      This message was sent automatically by the <b>Salon DEES Support Team</b>.
+                    </p>
+                    <p style="color: #9ca3af; font-size: 11px; margin: 6px 0 0 0;">
+                      &copy; 2026 Salon DEES. All rights reserved.
+                    </p>
+                  </td>
+                </tr>
+
+              </table>
+
+            </td>
+          </tr>
+        </table>
+
+      </body>
+      </html>
     `;
 
     try {
       await sendEmail({
         email: user.email,
         subject: 'Salon DEES password reset',
-        message,
-        text: `Reset your Salon DEES password using this link: ${resetUrl}. This link expires in 10 minutes.`,
+        html: message,
+        text: `Reset your Salon DEES account password using this link: ${resetUrl}. This link expires in 10 minutes.`
       });
 
       return res.status(200).json({ success: true, message: genericSuccessMessage });
