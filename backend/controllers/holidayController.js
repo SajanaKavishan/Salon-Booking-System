@@ -3,11 +3,13 @@ const Holiday = require('../models/Holiday');
 const Notification = require('../models/Notification');
 const { syncSriLankanPublicHolidays } = require('../services/holidaySyncService');
 
+// Constants for active appointment statuses, salon timezone, and valid year range for public holiday synchronization
 const ACTIVE_STATUSES = ['pending', 'confirmed'];
 const SALON_TIMEZONE = 'Asia/Colombo';
 const MIN_PUBLIC_HOLIDAY_SYNC_YEAR = 2000;
 const MAX_PUBLIC_HOLIDAY_SYNC_YEAR = 2100;
 
+// Utility function to get today's date in YYYY-MM-DD format based on the salon's timezone
 const getTodayDateKey = () => {
   const dateParts = new Intl.DateTimeFormat('en-GB', {
     timeZone: SALON_TIMEZONE,
@@ -24,6 +26,7 @@ const getTodayDateKey = () => {
   return `${partLookup.year}-${partLookup.month}-${partLookup.day}`;
 };
 
+// Utility function to validate if a given date string is in the correct YYYY-MM-DD format and represents a valid calendar date
 const isValidDateKey = (date) => {
   if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
 
@@ -37,6 +40,7 @@ const isValidDateKey = (date) => {
   );
 };
 
+// Utility function to convert request body data into a structured holiday payload, ensuring proper formatting and default values
 const toHolidayPayload = (body = {}) => ({
   date: String(body.date || '').slice(0, 10),
   name: String(body.name || body.description || '').trim(),
@@ -71,6 +75,7 @@ const validateHolidayPayload = (payload) => {
   return '';
 };
 
+// Utility function to convert bulk holiday request data into a structured payload, ensuring unique dates and proper formatting
 const toBulkHolidayPayload = (body = {}) => {
   const dates = Array.isArray(body.dates)
     ? [...new Set(body.dates.map((date) => String(date || '').slice(0, 10)))]
@@ -82,6 +87,7 @@ const toBulkHolidayPayload = (body = {}) => {
   };
 };
 
+// Utility function to validate bulk holiday payloads, ensuring that at least one date is provided, a name is specified, and all dates are in the correct format
 const validateBulkHolidayPayload = (payload) => {
   if (!Array.isArray(payload.dates) || payload.dates.length === 0) {
     return 'Please select at least one closure date.';
@@ -98,6 +104,7 @@ const validateBulkHolidayPayload = (payload) => {
   return '';
 };
 
+// Utility function to get the start and end of a given date in UTC, used for querying appointments within that date range
 const getAppointmentDateRange = (date) => {
   const start = new Date(`${date}T00:00:00.000Z`);
   const end = new Date(start);
@@ -105,6 +112,7 @@ const getAppointmentDateRange = (date) => {
   return { start, end };
 };
 
+// Function to build a MongoDB query for finding active appointments on a specific date, considering the provided statuses and date range
 const buildAppointmentsOnDateQuery = (date, statuses = ACTIVE_STATUSES) => {
   const { start, end } = getAppointmentDateRange(date);
 
@@ -117,6 +125,7 @@ const buildAppointmentsOnDateQuery = (date, statuses = ACTIVE_STATUSES) => {
   };
 };
 
+// Function to find all active appointments on a specific date, populating related user, services, and staff information for each appointment
 const findActiveAppointmentsOnDate = (date) => (
   Appointment.find(buildAppointmentsOnDateQuery(date))
     .populate('user', 'name email')
@@ -124,6 +133,7 @@ const findActiveAppointmentsOnDate = (date) => (
     .populate('staffId', 'name')
 );
 
+// Utility function to convert a time string in "HH:MM" format to the total number of minutes since midnight, returning null for invalid formats
 const timeToMinutes = (value) => {
   if (typeof value !== 'string') return null;
 
@@ -146,6 +156,7 @@ const timeToMinutes = (value) => {
   return hours * 60 + minutes;
 };
 
+// Function to check if an appointment overlaps with specified holiday hours, returning true if there is an overlap and false otherwise
 const appointmentOverlapsHolidayHours = (appointment, hours) => {
   const closureStart = timeToMinutes(hours.start);
   const closureEnd = timeToMinutes(hours.end);
@@ -164,6 +175,7 @@ const appointmentOverlapsHolidayHours = (appointment, hours) => {
   return appointmentStart < closureEnd && appointmentEnd > closureStart;
 };
 
+// Function to find appointments that conflict with a given holiday payload, considering whether the holiday is a full-day closure or has specific hours
 const findConflictingAppointmentsForPayload = async (payload) => {
   const appointments = await findActiveAppointmentsOnDate(payload.date);
   if (payload.isFullDay) return appointments;
@@ -188,6 +200,7 @@ const findConflictingAppointmentDates = async (dates = []) => {
   return conflictResults.filter((result) => result.appointmentCount > 0);
 };
 
+// Function to cancel appointments due to a holiday closure, updating their status and sending notifications to affected users
 const cancelAppointmentsForHolidayClosure = async (appointments = [], payload) => {
   if (appointments.length === 0) return;
 
@@ -218,6 +231,7 @@ const cancelAppointmentsForHolidayClosure = async (appointments = [], payload) =
   );
 };
 
+// Function to determine if an existing holiday would conflict with a new payload, based on date, full-day status, and specific hours
 const shouldCheckHolidayUpdateConflicts = (existingHoliday, payload) => {
   if (!existingHoliday) return false;
   if (existingHoliday.date !== payload.date) return true;
@@ -265,6 +279,7 @@ const getHolidays = async (_req, res) => {
   }
 };
 
+// Function to cancel appointments due to a holiday closure, updating their status and sending notifications to affected users
 const createHoliday = async (req, res) => {
   try {
     if (Array.isArray(req.body?.dates)) {
@@ -366,6 +381,7 @@ const createHoliday = async (req, res) => {
   }
 };
 
+// Function to forcefully create a holiday, cancelling any conflicting appointments and sending notifications to affected users
 const forceCreateHoliday = async (req, res) => {
   try {
     const payload = toHolidayPayload(req.body);
@@ -408,6 +424,7 @@ const forceCreateHoliday = async (req, res) => {
   }
 };
 
+// Function to update an existing holiday, checking for conflicts with active appointments and optionally cancelling them if forced
 const updateHoliday = async (req, res) => {
   try {
     const payload = toHolidayPayload(req.body);
@@ -476,6 +493,7 @@ const updateHoliday = async (req, res) => {
   }
 };
 
+// Function to delete (deactivate) a holiday, marking it as inactive in the database without permanently removing it
 const deleteHoliday = async (req, res) => {
   try {
     const holiday = await Holiday.findByIdAndUpdate(
@@ -499,6 +517,7 @@ const deleteHoliday = async (req, res) => {
   }
 };
 
+// Function to synchronize Sri Lankan public holidays for a specified year, validating the year and returning the result of the synchronization process
 const syncPublicHolidays = async (req, res) => {
   try {
     const requestedYear = Number(

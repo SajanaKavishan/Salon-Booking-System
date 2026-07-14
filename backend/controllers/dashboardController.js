@@ -26,6 +26,7 @@ const STATUS_LABELS = {
   cancelled: 'Cancelled',
 };
 
+// Utility function to format a Date object into a string in the format 'YYYY-MM-DD'. It extracts the year, month, and day from the Date object, ensuring that the month and day are zero-padded to two digits. The formatted string is then returned for use in queries or responses.
 const formatDate = (date) => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');

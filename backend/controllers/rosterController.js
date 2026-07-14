@@ -6,9 +6,11 @@ const User = require("../models/User");
 const mongoose = require("mongoose");
 const { ensureSettingsDocument } = require("./settingsController");
 
+// Utility functions for date manipulation and validation
 const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const allowedLeaveTypes = ["Casual", "Medical", "Annual", "Unpaid"];
 
+// Function to convert a Date object to a 'YYYY-MM-DD' string format
 const getDateKey = (date) => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -16,18 +18,21 @@ const getDateKey = (date) => {
     return `${year}-${month}-${day}`;
 };
 
+// Function to get the start of the day for a given date, setting the time to 00:00:00
 const startOfDay = (date) => {
     const nextDate = new Date(date);
     nextDate.setHours(0, 0, 0, 0);
     return nextDate;
 };
 
+// Function to add a specified number of days to a given date, returning the new date
 const addDays = (date, days) => {
     const nextDate = new Date(date);
     nextDate.setDate(nextDate.getDate() + days);
     return nextDate;
 };
 
+// Function to parse a date string in 'YYYY-MM-DD' format or return the date if it's already a Date object
 const parseDateOnly = (value) => {
     if (value instanceof Date) return value;
     if (typeof value === "string") {
@@ -39,6 +44,7 @@ const parseDateOnly = (value) => {
     return new Date(value);
 };
 
+// Function to generate an array of date keys (in 'YYYY-MM-DD' format) for each day in a specified date range
 const getDateKeysInRange = (startDate, endDate) => {
     const dateKeys = [];
     let cursor = startOfDay(startDate);
@@ -52,6 +58,7 @@ const getDateKeysInRange = (startDate, endDate) => {
     return dateKeys;
 };
 
+// Function to normalize offDays input, converting it to an array of day names if it's a string
 const normalizeOffDays = (offDays) => {
     if (Array.isArray(offDays)) return offDays;
     if (typeof offDays === "string") {
@@ -60,12 +67,14 @@ const normalizeOffDays = (offDays) => {
     return [];
 };
 
+// Function to get a label for working hours, defaulting to "09:00 - 17:00" if not provided
 const getWorkingHoursLabel = (workingHours = {}) => {
     const start = workingHours.start || "09:00";
     const end = workingHours.end || "17:00";
     return `${start} - ${end}`;
 };
 
+// Function to check if a given date falls within any of the approved leave periods
 const isDateWithinLeave = (date, leaves) => {
     const dateKey = getDateKey(date);
     return leaves.some((leave) => {
@@ -75,16 +84,19 @@ const isDateWithinLeave = (date, leaves) => {
     });
 };
 
+// Function to determine if the salon is closed on a given date based on settings, particularly for weekends
 const isSalonClosed = (date, settings) => {
     if (settings?.weekendBookings !== false) return false;
     const dayIndex = date.getDay();
     return dayIndex === 0 || dayIndex === 6;
 };
 
+// Function to check if a given date is an off day for the staff member based on their offDays configuration
 const isStaffOffDay = (date, offDays) => (
     offDays.some((day) => day.toLowerCase() === dayNames[date.getDay()].toLowerCase())
 );
 
+// Function to determine the next active shift for a staff member, considering their off days, approved leaves, and salon closure settings
 const getNextActiveShift = ({ staffProfile, approvedLeaves, settings, today = new Date() }) => {
     const offDays = normalizeOffDays(staffProfile?.offDays);
     const todayStart = startOfDay(today);
@@ -112,6 +124,7 @@ const getNextActiveShift = ({ staffProfile, approvedLeaves, settings, today = ne
     };
 };
 
+// Controller function to retrieve the shifts for the currently authenticated staff member, sorted by date
 const getShifts = async (req, res) => {
     try {
         const staffId = req.user._id; 
@@ -123,6 +136,7 @@ const getShifts = async (req, res) => {
     }
 };
 
+// Controller function to retrieve staff metrics, including leave balance, approved requests count, and next active shift information
 const getStaffMetrics = async (req, res) => {
     try {
         const staffId = req.user._id;
@@ -179,6 +193,7 @@ const getStaffMetrics = async (req, res) => {
     }
 };
 
+// Controller function to handle leave requests, validating input and checking for conflicts with existing leaves, holidays, and salon closure days
 const applyLeave = async (req, res) => {
     try {
         const { startDate, endDate, staffId: requestedStaffId } = req.body;

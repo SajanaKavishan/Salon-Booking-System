@@ -7,8 +7,10 @@ const mongoose = require('mongoose');
 const sendEmail = require('../utils/sendEmail');
 const { ensureSettingsDocument, defaultSettings } = require('./settingsController');
 
+// Utility function to convert a date to 'YYYY-MM-DD' format for comparison
 const toDateKey = (date) => new Date(date).toISOString().split('T')[0];
 
+// Utility function to format leave dates for email notifications
 const formatLeaveDate = (startDate, endDate = startDate) => {
     const formatter = new Intl.DateTimeFormat('en-US', {
         year: 'numeric',
@@ -21,6 +23,7 @@ const formatLeaveDate = (startDate, endDate = startDate) => {
     return start === end ? start : `${start} - ${end}`;
 };
 
+// Utility function to escape HTML special characters to prevent XSS attacks
 const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => ({
     '&': '&amp;',
     '<': '&lt;',
@@ -29,6 +32,7 @@ const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => (
     "'": '&#39;'
 })[character]);
 
+// Function to build the HTML content for the leave cancellation email, ensuring all dynamic content is safely escaped
 const buildLeaveCancellationEmail = ({
     customerName,
     salonName,
@@ -97,6 +101,7 @@ const getLeaveRequests = async (req, res) => {
     }
 };
 
+// Function to get conflicting appointments for a specific leave request, checking for overlapping dates and statuses
 const getLeaveConflicts = async (req, res) => {
     try {
         const { id } = req.params;
@@ -129,7 +134,7 @@ const getLeaveConflicts = async (req, res) => {
 };
 
 
-
+// Function to approve a leave request, handling conflicts with existing appointments and sending notifications to affected users
 const approveLeave = async (req, res) => {
     const session = await mongoose.startSession();
 
@@ -292,6 +297,7 @@ const approveLeave = async (req, res) => {
     }
 };
 
+// Function to reject a leave request, ensuring only pending requests can be rejected and providing appropriate feedback
 const rejectLeave = async (req, res) => {
     try {
         const { id } = req.params;

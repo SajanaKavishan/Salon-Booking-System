@@ -14,6 +14,7 @@ const weeklyOpeningHours = [
 const MAX_DEFAULT_BUFFER_MINUTES = 240;
 const MAX_GRACE_PERIOD_MINUTES = 120;
 
+// Function to generate default opening hours for each day of the week, setting them to open from 09:00 to 22:00
 const defaultOpeningHours = weeklyOpeningHours.reduce((hours, day) => ({
   ...hours,
   [day]: {
@@ -23,6 +24,7 @@ const defaultOpeningHours = weeklyOpeningHours.reduce((hours, day) => ({
   },
 }), {});
 
+// Default settings for the salon, including name, contact information, images, opening hours, and various booking preferences
 const defaultSettings = {
   salonName: 'Salon DEES',
   supportEmail: 'support@salondees.com',
@@ -41,6 +43,7 @@ const defaultSettings = {
   gracePeriod: 15,
 };
 
+// Function to ensure that a SalonSettings document exists in the database, creating one with default settings if it does not exist
 const ensureSettingsDocument = async () => {
   let settings = await SalonSettings.findOne();
 
@@ -51,6 +54,7 @@ const ensureSettingsDocument = async () => {
   return settings;
 };
 
+// Function to validate and parse a bounded number of minutes, throwing an error if the value is invalid or out of bounds
 const parseBoundedMinutes = ({ value, fallback, fieldName, max }) => {
   if (value === undefined) return fallback;
 
@@ -74,6 +78,7 @@ const parseBoundedMinutes = ({ value, fallback, fieldName, max }) => {
 
 const isValidTime = (value) => typeof value === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
 
+// Function to normalize opening hours, ensuring that each day has valid start and end times, and that the start time is before the end time
 const normalizeOpeningHours = (openingHours = {}, currentOpeningHours = {}) => (
   weeklyOpeningHours.reduce((normalized, day) => {
     const existingDayHours = currentOpeningHours?.[day] || defaultOpeningHours[day];
@@ -91,6 +96,7 @@ const normalizeOpeningHours = (openingHours = {}, currentOpeningHours = {}) => (
   }, {})
 );
 
+// Controller function to retrieve the salon settings, ensuring that a settings document exists and responding with the settings data
 const getSettings = async (_req, res) => {
   try {
     const settings = await ensureSettingsDocument();
@@ -101,6 +107,7 @@ const getSettings = async (_req, res) => {
   }
 };
 
+// Controller function to update the salon settings, handling validation, image uploads, and responding with the updated settings or appropriate error messages
 const updateSettings = async (req, res) => {
   try {
     const settings = await ensureSettingsDocument();
@@ -153,6 +160,7 @@ const updateSettings = async (req, res) => {
   }
 };
 
+// Controller function to update the home page images (salon interior or owner image), handling image uploads, Cloudinary integration, and responding with the updated settings or appropriate error messages
 const updateHomePageImage = async (req, res) => {
   try {
     const imageKey = req.params.imageKey;

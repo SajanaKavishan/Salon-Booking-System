@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const Message = require('../models/Message');
 
+// Function to extract validation error messages from a Mongoose ValidationError object, returning a concatenated string of messages or a default message if none are found
 const getValidationMessage = (error) => {
   if (error?.name !== 'ValidationError') return null;
 
@@ -11,6 +12,7 @@ const getValidationMessage = (error) => {
   return messages.length > 0 ? messages.join('. ') : 'Invalid message details';
 };
 
+// Controller function to create a new message, handling validation errors and responding with appropriate status codes and messages
 const createMessage = async (req, res) => {
   try {
     const { name, email, message } = req.body;
@@ -29,6 +31,7 @@ const createMessage = async (req, res) => {
   }
 };
 
+// Controller function to retrieve messages with pagination and optional filtering by year and month, returning the messages along with pagination metadata
 const getMessages = async (req, res) => {
   try {
     const page = Math.max(Number.parseInt(req.query.page, 10) || 1, 1);
@@ -72,6 +75,7 @@ const getMessages = async (req, res) => {
   }
 };
 
+// Controller function to mark a specific message as read, validating the message ID and responding with appropriate status codes and messages
 const markAsRead = async (req, res) => {
   try {
     if (!mongoose.isValidObjectId(req.params.id)) {
@@ -94,6 +98,7 @@ const markAsRead = async (req, res) => {
   }
 };
 
+// Controller function to delete a specific message, validating the message ID and responding with appropriate status codes and messages
 const deleteMessage = async (req, res) => {
   try {
     if (!mongoose.isValidObjectId(req.params.id)) {

@@ -8,6 +8,7 @@ const DEFAULT_REPLY = 'I am here to help with SalonDEES services, stylists, timi
 const MAX_USER_MESSAGE_LENGTH = 500;
 let groqClient = null;
 
+// Initialize Groq client if API key is available
 const getGroqClient = () => {
   if (!process.env.GROQ_API_KEY) {
     return null;
@@ -20,6 +21,7 @@ const getGroqClient = () => {
   return groqClient;
 };
 
+// Mapping of day keys to their corresponding labels for display purposes
 const dayLabels = {
   monday: 'Monday',
   tuesday: 'Tuesday',
@@ -30,6 +32,7 @@ const dayLabels = {
   sunday: 'Sunday',
 };
 
+// Function to format the opening hours of the salon into a readable string
 const formatOpeningHours = (openingHours = {}) => {
   return Object.entries(dayLabels)
     .map(([key, label]) => {
@@ -43,6 +46,7 @@ const formatOpeningHours = (openingHours = {}) => {
     .join('\n');
 };
 
+// Function to build the salon context by fetching services, staff, and settings from the database
 const buildSalonContext = async () => {
   const [services, staff, settings] = await Promise.all([
     Service.find({}).select('name price duration').lean(),
@@ -89,6 +93,7 @@ ${formatOpeningHours(settings?.openingHours)}
 `;
 };
 
+// Function to convert chat history into a format suitable for Groq API
 const toGroqMessages = (history = []) => {
   if (!Array.isArray(history)) {
     return [];
@@ -103,6 +108,7 @@ const toGroqMessages = (history = []) => {
     }));
 };
 
+// Function to build the system prompt for the AI assistant, incorporating the salon context and guidelines for interaction
 const buildSystemPrompt = (salonContext) => `
 You are the official AI Assistant of SalonDEES management system.
 Your persona is a polite, premium, welcoming salon concierge and expert beauty/grooming consultant.
@@ -118,12 +124,14 @@ Do not answer topics unrelated to SalonDEES, beauty, grooming, hair care, skin c
 ${salonContext}
 `;
 
+// Function to build the complete chat messages array for the Groq API, including the system prompt, chat history, and the user's current message
 const buildChatMessages = (salonContext, history, userMessage) => [
   { role: 'system', content: buildSystemPrompt(salonContext) },
   ...toGroqMessages(history),
   { role: 'user', content: userMessage },
 ];
 
+// Main handler for chat requests, processing user messages and returning AI-generated replies
 const handleChat = async (req, res) => {
   try {
     const { message, history = [] } = req.body;

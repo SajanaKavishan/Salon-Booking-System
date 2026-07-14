@@ -8,6 +8,7 @@ const {
   normalizeWorkingHours,
 } = require('../utils/staffSchedule');
 
+// Utility function to generate a JWT token for a user. The token includes the user's ID and role, and it is signed with a secret key from the environment variables. The token expires in 30 days.
 const generateToken = (user) => {
   return jwt.sign(
     {
@@ -21,6 +22,7 @@ const generateToken = (user) => {
   );
 };
 
+// Controller function to handle user login. It validates the provided email and password, checks if the user exists, and verifies the password. If successful, it generates a JWT token and returns user details along with the token. For staff users, it also retrieves additional details such as profile image, specialty, working hours, and off days.
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -80,6 +82,7 @@ const login = async (req, res) => {
   }
 };
 
+// Controller function to handle password reset requests. It generates a secure token for password reset, saves it to the user's record with an expiration time, and sends an email with a reset link. The function ensures that the frontend URL is properly configured for production environments and handles errors gracefully.
 const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
@@ -163,6 +166,7 @@ const forgotPassword = async (req, res) => {
   }
 };
 
+// Controller function to handle password reset requests. It validates the reset token and updates the user's password.
 const resetPassword = async (req, res) => {
   try {
     const { token } = req.params;

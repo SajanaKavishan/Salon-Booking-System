@@ -14,9 +14,11 @@ const {
   normalizeWorkingHours,
 } = require('../utils/staffSchedule');
 
+// Constants for default values and allowed staff profile text fields
 const DEFAULT_PHONE_FALLBACK = '0000000000';
 const STAFF_PROFILE_TEXT_FIELDS = ['description', 'bio', 'profileDescription', 'about', 'experience'];
 
+// Function to pick and normalize staff profile text fields from the request body, returning an object with only the allowed fields and their trimmed string values
 const pickStaffProfileTextFields = (body = {}) => (
   STAFF_PROFILE_TEXT_FIELDS.reduce((fields, field) => {
     if (body[field] !== undefined) {
@@ -32,6 +34,7 @@ const isValidPhoneNumber = (phoneValue) => {
   return /^(?:\+94|0)7\d{8}$/.test(normalizedPhone);
 };
 
+// Default settings for the salon, including name, contact information, images, opening hours, and various booking preferences
 const validateLinkedStaffUser = async (userId, currentStaffId = null) => {
   if (!mongoose.isValidObjectId(userId)) {
     const error = new Error('Please provide a valid linked user ID.');

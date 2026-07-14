@@ -10,6 +10,7 @@ const generateAvailableSlots = require('../utils/slotGenerator');
 const { isStaffOnApprovedLeave } = require('../utils/slotGenerator');
 const { ensureSettingsDocument, defaultSettings } = require('./settingsController');
 
+// Utility function to escape HTML special characters in a string to prevent XSS attacks when rendering user-provided content in HTML. It replaces &, <, >, ", and ' with their corresponding HTML entities.
 const escapeHtml = (value) => (
     String(value ?? '')
         .replace(/&/g, '&amp;')
@@ -19,6 +20,7 @@ const escapeHtml = (value) => (
         .replace(/'/g, '&#39;')
 );
 
+// Utility function to convert a time string (e.g., "10:30 AM") or a Date object to the total number of minutes since midnight. It handles both 12-hour and 24-hour formats and throws an error for invalid formats.
 const timeToMinutes = (timeStr) => {
     if (timeStr instanceof Date) {
         return timeStr.getHours() * 60 + timeStr.getMinutes();
@@ -53,6 +55,7 @@ const timeToMinutes = (timeStr) => {
     return hours * 60 + minutes;
 };
 
+// Utility function to convert a total number of minutes since midnight to a formatted time string in 12-hour format with AM/PM. It normalizes the input to ensure it falls within a single day (0-1439 minutes) and formats the output accordingly.
 const minutesToTime = (mins) => {
     const normalizedMins = ((mins % 1440) + 1440) % 1440;
     let hours = Math.floor(normalizedMins / 60);
@@ -63,6 +66,7 @@ const minutesToTime = (mins) => {
     return `${hours < 10 ? '0' : ''}${hours}:${String(minutes).padStart(2, '0')} ${modifier}`;
 };
 
+// Utility function to get the local date key in the format "YYYY-MM-DD" for a given date or the current date if no date is provided. This is used for consistent date comparisons and storage in the database.
 const getLocalDateKey = (date = new Date()) => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -70,12 +74,14 @@ const getLocalDateKey = (date = new Date()) => {
     return `${year}-${month}-${day}`;
 };
 
+// Utility function to create a custom error object for appointment-related errors. It takes a message and an optional status code (defaulting to 400) and returns an Error object with the specified message and status code.
 const createAppointmentError = (message, statusCode = 400) => {
     const error = new Error(message);
     error.statusCode = statusCode;
     return error;
 };
 
+// Utility function to parse and validate a booking date value. It extracts the date key in "YYYY-MM-DD" format and creates a Date object for the appointment. If the date is invalid, it throws an error.
 const parseBookingDateKey = (dateValue) => {
     const dateKey = String(dateValue || '').slice(0, 10);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
@@ -90,6 +96,7 @@ const parseBookingDateKey = (dateValue) => {
     return { dateKey, parsedDate };
 };
 
+// Utility function to assert that a given appointment date and start time are not in the past. It compares the provided date key and start minutes against the current local date and time, throwing an error if the appointment is in the past.
 const assertNotPastDateTime = (dateKey, startMins) => {
     const todayKey = getLocalDateKey();
     const now = new Date();
@@ -100,6 +107,7 @@ const assertNotPastDateTime = (dateKey, startMins) => {
     }
 };
 
+// Utility function to calculate the start datetime of an appointment based on its date and start time. It returns a Date object representing the exact start time of the appointment, throwing an error if the date or start time is invalid.
 const getAppointmentScheduleStart = (appointment) => {
     const dateValue = appointment?.date || appointment?.bookingDate;
     const dateKey = dateValue instanceof Date
@@ -119,6 +127,7 @@ const getAppointmentScheduleStart = (appointment) => {
     return new Date(year, month - 1, day, Math.floor(startMinutes / 60), startMinutes % 60, 0, 0);
 };
 
+// Utility function to calculate the end datetime of an appointment based on its date and end time. It returns a Date object representing the exact end time of the appointment, or null if the date or end time is invalid.
 const getAppointmentScheduleEnd = (appointment) => {
     const dateValue = appointment?.date || appointment?.bookingDate;
     const dateKey = dateValue instanceof Date
@@ -142,6 +151,7 @@ const getAppointmentScheduleEnd = (appointment) => {
     }
 };
 
+// Utility function to parse a time slot range string (e.g., "10:00 AM - 11:00 AM") into an object containing the start and end times in minutes since midnight. It validates the format and ensures that the end time is after the start time, throwing an error for invalid formats.
 const parseSlotRange = (slotRange) => {
     if (typeof slotRange !== 'string') {
         throw createAppointmentError('Invalid time slot format provided');
@@ -163,11 +173,13 @@ const parseSlotRange = (slotRange) => {
     return { start, end };
 };
 
+// Utility function to check if two slot ranges (each with a start and end time in minutes) match exactly. It returns true if both the start and end times are equal, and false otherwise.
 const slotRangesMatch = (firstSlotRange, secondSlotRange) => (
     firstSlotRange.start === secondSlotRange.start
     && firstSlotRange.end === secondSlotRange.end
 );
 
+// Utility function to find an overlapping appointment for a specific staff member on a given date and time range. It checks for existing appointments that conflict with the requested start and end times, considering both numeric minute fields and legacy time slot formats. It returns the overlapping appointment if found, or null if no overlap exists.
 const findOverlappingAppointmentForStaff = async ({ date, staffId, startMins, endMins, session }) => {
     const startDate = new Date(`${date}T00:00:00.000Z`);
     const endDate = new Date(startDate);
@@ -211,6 +223,7 @@ const findOverlappingAppointmentForStaff = async ({ date, staffId, startMins, en
     });
 };
 
+// Utility function to check if a given error is a duplicate appointment key error. It checks the error code and key pattern to determine if the error is related to a unique constraint violation for staffId, bookingDate, or startTime fields in the appointments collection.
 const isDuplicateAppointmentKeyError = (error) => (
     error?.code === 11000
     && (
@@ -220,6 +233,7 @@ const isDuplicateAppointmentKeyError = (error) => (
     )
 );
 
+// Utility function to assert that a set of time ranges do not overlap with each other. It sorts the ranges by start time and checks for any overlaps, throwing an error with the provided message if any overlap is detected.
 const DAY_KEYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
 const assertNoRangeOverlap = (ranges, message) => {
@@ -232,6 +246,7 @@ const assertNoRangeOverlap = (ranges, message) => {
     }
 };
 
+// Utility function to validate that a set of shifted appointment plans for a stylist on a specific date do not violate salon or stylist operating hours, holidays, off days, approved leaves, or overlap with existing appointments. It throws an error if any validation fails.
 const validateShiftPlanBoundaries = async ({ stylistId, dateKey, bookingDate, shiftedPlans }) => {
     if (shiftedPlans.length === 0) return;
 
@@ -395,7 +410,7 @@ const createAppointment = async (req, res) => {
                 message: 'Staff accounts cannot create customer bookings directly.'
             });
         }
-
+        // Extract relevant fields from the request body, supporting both legacy and current field names for stylist, date, and time slot. It also handles optional bypassing of buffer checks for admin users.
         const {
             staffId,
             stylist: legacyStylist,
@@ -784,6 +799,9 @@ const getStaffAssignmentIdsForUser = async (user) => {
     ];
 };
 
+// @desc    Get staff assignment IDs for admin requests
+// @route   GET /api/appointments/staff-assignments
+// @access  Private/Admin
 const getStaffAssignmentIdsForAdminRequest = async (staffId) => {
     if (!staffId) {
         throw createHttpError('staffId query parameter is required for admin staff earnings requests.', 400);
@@ -817,6 +835,7 @@ const getStaffAssignmentIdsForAdminRequest = async (staffId) => {
     ];
 };
 
+// Utility function to build a MongoDB query for staff assignments based on an array of staff IDs. It returns a query object that can be used to filter appointments by either the stylist or staffId fields, allowing for flexible querying of appointments associated with specific staff members.
 const buildStaffAssignmentQuery = (staffIds) => ({
     $or: [
         { stylist: { $in: staffIds } },
@@ -824,6 +843,9 @@ const buildStaffAssignmentQuery = (staffIds) => ({
     ],
 });
 
+// @desc    Get pending appointments count
+// @route   GET /api/appointments/pending/count
+// @access  Private/Admin/Staff
 const getPendingAppointmentsCount = async (req, res) => {
     try {
         const query = { status: { $in: ['pending', 'confirmed'] } };
@@ -901,6 +923,7 @@ const getPendingReviewsCount = async (req, res) => {
     }
 };
 
+// Utility function to get a MongoDB query for staff appointments based on the user's role. If the user is a staff member, it retrieves their associated staff assignment IDs and builds a query to filter appointments accordingly. If the user is not a staff member, it returns an empty query object.
 const getStaffAppointmentQuery = async (user) => {
     if (user.role !== 'staff') return {};
 
@@ -909,6 +932,7 @@ const getStaffAppointmentQuery = async (user) => {
     return buildStaffAssignmentQuery(staffIds);
 };
 
+// Utility function to get a MongoDB query for staff earnings based on the user's role. If the user is a staff member, it retrieves their associated staff assignment IDs and builds a query to filter appointments accordingly. If the user is an admin, it retrieves the staff assignment IDs for the specified staffId in the request query and builds a query to filter appointments accordingly. If the user is neither a staff member nor an admin, it throws an unauthorized error.
 const getStaffEarningsScopeQuery = async (req) => {
     if (req.user.role === 'staff') {
         return buildStaffAssignmentQuery(await getStaffAssignmentIdsForUser(req.user));
@@ -921,6 +945,7 @@ const getStaffEarningsScopeQuery = async (req) => {
     throw createHttpError('Unauthorized', 401);
 };
 
+// Utility function to format a Date object into a string key in the format "YYYY-MM-DD". This is useful for creating consistent keys for mapping revenue data by date.
 const formatDateKey = (date) => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -948,6 +973,7 @@ const STAFF_EARNINGS_RANGE_LABELS = {
     LAST_7_DAYS: 'Last 7 days',
 };
 
+// Utility function to normalize the staff earnings range input. It converts various input formats into standardized range identifiers, ensuring consistent handling of different user inputs for earnings reports.
 const normalizeStaffEarningsRange = (range) => {
     const normalizedRange = String(range || 'YTD')
         .trim()
@@ -960,6 +986,7 @@ const normalizeStaffEarningsRange = (range) => {
     return 'YTD';
 };
 
+// Utility function to determine the date range for staff earnings reports based on the specified year and range. It validates the year input, normalizes the range, and calculates the appropriate start and end dates for the earnings report, returning an object containing the year, range, label, start date, and end date.
 const getStaffEarningsWindow = ({ year, range } = {}) => {
     const now = new Date();
     const currentYear = now.getFullYear();
@@ -1002,6 +1029,7 @@ const getStaffEarningsWindow = ({ year, range } = {}) => {
     };
 };
 
+// Utility function to extract the booking date from an appointment object. It checks for the presence of a valid bookingDate property, and if not found, it attempts to parse the date from the legacy date field. If neither is available or valid, it returns null.
 const getAppointmentDateValue = (appointment) => {
     if (appointment.bookingDate instanceof Date && !Number.isNaN(appointment.bookingDate.getTime())) {
         return appointment.bookingDate;
@@ -1015,6 +1043,7 @@ const getAppointmentDateValue = (appointment) => {
     return null;
 };
 
+// Utility function to build revenue trends for staff earnings reports. It aggregates the total revenue from completed appointments over a specified time window, grouping the revenue by month or day depending on the range. The function returns an array of objects containing labels and corresponding revenue values for each period in the specified window.
 const buildStaffRevenueTrends = (appointments, window) => {
     const revenueByPeriod = new Map();
 
@@ -1058,6 +1087,7 @@ const buildStaffRevenueTrends = (appointments, window) => {
     return trends;
 };
 
+// Utility function to build a list of available years for staff earnings reports based on completed appointments. It retrieves all completed appointments for the specified staff query, extracts the years from the booking dates, and returns a sorted array of unique years, including the current year.
 const buildStaffAvailableYears = async (staffQuery, currentYear) => {
     const appointments = await Appointment.find({
         ...staffQuery,
