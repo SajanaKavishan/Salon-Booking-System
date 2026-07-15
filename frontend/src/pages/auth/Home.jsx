@@ -646,7 +646,7 @@ function Home() {
 
             <div className="mt-8 space-y-4">
               {[
-                'Internationally trained techniques and trends',
+                'Professionally trained techniques and trends',
                 'One-on-one consultations to refine every detail',
                 'Signature finishes that elevate your confidence'
               ].map((item, index) => (
