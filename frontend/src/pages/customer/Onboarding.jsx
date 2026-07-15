@@ -18,25 +18,25 @@ const steps = {
     subtitle:
       'Experience a new standard of luxury hair care and styling. Your personalized journey begins here, where every detail is tailored to your unique aesthetic.',
     eyebrow: 'Private Client Onboarding',
-    image: '/step 1.jpg',
+    image: '/step-1.jpg',
   },
   2: {
     title: 'Elevated Experience',
     subtitle: 'Discover the exclusive benefits of our digital concierge.',
     eyebrow: 'Digital Concierge',
-    image: '/step 2.jpg',
+    image: '/step-2.jpg',
   },
   3: {
     title: 'Select a Master Stylist',
     subtitle: 'Choose an expert whose vision aligns with yours.',
     eyebrow: 'Signature Artist',
-    image: '/step 3.jpg',
+    image: '/step-3.jpg',
   },
   4: {
     title: 'Your Salon Journey Begins Now',
     subtitle: 'Your profile is configured for the ultimate SalonDEES experience. Book your first appointment now.',
     eyebrow: 'Suite Unlocked',
-    image: '/step 4.jpg',
+    image: '/step-4.jpg',
   },
 };
 
