@@ -18,26 +18,33 @@ const steps = {
     subtitle:
       'Experience a new standard of luxury hair care and styling. Your personalized journey begins here, where every detail is tailored to your unique aesthetic.',
     eyebrow: 'Private Client Onboarding',
-    image: '/loginBg.jpg',
+    image: '/step 1.jpg',
   },
   2: {
     title: 'Elevated Experience',
     subtitle: 'Discover the exclusive benefits of our digital concierge.',
     eyebrow: 'Digital Concierge',
-    image: '/heroBg.jpg',
+    image: '/step 2.jpg',
   },
   3: {
     title: 'Select a Master Stylist',
     subtitle: 'Choose an expert whose vision aligns with yours.',
     eyebrow: 'Signature Artist',
-    image: '/SchoolHaircut.jpg',
+    image: '/step 3.jpg',
   },
   4: {
     title: 'Your Salon Journey Begins Now',
     subtitle: 'Your profile is configured for the ultimate SalonDEES experience. Book your first appointment now.',
     eyebrow: 'Suite Unlocked',
-    image: '/salonInterior.jpg',
+    image: '/step 4.jpg',
   },
+};
+
+const stepImageClasses = {
+  1: 'object-left',
+  2: 'object-center',
+  3: 'object-center grayscale',
+  4: 'object-[center_28%]',
 };
 
 const benefits = [
@@ -596,13 +603,7 @@ function Onboarding() {
               aria-hidden="true"
               decoding="async"
               fetchPriority="high"
-              className={`h-full w-full object-cover ${
-                currentStep === 1
-                  ? 'object-left'
-                  : currentStep === 4
-                    ? 'object-[center_28%]'
-                    : 'object-center'
-              } ${currentStep === 3 ? 'grayscale' : ''}`}
+              className={`h-full w-full object-cover ${stepImageClasses[currentStep] || 'object-center'}`}
             />
             <div className="absolute inset-0 bg-black/35" />
             <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-[#050506] via-[#050506]/70 to-transparent" />
@@ -633,7 +634,7 @@ function Onboarding() {
                 aria-hidden="true"
                 decoding="async"
                 fetchPriority="high"
-                className="h-full w-full object-cover object-center brightness-[0.78] contrast-[1.02] will-change-transform transition-all duration-700"
+                className={`h-full w-full object-cover ${stepImageClasses[currentStep] || 'object-center'} brightness-[0.78] contrast-[1.02] will-change-transform transition-all duration-700`}
               />
               <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-[#050506] to-transparent" />
             </div>
@@ -651,7 +652,7 @@ function Onboarding() {
                 aria-hidden="true"
                 decoding="async"
                 fetchPriority="high"
-                className="w-full h-full object-cover object-center transform scale-100 brightness-[0.88] contrast-[1.02] will-change-transform transition-all duration-700"
+                className={`w-full h-full object-cover ${stepImageClasses[currentStep] || 'object-center'} transform scale-100 brightness-[0.88] contrast-[1.02] will-change-transform transition-all duration-700`}
               />
               <div className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-[#050506] to-transparent" />
             </div>
