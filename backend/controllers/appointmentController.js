@@ -20,6 +20,60 @@ const escapeHtml = (value) => (
         .replace(/'/g, '&#39;')
 );
 
+const APPOINTMENT_EMAIL_BANNER = 'https://i.imgur.com/pM8tFyY.jpeg';
+
+const buildAppointmentEmail = ({
+    eyebrow,
+    title,
+    intro,
+    badgeText,
+    badgeColor = '#d4af37',
+    rows = [],
+    footerPrimary,
+    footerSecondary,
+}) => {
+    const safeRows = rows.map(({ label, value }) => ({
+        label: escapeHtml(label),
+        value: escapeHtml(value),
+    }));
+
+    return `
+        <div style="margin:0 auto; max-width:580px; overflow:hidden; border:1px solid #2a2a2a; border-radius:18px; background:#080808; color:#f5f5f5; box-shadow:0 18px 60px rgba(0,0,0,0.42);">
+            <div style="background:#050505; border-bottom:1px solid #202020;">
+                <img src="${APPOINTMENT_EMAIL_BANNER}" alt="Salon DEES" width="580" style="width:100%; max-width:580px; height:auto; display:block; border:0;" />
+            </div>
+            <div style="padding:30px 34px 32px; font-family:Arial, Helvetica, sans-serif;">
+                <p style="margin:0 0 12px; color:#d4af37; font-size:11px; font-weight:700; letter-spacing:2px; text-transform:uppercase;">${escapeHtml(eyebrow)}</p>
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse; margin:0 0 14px;">
+                    <tr>
+                        <td style="padding:0 16px 0 0; vertical-align:top;">
+                            <h1 style="margin:0; color:#ffffff; font-size:24px; line-height:1.15; font-weight:700;">${escapeHtml(title)}</h1>
+                        </td>
+                        <td align="right" style="white-space:nowrap; vertical-align:top;">
+                            <span style="display:inline-block; padding:7px 12px; border-radius:999px; background:${badgeColor}; color:#000000; font-size:11px; font-weight:800; letter-spacing:1px; text-transform:uppercase;">${escapeHtml(badgeText)}</span>
+                        </td>
+                    </tr>
+                </table>
+                <p style="margin:0; color:#c8c8c8; font-size:15px; line-height:1.75;">${intro}</p>
+                <div style="margin-top:24px; border:1px solid #262626; border-radius:16px; overflow:hidden; background:rgba(255,255,255,0.02);">
+                    ${safeRows.map(({ label, value }, index) => `
+                        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;${index < safeRows.length - 1 ? 'border-bottom:1px solid #262626;' : ''}">
+                            <tr>
+                                <td style="width:42%; padding:14px 16px; color:#9ca3af; font-size:13px; line-height:1.5; letter-spacing:0.04em; text-transform:uppercase; background:rgba(255,255,255,0.015);">${label}:</td>
+                                <td style="padding:14px 16px; color:#ffffff; font-size:14px; line-height:1.6; font-weight:600; text-align:right;">${value}</td>
+                            </tr>
+                        </table>
+                    `).join('')}
+                </div>
+                <div style="margin-top:24px; border-top:1px solid #202020; padding-top:18px; text-align:center;">
+                    <p style="margin:0; color:#f5f5f5; font-size:13px; line-height:1.7;">${escapeHtml(footerPrimary)}</p>
+                    <p style="margin:6px 0 0; color:#9ca3af; font-size:12px; line-height:1.6;">${escapeHtml(footerSecondary)}</p>
+                </div>
+            </div>
+        </div>
+    `;
+};
+
 // Utility function to convert a time string (e.g., "10:30 AM") or a Date object to the total number of minutes since midnight. It handles both 12-hour and 24-hour formats and throws an error for invalid formats.
 const timeToMinutes = (timeStr) => {
     if (timeStr instanceof Date) {
@@ -690,24 +744,34 @@ const createAppointment = async (req, res) => {
             const safeStylistName = escapeHtml(stylistName);
 
             try {
+                const stylistEmail = finalStylist?.userId
+                    ? await User.findById(finalStylist.userId).select('email').lean().then((user) => user?.email || '')
+                    : finalStylist?.email || '';
+
                 await sendEmail({
                     email: supportEmail,
                     subject: `New Booking Alert - ${salonName}`,
-                    message: `
-                        <div style="font-family: Arial, sans-serif; padding: 20px; background: #111111; color: #f5f5f5; border-radius: 10px;">
-                            <h2 style="color: #d4af37; margin-top: 0;">New appointment received</h2>
-                            <p><strong>Client:</strong> ${safeClientName}</p>
-                            <p><strong>Services:</strong> ${serviceNames}</p>
-                            <p><strong>Date:</strong> ${safeDate}</p>
-                            <p><strong>Time:</strong> ${safeTime}</p>
-                            <p><strong>Stylist:</strong> ${safeStylistName}</p>
-                            <p><strong>Status:</strong> pending</p>
-                            <p style="margin-top: 16px; color: #bbbbbb;">For assistance, contact ${safeSupportEmail} or ${safeContactNumber}</p>
-                        </div>
-                    `
+                    cc: stylistEmail || undefined,
+                    message: buildAppointmentEmail({
+                        eyebrow: 'Salon Notification',
+                        title: 'New appointment received',
+                        badgeText: 'Pending',
+                        badgeColor: '#d4af37',
+                        intro: `A new booking has been created for ${safeClientName}. Management can review the booking details below, and the assigned stylist is copied on this notification when an email is available.`,
+                        rows: [
+                            { label: 'Client', value: safeClientName },
+                            { label: 'Services', value: serviceNames },
+                            { label: 'Date', value: safeDate },
+                            { label: 'Time', value: safeTime },
+                            { label: 'Stylist', value: safeStylistName },
+                            { label: 'Status', value: 'Pending' },
+                        ],
+                        footerPrimary: `For assistance, contact ${safeSupportEmail} or ${safeContactNumber}.`,
+                        footerSecondary: 'This alert was generated automatically by Salon DEES.'
+                    })
                 });
             } catch (emailError) {
-                console.error('Booking alert email failed:', emailError);
+                console.warn('Notification failed:', emailError.message);
             }
         }
 
@@ -1500,7 +1564,6 @@ const updateAppointmentStatus = async (req, res) => {
             const emailStatusKey = Appointment.normalizeStatus(updatedAppointment.status);
             const emailStatus = updatedAppointment.toJSON().status;
             const emailSubject = `Appointment ${emailStatus} - ${salonName}`;
-            const safeSalonName = escapeHtml(salonName);
             const safeSupportEmail = escapeHtml(supportEmail);
             const safeContactNumber = escapeHtml(contactNumber);
             const safeEmailStatus = escapeHtml(emailStatus);
@@ -1510,62 +1573,29 @@ const updateAppointmentStatus = async (req, res) => {
             const serviceNames = (appointment.services && appointment.services.length > 0)
                 ? appointment.services.filter(s => s && s.name).map(s => escapeHtml(s.name)).join(', ')
                 : 'Not specified';
-            
+
             const statusColor = emailStatusKey === 'confirmed'
                 ? '#27ae60'
                 : ['rejected', 'cancelled', 'no-show'].includes(emailStatusKey)
                     ? '#e74c3c'
                     : '#f39c12';
-            const rows = [
-                ['Services', serviceNames],
-                ['Date', appointment.date || 'Not specified'],
-                ['Time', `${appointment.startTime || 'N/A'} - ${appointment.endTime || 'N/A'}`],
-                ['Duration', `${appointment.totalDuration || 0} minutes`],
-                ['Total Amount', `Rs. ${(appointment.totalAmount || 0).toFixed(2)}`]
-            ];
-            const safeRows = rows.map(([label, value]) => [escapeHtml(label), escapeHtml(value)]);
 
-            const emailMessage = settings.darkReceipts
-                ? `
-                    <div style="font-family: Arial, sans-serif; padding: 24px; border: 1px solid #262626; border-radius: 14px; max-width: 580px; margin: 0 auto; background: #0b0b0b; color: #f5f5f5;">
-                        <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; border-bottom:1px solid #232323; padding-bottom:14px;">
-                            <h2 style="color:#d4af37; margin:0;">${safeSalonName}</h2>
-                            <span style="padding:6px 12px; border-radius:999px; background:${statusColor}; color:#ffffff; font-size:12px; font-weight:bold;">${safeEmailStatus}</span>
-                        </div>
-                        <p style="font-size:16px; margin-top:20px;">Hello <strong>${safeCustomerName}</strong>,</p>
-                        <p style="font-size:14px; line-height:1.7; color:#d1d5db;">Your appointment has been updated. Here is your latest booking summary.</p>
-                        <div style="margin-top:18px; border:1px solid #232323; border-radius:12px; overflow:hidden;">
-                            ${safeRows.map(([label, value], index) => `
-                                <div style="display:flex; justify-content:space-between; gap:16px; padding:12px 14px; ${index < rows.length - 1 ? 'border-bottom:1px solid #232323;' : ''}">
-                                    <span style="color:#9ca3af; font-size:13px;">${label}</span>
-                                    <span style="color:#ffffff; font-size:13px; font-weight:600; text-align:right;">${value}</span>
-                                </div>
-                            `).join('')}
-                        </div>
-                        <p style="margin-top:20px; font-size:13px; color:#9ca3af; text-align:center;">
-                            Thank you for choosing ${safeSalonName}.<br/>Need help? Reach us at ${safeSupportEmail} or ${safeContactNumber}
-                        </p>
-                    </div>
-                `
-                : `
-                    <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px; max-width: 550px; margin: 0 auto; background-color: #f9f9f9;">
-                        <h2 style="color: ${statusColor}; text-align: center; border-bottom: 2px solid ${statusColor}; padding-bottom: 10px;">
-                            Appointment Status: ${safeEmailStatus}
-                        </h2>
-                        <p style="font-size: 16px; margin-top: 20px;">Welcome! <strong>${safeCustomerName}</strong>,</p>
-                        <p style="font-size: 14px; color: #555; margin-bottom: 20px;">Your appointment status has been updated to: <strong style="color: ${statusColor};">${safeEmailStatus}</strong></p>
-                        <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
-                            <tr><td style="padding: 10px; border: 1px solid #e0e0e0; background-color: #f5f5f5; font-weight: bold; width: 40%;">Services:</td><td style="padding: 10px; border: 1px solid #e0e0e0;">${serviceNames}</td></tr>
-                            <tr><td style="padding: 10px; border: 1px solid #e0e0e0; background-color: #f5f5f5; font-weight: bold;">Date:</td><td style="padding: 10px; border: 1px solid #e0e0e0;">${escapeHtml(appointment.date)}</td></tr>
-                            <tr><td style="padding: 10px; border: 1px solid #e0e0e0; background-color: #f5f5f5; font-weight: bold;">Time:</td><td style="padding: 10px; border: 1px solid #e0e0e0;">${escapeHtml(appointment.startTime)} - ${escapeHtml(appointment.endTime)}</td></tr>
-                            <tr><td style="padding: 10px; border: 1px solid #e0e0e0; background-color: #f5f5f5; font-weight: bold;">Duration:</td><td style="padding: 10px; border: 1px solid #e0e0e0;">${escapeHtml(`${appointment.totalDuration} minutes`)}</td></tr>
-                            <tr><td style="padding: 10px; border: 1px solid #e0e0e0; background-color: #f5f5f5; font-weight: bold;">Total Amount:</td><td style="padding: 10px; border: 1px solid #e0e0e0; color: #27ae60; font-weight: bold;">Rs. ${appointment.totalAmount.toFixed(2)}</td></tr>
-                        </table>
-                        <p style="margin-top: 20px; font-size: 14px; color: #777; text-align: center;">
-                            Thank you for choosing ${safeSalonName}!<br/><span style="font-size: 12px;">For assistance, contact us at ${safeSupportEmail} or ${safeContactNumber}</span>
-                        </p>
-                    </div>
-                `;
+            const emailMessage = buildAppointmentEmail({
+                eyebrow: 'Appointment Update',
+                title: `Appointment ${emailStatus}`,
+                badgeText: emailStatus,
+                badgeColor: statusColor,
+                intro: `Hello ${safeCustomerName}, your appointment has been updated. The summary below reflects the latest booking details from Salon DEES.`,
+                rows: [
+                    { label: 'Services', value: serviceNames },
+                    { label: 'Date', value: appointment.date || 'Not specified' },
+                    { label: 'Time', value: `${appointment.startTime || 'N/A'} - ${appointment.endTime || 'N/A'}` },
+                    { label: 'Duration', value: `${appointment.totalDuration || 0} minutes` },
+                    { label: 'Total Amount', value: `Rs. ${(appointment.totalAmount || 0).toFixed(2)}` },
+                ],
+                footerPrimary: `Thank you for choosing Salon DEES.`,
+                footerSecondary: `Need help? Reach us at ${safeSupportEmail} or ${safeContactNumber}.`
+            });
 
             // Send data to sendEmail utility function to send the email notification to the user about the status update of their appointment. The email includes the appointment details and a message indicating the new status of the appointment.
             try {
@@ -1612,6 +1642,11 @@ const updateAppointmentStatusByStaff = async (req, res) => {
             return res.status(401).json({ message: 'Unauthorized' });
         }
 
+        const settings = await ensureSettingsDocument();
+        const salonName = settings?.salonName || defaultSettings.salonName;
+        const supportEmail = settings?.supportEmail || defaultSettings.supportEmail;
+        const contactNumber = settings?.contactNumber || defaultSettings.contactNumber;
+
         const appointment = await Appointment.findById(req.params.id)
             .populate('user', 'name email')
             .populate('services', 'name');
@@ -1637,6 +1672,57 @@ const updateAppointmentStatusByStaff = async (req, res) => {
 
             appointment.status = requestedStatus;
             const updatedAppointment = await appointment.save();
+
+            // Send email notification to customer when appointment is accepted or rejected
+            if (settings.customerEmails && appointment.user && appointment.user.email) {
+                const emailStatusKey = Appointment.normalizeStatus(updatedAppointment.status);
+                const emailStatus = updatedAppointment.toJSON().status;
+                const emailSubject = `Appointment ${emailStatus} - ${salonName}`;
+                const safeSupportEmail = escapeHtml(supportEmail);
+                const safeContactNumber = escapeHtml(contactNumber);
+                const safeEmailStatus = escapeHtml(emailStatus);
+                const safeCustomerName = escapeHtml(appointment.user.name || 'there');
+
+                // Safely get service names - filter out any null/undefined services
+                const serviceNames = (appointment.services && appointment.services.length > 0)
+                    ? appointment.services.filter(s => s && s.name).map(s => escapeHtml(s.name)).join(', ')
+                    : 'Not specified';
+
+                const statusColor = emailStatusKey === 'confirmed'
+                    ? '#27ae60'
+                    : ['rejected', 'cancelled', 'no-show'].includes(emailStatusKey)
+                        ? '#e74c3c'
+                        : '#f39c12';
+
+                const emailMessage = buildAppointmentEmail({
+                    eyebrow: 'Appointment Update',
+                    title: `Appointment ${emailStatus}`,
+                    badgeText: emailStatus,
+                    badgeColor: statusColor,
+                    intro: `Hello ${safeCustomerName}, your appointment has been updated. The summary below reflects the latest booking details from Salon DEES.`,
+                    rows: [
+                        { label: 'Services', value: serviceNames },
+                        { label: 'Date', value: appointment.date || 'Not specified' },
+                        { label: 'Time', value: `${appointment.startTime || 'N/A'} - ${appointment.endTime || 'N/A'}` },
+                        { label: 'Duration', value: `${appointment.totalDuration || 0} minutes` },
+                        { label: 'Total Amount', value: `Rs. ${(appointment.totalAmount || 0).toFixed(2)}` },
+                    ],
+                    footerPrimary: 'Thank you for choosing Salon DEES.',
+                    footerSecondary: `Need help? Reach us at ${safeSupportEmail} or ${safeContactNumber}.`
+                });
+
+                // Send email notification to customer
+                try {
+                    await sendEmail({
+                        email: appointment.user.email,
+                        subject: emailSubject,
+                        message: emailMessage
+                    });
+                } catch (emailError) {
+                    // Log email error but don't fail the appointment status update
+                    console.warn("Email notification failed, but appointment status was updated:", emailError.message);
+                }
+            }
 
             return res.status(200).json({
                 message: 'Status updated successfully!',

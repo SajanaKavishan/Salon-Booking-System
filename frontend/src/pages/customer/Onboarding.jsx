@@ -12,39 +12,26 @@ import {
 } from 'lucide-react';
 import BACKEND_BASE_URL, { apiUrl } from '../../utils/apiConfig';
 
-const FALLBACK_STAFF_IMAGE = '/Owner.jpg';
-
-const onboardingImages = {
-  1: 'https://images.unsplash.com/photo-1599696848652-f0ff23bc911f?crop=entropy&cs=tinysrgb&fit=max&fm=webp&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBtaW5pbWFsaXN0JTIwc2Fsb24lMjBpbnRlcmlvciUyMGRhcmt8ZW58MXx8fHwxNzgyODMxMzE5fDA&ixlib=rb-4.1.0&q=95&w=2400',
-  2: 'https://images.unsplash.com/photo-1634449571010-02389ed0f9b0?crop=entropy&cs=tinysrgb&fit=max&fm=webp&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBoYWlyJTIwc2Fsb24lMjBzdHlsaW5nJTIwc2VydmljZXxlbnwxfHx8fDE3ODIwMzMwMzB8MA&ixlib=rb-4.1.0&q=95&w=2400',
-  3: 'https://images.unsplash.com/photo-1635346125627-74d1b2867898?crop=entropy&cs=tinysrgb&fit=max&fm=webp&ixid=M3w3Nzg4Nzd8MHwxfHxoYWlyJTIwc3R5bGlzdCUyMGN1dHRpbmclMjBoYWlyJTIwc2Fsb24lMjBkYXJrfGVufDF8fHx8MTtextIwMzMwMzB8MA&ixlib=rb-4.1.0&q=95&w=2400',
-  4: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?crop=entropy&cs=tinysrgb&fit=max&fm=webp&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxiZWF1dGlmdWwlMjB3b21hbiUyMHBlcmZlY3QlMjBoYWlyJTIwYmxvd291dCUyMHBvcnRyYWl0JTIwZGFya3xlbnwxfHx8fDE3ODIwMzMwMzB8MA&ixlib=rb-4.1.0&q=95&w=2400',
-};
-
 const steps = {
   1: {
     title: 'Welcome to SalonDEES',
     subtitle:
       'Experience a new standard of luxury hair care and styling. Your personalized journey begins here, where every detail is tailored to your unique aesthetic.',
-    image: onboardingImages[1],
     eyebrow: 'Private Client Onboarding',
   },
   2: {
     title: 'Elevated Experience',
     subtitle: 'Discover the exclusive benefits of our digital concierge.',
-    image: onboardingImages[2],
     eyebrow: 'Digital Concierge',
   },
   3: {
     title: 'Select a Master Stylist',
     subtitle: 'Choose an expert whose vision aligns with yours.',
-    image: onboardingImages[3],
     eyebrow: 'Signature Artist',
   },
   4: {
     title: 'Your Salon Journey Begins Now',
     subtitle: 'Your profile is configured for the ultimate SalonDEES experience. Book your first appointment now.',
-    image: onboardingImages[4],
     eyebrow: 'Suite Unlocked',
   },
 };
@@ -111,7 +98,7 @@ function getStaffId(staff) {
 }
 
 function getImageUrl(imageUrl) {
-  if (!imageUrl) return FALLBACK_STAFF_IMAGE;
+  if (!imageUrl) return '';
   if (/^https?:\/\//i.test(imageUrl) || imageUrl.startsWith('data:')) return imageUrl;
   if (imageUrl.startsWith('/uploads')) return `${BACKEND_BASE_URL}${imageUrl}`;
   return imageUrl.startsWith('/') ? imageUrl : `${BACKEND_BASE_URL}/${imageUrl}`;
@@ -164,26 +151,30 @@ function StylistCard({
   selectedStylistId,
   setHoveredStylistId,
   setSelectedStylistId,
+  isPreviewOnly = false,
 }) {
   const stylistId = getStaffId(stylist);
   const isHovered = hoveredStylistId === stylistId;
   const isMuted = hoveredStylistId && !isHovered;
-  const isSelected = selectedStylistId === stylistId;
+  const isSelected = !isPreviewOnly && selectedStylistId === stylistId;
   const specialty = stylist.specialty || 'Luxury Artist';
   const experience = stylist.experience
     || stylist.experienceLevel
     || (stylist.yearsOfExperience ? `${stylist.yearsOfExperience}+ years experience` : 'Expert Stylist');
+  const imageUrl = getImageUrl(stylist.imageUrl || stylist.profileImage);
+  const hasImage = Boolean(imageUrl);
 
   return (
     <motion.button
       layout
       type="button"
       variants={itemVariants}
-      onMouseEnter={() => setHoveredStylistId(stylistId)}
-      onMouseLeave={() => setHoveredStylistId(null)}
-      onFocus={() => setHoveredStylistId(stylistId)}
-      onBlur={() => setHoveredStylistId(null)}
-      onClick={() => setSelectedStylistId(stylistId)}
+      disabled={isPreviewOnly}
+      onMouseEnter={() => !isPreviewOnly && setHoveredStylistId(stylistId)}
+      onMouseLeave={() => !isPreviewOnly && setHoveredStylistId(null)}
+      onFocus={() => !isPreviewOnly && setHoveredStylistId(stylistId)}
+      onBlur={() => !isPreviewOnly && setHoveredStylistId(null)}
+      onClick={() => !isPreviewOnly && setSelectedStylistId(stylistId)}
       animate={{
         opacity: isMuted ? 0.4 : 1,
         scale: 1,
@@ -201,25 +192,45 @@ function StylistCard({
             : '0 18px 34px rgba(0,0,0,0.24)',
       }}
       transition={{ duration: 0.25, ease: 'easeOut' }}
-      className="group relative origin-bottom w-[72vw] max-w-[17rem] shrink-0 overflow-hidden rounded-[18px] border bg-[#141417]/95 text-left backdrop-blur-xl sm:w-[13rem] lg:w-[10.25rem] xl:w-[10.85rem]"
+      className={`group relative origin-bottom w-[72vw] max-w-[17rem] shrink-0 overflow-hidden rounded-[18px] border text-left backdrop-blur-xl sm:w-[13rem] lg:w-[10.25rem] xl:w-[10.85rem] ${
+        isPreviewOnly
+          ? 'cursor-not-allowed border-white/8 bg-[#101012]/88 opacity-70 grayscale-[0.9]'
+          : 'bg-[#141417]/95'
+      }`}
     >
-      <div className="relative h-[14rem] overflow-hidden bg-zinc-900 lg:h-[13rem] xl:h-[13.75rem]">
-        <img
-          src={getImageUrl(stylist.imageUrl || stylist.profileImage)}
-          alt={stylist.name}
-          loading="lazy"
-          decoding="async"
-          className="w-full h-full object-cover object-center transform scale-100 will-change-transform transition duration-300 group-hover:scale-[1.04]"
-          onError={(event) => {
-            event.currentTarget.src = FALLBACK_STAFF_IMAGE;
-          }}
-        />
+      <div className="relative h-[14rem] overflow-hidden bg-zinc-950 lg:h-[13rem] xl:h-[13.75rem]">
+        <div className="absolute inset-0 animate-pulse bg-[radial-gradient(circle_at_top,_rgba(212,175,55,0.18),_transparent_42%),linear-gradient(160deg,_#141014_0%,_#09090b_55%,_#050506_100%)]">
+          <div className="absolute inset-0 bg-[linear-gradient(115deg,transparent_0%,rgba(212,175,55,0.08)_50%,transparent_100%)] opacity-80" />
+          <div className="absolute left-4 top-5 h-20 w-16 rounded-[28px] border border-[#D4AF37]/28 bg-[#0d0d10]/85 shadow-[0_0_0_1px_rgba(255,255,255,0.03)]" />
+          <div className="absolute right-4 top-6 h-3 w-20 rounded-full bg-[#D4AF37]/22" />
+          <div className="absolute right-4 top-11 h-3 w-14 rounded-full bg-white/10" />
+          <div className="absolute bottom-7 left-4 right-4 h-16 rounded-[24px] border border-white/8 bg-white/[0.035]" />
+          <div className="absolute bottom-10 left-7 h-3 w-24 rounded-full bg-[#D4AF37]/24" />
+          <div className="absolute bottom-5 left-7 h-2.5 w-18 rounded-full bg-white/10" />
+        </div>
+        {hasImage && (
+          <img
+            src={imageUrl}
+            alt={stylist.name}
+            loading="lazy"
+            decoding="async"
+            className="relative z-10 h-full w-full object-cover object-center transform scale-100 will-change-transform transition duration-300 group-hover:scale-[1.04]"
+            onError={(event) => {
+              event.currentTarget.style.display = 'none';
+            }}
+          />
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-[#141417] via-[#141417]/45 to-transparent" />
         <div className="absolute bottom-4 left-4 z-10 flex items-center gap-2 rounded-full bg-black/72 px-3 py-1.5 text-sm font-bold text-white shadow-lg backdrop-blur">
           <Star className="h-4 w-4 fill-[#D4AF37] text-[#D4AF37]" />
           <span>{formatRating(stylist.averageRating)}</span>
           <span className="text-xs font-medium text-white/48">({formatReviewCount(stylist.totalReviewsCount)})</span>
         </div>
+        {isPreviewOnly && (
+          <div className="absolute right-4 top-4 z-20 rounded-full border border-[#D4AF37]/35 bg-black/75 px-3 py-1 text-[0.68rem] font-bold uppercase tracking-[0.18em] text-[#D4AF37] shadow-lg backdrop-blur">
+            Preview Only
+          </div>
+        )}
       </div>
 
       <div className="relative z-10 -mt-0.5 flex min-h-[15.5rem] flex-col bg-[#141417] p-5 shadow-[0_-10px_18px_#141417] lg:min-h-[15.8rem] lg:p-5 xl:min-h-[16.4rem]">
@@ -268,6 +279,7 @@ function Onboarding() {
   const storedUser = useMemo(getStoredUser, []);
   const activeStep = steps[currentStep];
   const displayStylists = stylists.length ? stylists : fallbackStylists;
+  const isPreviewOnlyStylists = !isLoadingStylists && stylists.length === 0;
   const selectedRealStylistId = stylists.some((staff) => getStaffId(staff) === selectedStylistId)
     ? selectedStylistId
     : null;
@@ -441,6 +453,11 @@ function Onboarding() {
           <motion.p variants={itemVariants} className="mx-auto mt-4 max-w-[32rem] text-base leading-7 text-[#b9c0d2] sm:text-lg lg:mx-0 lg:text-[1.28rem] lg:leading-tight">
             {activeStep.subtitle}
           </motion.p>
+          {isPreviewOnlyStylists && (
+            <motion.div variants={itemVariants} className="mt-6 rounded-[18px] border border-[#D4AF37]/20 bg-[#D4AF37]/8 px-5 py-4 text-left text-sm leading-6 text-[#f1e7bf] shadow-[0_0_24px_rgba(212,175,55,0.08)]">
+              Stylist selection is currently offline. You can skip this step or try reloading.
+            </motion.div>
+          )}
           <motion.div
             variants={itemVariants}
             className="salon-scrollbar -mx-6 mt-6 flex min-w-0 snap-x gap-4 overflow-x-auto overflow-y-visible scroll-px-6 px-6 pb-10 pt-4 sm:-mx-8 sm:px-8 sm:pb-10 lg:-mx-1 lg:mt-5 lg:gap-5 lg:px-1 lg:pb-5 lg:pt-2"
@@ -466,6 +483,7 @@ function Onboarding() {
                       selectedStylistId={selectedStylistId}
                       setHoveredStylistId={setHoveredStylistId}
                       setSelectedStylistId={setSelectedStylistId}
+                      isPreviewOnly={isPreviewOnlyStylists}
                     />
                   </div>
                 ))}

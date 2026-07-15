@@ -36,6 +36,7 @@ const sendEmail = async (options) => {
         const mailOptions = {
             from: `"${BRAND_NAME}" <${process.env.EMAIL_USER}>`,
             to: options.email,
+            cc: options.cc,
             subject: options.subject,
             html: options.html || options.message,
             text: options.text || stripHtml(options.html || options.message),
