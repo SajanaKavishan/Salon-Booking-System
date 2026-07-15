@@ -1,6 +1,7 @@
-const configuredApiBaseUrl = String(import.meta.env.VITE_API_BASE_URL ?? '')
-  .trim()
-  .replace(/\/+$/, '');
+const configuredApiBaseUrl = [import.meta.env.VITE_API_BASE_URL, import.meta.env.VITE_BACKEND_URL]
+  .map((value) => String(value ?? '').trim())
+  .find(Boolean)
+  ?.replace(/\/+$/, '');
 
 const getFallbackApiBaseUrl = () => {
   if (configuredApiBaseUrl) return configuredApiBaseUrl;

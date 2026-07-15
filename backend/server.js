@@ -15,19 +15,22 @@ mongoose.set("bufferCommands", false);
 
 app.use(helmet());
 
-const configuredClientOrigins = (process.env.CLIENT_URL || "")
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean);
+const configuredClientOrigins = Array.from(new Set(
+    [process.env.CLIENT_URL, process.env.FRONTEND_URL, process.env.BACKEND_URL]
+        .flatMap((value) => String(value || "")
+            .split(",")
+            .map((origin) => origin.trim())
+            .filter(Boolean))
+));
 const isProduction = process.env.NODE_ENV === "production";
-const fallbackClientOrigins = ["http://localhost:5173", "http://localhost:3000"];
+const fallbackClientOrigins = ["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173"];
 const allowedOrigins = Array.from(new Set([
     ...configuredClientOrigins,
     ...(isProduction ? [] : fallbackClientOrigins),
 ]));
 
 if (isProduction && configuredClientOrigins.length === 0) {
-    throw new Error("Critical configuration error: CLIENT_URL must be configured in production.");
+    throw new Error("Critical configuration error: CLIENT_URL, FRONTEND_URL, or BACKEND_URL must be configured in production.");
 }
 
 const mongoOptions = { 

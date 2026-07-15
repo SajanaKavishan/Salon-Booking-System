@@ -1,13 +1,13 @@
 const cloudinary = require('cloudinary').v2;
 
-// Validate that all required Cloudinary environment variables are set
+// Validate that all required Cloudinary environment variables are set when a full URL is not provided.
 const requiredCloudinaryEnvVars = [
   process.env.CLOUDINARY_CLOUD_NAME,
   process.env.CLOUDINARY_API_KEY,
   process.env.CLOUDINARY_API_SECRET,
 ];
 
-if (requiredCloudinaryEnvVars.some((value) => !value)) {
+if (!process.env.CLOUDINARY_URL && requiredCloudinaryEnvVars.some((value) => !value)) {
   throw new Error("Missing critical Cloudinary configuration environment variables.");
 }
 
