@@ -18,21 +18,25 @@ const steps = {
     subtitle:
       'Experience a new standard of luxury hair care and styling. Your personalized journey begins here, where every detail is tailored to your unique aesthetic.',
     eyebrow: 'Private Client Onboarding',
+    image: '/loginBg.jpg',
   },
   2: {
     title: 'Elevated Experience',
     subtitle: 'Discover the exclusive benefits of our digital concierge.',
     eyebrow: 'Digital Concierge',
+    image: '/heroBg.jpg',
   },
   3: {
     title: 'Select a Master Stylist',
     subtitle: 'Choose an expert whose vision aligns with yours.',
     eyebrow: 'Signature Artist',
+    image: '/SchoolHaircut.jpg',
   },
   4: {
     title: 'Your Salon Journey Begins Now',
     subtitle: 'Your profile is configured for the ultimate SalonDEES experience. Book your first appointment now.',
     eyebrow: 'Suite Unlocked',
+    image: '/salonInterior.jpg',
   },
 };
 
@@ -97,11 +101,19 @@ function getStaffId(staff) {
   return staff?.userId || staff?._id || staff?.id || '';
 }
 
+function getPublicAssetUrl(assetPath) {
+  if (!assetPath) return '';
+  if (/^https?:\/\//i.test(assetPath) || assetPath.startsWith('data:')) return assetPath;
+
+  const normalizedPath = assetPath.replace(/^\/+/, '');
+  return `${import.meta.env.BASE_URL}${normalizedPath}`;
+}
+
 function getImageUrl(imageUrl) {
   if (!imageUrl) return '';
   if (/^https?:\/\//i.test(imageUrl) || imageUrl.startsWith('data:')) return imageUrl;
   if (imageUrl.startsWith('/uploads')) return `${BACKEND_BASE_URL}${imageUrl}`;
-  return imageUrl.startsWith('/') ? imageUrl : `${BACKEND_BASE_URL}/${imageUrl}`;
+  return getPublicAssetUrl(imageUrl);
 }
 
 const formatRating = (rating) => Number(rating || 0).toFixed(1);
