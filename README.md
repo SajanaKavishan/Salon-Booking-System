@@ -1,7 +1,7 @@
 # SalonDEES — Salon Booking & Management System
 
 <p align="center">
-  <img src="frontend/public/logo.png" alt="SalonDEES logo" width="140" />
+  <img src="frontend/public/logo.jpeg" alt="SalonDEES logo" width="140" />
 </p>
 
 <p align="center">
