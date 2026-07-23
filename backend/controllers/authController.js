@@ -14,7 +14,10 @@ const generateToken = (user) => {
   return jwt.sign(
     {
       id: user._id,
-      role: user.role
+      role: user.role,
+      ...(user.passwordChangedAt ? {
+        passwordChangedAt: new Date(user.passwordChangedAt).toISOString(),
+      } : {}),
     },
     process.env.JWT_SECRET,
     {
@@ -26,13 +29,14 @@ const generateToken = (user) => {
 // Controller function to handle user login. It validates the provided email and password, checks if the user exists, and verifies the password. If successful, it generates a JWT token and returns user details along with the token. For staff users, it also retrieves additional details such as profile image, specialty, working hours, and off days.
 const login = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password } = req.body || {};
 
-    if (!email || !password) {
+    if (typeof email !== 'string' || !email.trim() || !password) {
       return res.status(400).json({ message: 'Email and password are required.' });
     }
 
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await User.findOne({ email: normalizedEmail }).select('+password');
     if (!user) {
       return res.status(401).json({ message: 'Invalid email or password.' });
     }
@@ -40,6 +44,10 @@ const login = async (req, res) => {
     const passwordMatches = await bcrypt.compare(password, user.password);
     if (!passwordMatches) {
       return res.status(401).json({ message: 'Invalid email or password.' });
+    }
+
+    if (user.isActive === false) {
+      return res.status(403).json({ message: 'This account is inactive. Please contact the salon administrator.' });
     }
 
     const token = generateToken(user);
@@ -50,7 +58,10 @@ const login = async (req, res) => {
     let workingHours = normalizeWorkingHours();
 
     if (user.role === 'staff') {
-      const staffDetails = await Staff.findOne({ userId: user._id }).lean();
+      const staffDetails = await Staff.findOne({
+        userId: user._id,
+        isActive: { $ne: false },
+      }).lean();
       if (staffDetails) {
         profileImage = profileImage || staffDetails.imageUrl || '';
         specialty = staffDetails.specialty || '';
@@ -85,24 +96,41 @@ const login = async (req, res) => {
 
 // Controller function to handle password reset requests. It generates a secure token for password reset, saves it to the user's record with an expiration time, and sends an email with a reset link. The function ensures that the frontend URL is properly configured for production environments and handles errors gracefully.
 const forgotPassword = async (req, res) => {
-  try {
-    const { email } = req.body;
-    const genericSuccessMessage = 'If an account exists with that email, a password reset link has been sent.';
-
-    if (!email) {
-      return res.status(400).json({ message: 'Email is required.' });
-    }
-
-    const user = await User.findOne({ email: email.toLowerCase().trim() });
-    if (!user) {
+  const genericSuccessMessage = 'If an account exists with that email, a password reset link has been sent.';
+  const sendGenericSuccessResponse = () => {
+    if (!res.headersSent) {
       return res.status(200).json({ success: true, message: genericSuccessMessage });
     }
 
-    if (user.resetPasswordExpire && (user.resetPasswordExpire.getTime() - Date.now() > 5 * 60 * 1000)) {
-      return res.status(429).json({
-        message: 'A password reset email was recently sent. Please wait 5 minutes before trying again.',
-      });
+    return undefined;
+  };
+
+  try {
+    const { email } = req.body || {};
+
+    if (typeof email !== 'string' || !email.trim()) {
+      return res.status(400).json({ message: 'Email is required.' });
     }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await User.findOne({ email: normalizedEmail });
+    if (!user) {
+      return sendGenericSuccessResponse();
+    }
+
+    if (user.resetPasswordExpire && (user.resetPasswordExpire.getTime() - Date.now() > 5 * 60 * 1000)) {
+      console.info('[AUDIT] Password reset request suppressed by cooldown.', {
+        event: 'PASSWORD_RESET_COOLDOWN',
+        userId: user._id?.toString?.() || null,
+        timestamp: new Date().toISOString(),
+      });
+
+      return sendGenericSuccessResponse();
+    }
+
+    // Send the indistinguishable public response before SMTP or token persistence
+    // work so account existence cannot be inferred from response duration.
+    sendGenericSuccessResponse();
 
     const configuredFrontendUrl = String(process.env.FRONTEND_URL || process.env.CLIENT_URL || '')
       .split(',')
@@ -116,7 +144,7 @@ const forgotPassword = async (req, res) => {
       );
     }
 
-    const clientUrl = process.env.FRONTEND_URL || process.env.CLIENT_URL || req.headers.origin || 'http://localhost:5173';
+    const clientUrl = configuredFrontendUrl || req.headers.origin || 'http://localhost:5173';
 
     if (!configuredFrontendUrl) {
       console.error(
@@ -229,19 +257,28 @@ const forgotPassword = async (req, res) => {
         html: message,
         text: `Reset your Salon DEES account password using this link: ${resetUrl}. This link expires in 10 minutes.`
       });
-
-      return res.status(200).json({ success: true, message: genericSuccessMessage });
     } catch (emailError) {
       user.resetPasswordToken = undefined;
       user.resetPasswordExpire = undefined;
       await user.save();
 
-      return res.status(500).json({
-        message: 'Email could not be sent. Please try again later.',
+      console.error('[AUDIT] Password reset email delivery failed after generic response.', {
+        event: 'PASSWORD_RESET_EMAIL_FAILED',
+        userId: user._id?.toString?.() || null,
+        error: emailError.message,
+        timestamp: new Date().toISOString(),
       });
     }
+
+    return undefined;
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    console.error('[AUDIT] Password reset request processing failed.', {
+      event: 'PASSWORD_RESET_PROCESSING_FAILED',
+      error: error.message,
+      timestamp: new Date().toISOString(),
+    });
+
+    return sendGenericSuccessResponse();
   }
 };
 
@@ -255,8 +292,11 @@ const resetPassword = async (req, res) => {
       return res.status(400).json({ message: 'New password is required.' });
     }
 
-    if (String(password).length < 6) {
-      return res.status(400).json({ message: 'Password must be at least 6 characters long.' });
+    if (String(password).length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 8 characters long.',
+      });
     }
 
     const resetPasswordToken = crypto
@@ -275,12 +315,18 @@ const resetPassword = async (req, res) => {
 
     const salt = await bcrypt.genSalt(10);
     user.password = await bcrypt.hash(password, salt);
+    user.passwordChangedAt = new Date();
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;
 
     await user.save();
 
-    return res.status(200).json({ message: 'Password reset successful. You can now sign in.' });
+    const freshToken = generateToken(user);
+
+    return res.status(200).json({
+      message: 'Password updated successfully',
+      token: freshToken,
+    });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }

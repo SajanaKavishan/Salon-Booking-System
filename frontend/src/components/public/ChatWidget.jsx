@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import axios from 'axios';
+import { apiClient as axios } from '../../utils/apiConfig';
 import { Bot, ChevronDown, Loader2, Send } from 'lucide-react';
 import { apiUrl } from '../../utils/apiConfig';
 
@@ -29,7 +29,7 @@ const STAFF_PAGE_SIZE = 4;
 
 const staticReplies = {
   bookingHelp:
-    'Booking works in a few simple steps: choose your service, select a preferred stylist or any available stylist, pick a date and time, then confirm your appointment. The booking page will only show valid options based on salon availability.',
+    'Booking works in a few simple steps: choose your service, select one specific stylist, pick a date and time, then confirm your appointment. The booking page will only show valid options for your selected stylist.',
   cancellationPolicy:
     'You can cancel or reschedule your appointment up to 2 hours before the scheduled time. This helps SalonDEES reopen the slot for another client.',
   phonePolicy:
@@ -39,7 +39,7 @@ const staticReplies = {
   latePolicy:
     'If you are running late, tap the "I am late" button on your appointment screen. This lets the salon know early and helps the team manage the day schedule.',
   staffHelp:
-    'Our staff include skilled stylists with different strengths. If you are unsure who to choose, select any available stylist during booking and SalonDEES will match you with an artist who is free for your selected service and time.',
+    'Our staff include skilled stylists with different strengths. Every booking requires one specific stylist, so compare their profiles and choose the artist who best fits your service.',
   moreHelp:
     'Sure. What else would you like to know about SalonDEES? You can type your question below.',
 };
@@ -142,6 +142,7 @@ function formatMessageTime(createdAt) {
 }
 
 function ChatWidget({ mode = 'desktop-floating' }) {
+  const isMobileTrigger = mode === 'mobile-trigger';
   const [isOpen, setIsOpen] = useState(false);
   const [shouldRenderChat, setShouldRenderChat] = useState(false);
   const [messages, setMessages] = useState(initialMessages);
@@ -178,16 +179,36 @@ function ChatWidget({ mode = 'desktop-floating' }) {
   }, [isOpen, messages]);
 
   useEffect(() => {
-    const isMobile = window.matchMedia('(max-width: 640px)').matches;
-    if (!isMobile || !isOpen) return undefined;
+    const breakpoint = window.matchMedia('(max-width: 640px)');
+    const clearLegacyScrollLock = () => {
+      if (document.body.style.overflow === 'hidden') {
+        document.body.style.removeProperty('overflow');
+      }
+      if (document.documentElement.style.overflow === 'hidden') {
+        document.documentElement.style.removeProperty('overflow');
+      }
+    };
+    const handleBreakpointChange = () => {
+      setIsOpen(false);
+      setShouldRenderChat(false);
+      clearLegacyScrollLock();
+    };
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    if (typeof breakpoint.addEventListener === 'function') {
+      breakpoint.addEventListener('change', handleBreakpointChange);
+    } else {
+      breakpoint.addListener(handleBreakpointChange);
+    }
 
     return () => {
-      document.body.style.overflow = previousOverflow;
+      if (typeof breakpoint.removeEventListener === 'function') {
+        breakpoint.removeEventListener('change', handleBreakpointChange);
+      } else {
+        breakpoint.removeListener(handleBreakpointChange);
+      }
+      clearLegacyScrollLock();
     };
-  }, [isOpen]);
+  }, []);
 
   useEffect(() => {
     if (isOpen) {
@@ -271,7 +292,7 @@ function ChatWidget({ mode = 'desktop-floating' }) {
       userText: action.label,
       assistantText: selected
         ? `${selected.name}${description ? `: ${description}` : ' is a SalonDEES staff member.'}\n\nYou can choose ${selected.name} during booking if available for your selected time.`
-        : 'That stylist profile is not available right now. You can still choose any available stylist during booking.',
+        : 'That stylist profile is not available right now. Please choose another specific stylist before booking.',
     });
     setCurrentStep('ask_only');
   };
@@ -463,10 +484,9 @@ function ChatWidget({ mode = 'desktop-floating' }) {
     scrollContainer.scrollTop += event.deltaY;
   };
 
-  const isMobileTrigger = mode === 'mobile-trigger';
   const rootClassName = isMobileTrigger
-    ? 'w-full sm:hidden'
-    : 'fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+1rem)] z-[60] hidden flex-col items-end gap-3 sm:inset-x-auto sm:bottom-8 sm:right-8 sm:flex sm:gap-4';
+    ? 'relative z-[99999] w-full sm:hidden'
+    : 'fixed inset-x-3 bottom-[calc(env(safe-area-inset-bottom)+1rem)] z-[99999] hidden flex-col items-end gap-3 sm:inset-x-auto sm:bottom-8 sm:right-8 sm:flex sm:gap-4';
   const panelPositionClassName = isMobileTrigger
     ? `fixed inset-x-3 top-[calc(env(safe-area-inset-top)+5.5rem)] z-[70] max-[360px]:inset-x-2 ${
         isInputFocused
@@ -621,6 +641,9 @@ function ChatWidget({ mode = 'desktop-floating' }) {
       {shouldRenderChat && (
         <div
           onWheel={handlePanelWheel}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Salon Assistant Chat"
           className={`${panelPositionClassName} ${panelSizeClassName} flex origin-bottom-right flex-col overflow-hidden rounded-2xl border border-[#d4af37]/25 bg-[#101010]/95 shadow-2xl shadow-black/60 backdrop-blur-md transition-[bottom] duration-300 ease-out sm:rounded-3xl ${
             isOpen
               ? 'animate-[salonChatUnfold_360ms_cubic-bezier(0.16,1,0.3,1)_both]'
@@ -657,6 +680,8 @@ function ChatWidget({ mode = 'desktop-floating' }) {
           <div
             ref={chatScrollRef}
             onScroll={handleChatScroll}
+            aria-live="polite"
+            aria-relevant="additions text"
             className="salon-chat-scrollbar flex-1 overscroll-contain space-y-3 overflow-y-auto bg-[#101010] px-3 py-4 sm:space-y-4 sm:px-4 sm:py-5"
           >
             {messages.map((message, index) => {
@@ -756,6 +781,7 @@ function ChatWidget({ mode = 'desktop-floating' }) {
                 onBlur={() => setIsInputFocused(false)}
                 placeholder="Ask SalonDEES Concierge..."
                 aria-label="Ask SalonDEES Concierge"
+                maxLength={500}
                 className="min-w-0 flex-1 rounded-full border border-[#d4af37]/20 bg-[#101010] px-4 py-3 text-sm text-white outline-none transition placeholder:text-neutral-500 focus:border-[#d4af37] focus:ring-2 focus:ring-[#d4af37]/20 max-[360px]:px-3 max-[360px]:text-[0.82rem]"
                 disabled={isSending}
               />

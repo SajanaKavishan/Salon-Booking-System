@@ -157,6 +157,7 @@ Update the values for your local environment. Never commit real secrets.
 | `CLOUDINARY_API_KEY` | For uploads | Cloudinary API key |
 | `CLOUDINARY_API_SECRET` | For uploads | Cloudinary API secret |
 | `GOOGLE_CALENDAR_API_KEY` | Optional | Public-holiday synchronization |
+| `GOOGLE_CLIENT_ID` | For Google sign-in | Server-side audience used to verify Google ID tokens; use the same web client ID as the frontend |
 | `GROQ_API_KEY` | Optional | AI chatbot responses |
 | `EMAIL_HOST` | For email | SMTP server hostname |
 | `EMAIL_PORT` | For email | SMTP server port |

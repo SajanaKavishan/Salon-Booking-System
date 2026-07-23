@@ -25,6 +25,14 @@ const dayHoursSchema = new mongoose.Schema(
 
 const salonSettingsSchema = new mongoose.Schema(
   {
+    key: {
+      type: String,
+      default: 'global',
+      enum: ['global'],
+      required: true,
+      unique: true,
+      immutable: true,
+    },
     salonName: {
       type: String,
       default: 'Salon DEES',

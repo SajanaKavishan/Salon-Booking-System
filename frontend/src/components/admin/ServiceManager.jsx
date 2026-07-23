@@ -1,12 +1,20 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import axios from 'axios';
+import { apiClient as axios } from '../../utils/apiConfig';
 import { toast } from 'react-toastify';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { GlassCard, GoldButton } from './SystemUI';
 import API_BASE_URL from '../../utils/apiConfig';
+import { useModalFocus } from '../../hooks/useModalFocus';
 
 const mutedGoldButtonClassName = 'disabled:cursor-not-allowed disabled:border-[#756a1d] disabled:bg-[#756a1d] disabled:text-black/70 disabled:shadow-none disabled:brightness-75 disabled:hover:bg-[#756a1d] disabled:hover:text-black/70';
+const isValidServicePrice = (value) => value !== '' && Number.isFinite(Number(value)) && Number(value) >= 0;
+const isValidServiceDuration = (value) => (
+  value !== ''
+  && Number.isInteger(Number(value))
+  && Number(value) >= 15
+  && Number(value) <= 480
+);
 
 function SalonNumberField({
   id,
@@ -18,6 +26,8 @@ function SalonNumberField({
   fieldClassName,
   step = 1,
   min = 0,
+  max = Number.POSITIVE_INFINITY,
+  integerOnly = false,
 }) {
   const commitValue = (nextValue) => {
     const numericValue = Number(nextValue);
@@ -27,13 +37,14 @@ function SalonNumberField({
     }
 
     if (!Number.isNaN(numericValue)) {
-      onValueChange(String(Math.max(min, numericValue)));
+      const normalizedValue = integerOnly ? Math.round(numericValue) : numericValue;
+      onValueChange(String(Math.min(max, Math.max(min, normalizedValue))));
     }
   };
 
   const adjustValue = (direction) => {
     const currentValue = Number(value) || 0;
-    const nextValue = Math.max(min, currentValue + direction * step);
+    const nextValue = Math.min(max, Math.max(min, currentValue + direction * step));
     onValueChange(String(nextValue));
   };
 
@@ -43,19 +54,25 @@ function SalonNumberField({
       <div className="relative">
         <input
           id={id}
-          type="text"
-          inputMode="decimal"
+          type="number"
+          inputMode={integerOnly ? 'numeric' : 'decimal'}
+          min={min}
+          max={Number.isFinite(max) ? max : undefined}
+          step={integerOnly ? 1 : 'any'}
           placeholder={placeholder}
           value={value}
           onChange={(event) => {
             const nextValue = event.target.value;
-            if (/^\d*\.?\d*$/.test(nextValue)) {
+            const validPattern = integerOnly ? /^\d*$/ : /^\d*\.?\d*$/;
+            if (validPattern.test(nextValue)) {
               onValueChange(nextValue);
             }
           }}
           onBlur={() => commitValue(value)}
+          aria-valuemin={min}
+          aria-valuemax={Number.isFinite(max) ? max : undefined}
           required
-          className={`${fieldClassName} pr-12`}
+          className={`${fieldClassName} pr-12 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
         />
         <div className="absolute right-2 top-1/2 flex -translate-y-1/2 flex-col overflow-hidden rounded-md border border-[#d4af37]/20 bg-[#0b0b0b]/90">
           <button
@@ -107,14 +124,19 @@ function ServiceManager() {
   const editFileInputRef = useRef(null);
   const canAddService = Boolean(
     formData.name.trim() &&
-    Number(formData.price) > 0 &&
-    Number(formData.duration) > 0
+    isValidServicePrice(formData.price) &&
+    isValidServiceDuration(formData.duration)
   );
   const hasEditChanges = JSON.stringify(editData) !== JSON.stringify(originalEditData) || Boolean(selectedEditImage);
+  const canUpdateService = Boolean(
+    hasEditChanges
+    && String(editData.name || '').trim()
+    && isValidServicePrice(editData.price)
+    && isValidServiceDuration(editData.duration)
+  );
 
   const getAuthConfig = () => {
-    const token = localStorage.getItem('token');
-    return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+    return {};
   };
 
   useEffect(() => {
@@ -204,6 +226,27 @@ function ServiceManager() {
     }
   };
 
+  const closeEditModal = () => {
+    if (isUpdatingService) return;
+    setIsEditModalOpen(false);
+    clearSelectedEditImage();
+  };
+  const closeDeleteModal = () => {
+    if (isDeletingService) return;
+    setIsDeleteModalOpen(false);
+    setItemToDelete(null);
+  };
+  const editDialogRef = useModalFocus({
+    isOpen: isEditModalOpen,
+    onClose: closeEditModal,
+    canClose: !isUpdatingService,
+  });
+  const deleteDialogRef = useModalFocus({
+    isOpen: isDeleteModalOpen,
+    onClose: closeDeleteModal,
+    canClose: !isDeletingService,
+  });
+
   const handleAddService = async (e) => {
     e.preventDefault();
     if (isAddingService || !canAddService) return;
@@ -266,7 +309,7 @@ function ServiceManager() {
 
   const handleUpdateService = async (e) => {
     e.preventDefault();
-    if (isUpdatingService || !hasEditChanges) return;
+    if (isUpdatingService || !canUpdateService) return;
 
     setIsUpdatingService(true);
     try {
@@ -319,6 +362,9 @@ function ServiceManager() {
             placeholder="Duration (Mins)"
             labelClassName={labelClassName}
             fieldClassName={fieldClassName}
+            min={15}
+            max={480}
+            integerOnly
           />
           <div className="md:col-span-3">
             <input
@@ -369,7 +415,7 @@ function ServiceManager() {
       </section>
 
       <section className="rounded-2xl border border-white/10 bg-[#111111]/70 p-4 shadow-xl backdrop-blur-md sm:p-6">
-        <div className="space-y-3 md:hidden">
+        <div className="space-y-3 lg:hidden">
           {isFetchingInitial ? (
             Array.from({ length: 3 }).map((_, index) => (
               <article key={`service-mobile-skeleton-${index}`} className="animate-pulse rounded-xl border border-white/10 bg-black/20 p-4">
@@ -406,7 +452,7 @@ function ServiceManager() {
                     }}
                   />
                 ) : (
-                  <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-gray-800 text-[10px] text-gray-500">
+                  <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-gray-800 text-xs text-gray-300">
                     No Img
                   </div>
                 )}
@@ -430,11 +476,11 @@ function ServiceManager() {
 
                   <div className="mt-4 grid grid-cols-2 gap-3 rounded-lg border border-white/5 bg-black/20 p-3 text-sm">
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Price</p>
+                      <p className="text-xs font-bold uppercase tracking-widest text-gray-300">Price</p>
                       <p className="mt-1 font-semibold text-[#d4af37]">Rs. {service.price}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Duration</p>
+                      <p className="text-xs font-bold uppercase tracking-widest text-gray-300">Duration</p>
                       <p className="mt-1 font-semibold text-gray-200">{service.duration} mins</p>
                     </div>
                   </div>
@@ -467,7 +513,7 @@ function ServiceManager() {
           )}
         </div>
 
-        <div className="salon-scrollbar hidden overflow-x-auto rounded-xl border border-white/10 bg-black/20 md:block">
+        <div className="salon-scrollbar hidden overflow-x-auto rounded-xl border border-white/10 bg-black/20 lg:block">
           <table className="salon-table">
             <thead>
               <tr className="bg-black/30 text-[#d4af37]">
@@ -576,17 +622,19 @@ function ServiceManager() {
       {typeof document !== 'undefined' && createPortal((
         <>
           {isEditModalOpen && (
-        <div className="fixed inset-0 z-[9999] flex min-h-screen items-center justify-center overflow-y-auto bg-black/90 px-4 py-6 backdrop-blur-xl">
+        <div className="salon-modal-overlay fixed inset-0 z-[9999] flex min-h-screen items-center justify-center overflow-y-auto bg-black/90 px-3 py-4 backdrop-blur-xl sm:px-4 sm:py-6">
           <GlassCard
+            ref={editDialogRef}
             role="dialog"
             aria-modal="true"
-            aria-labelledby="modal-title"
-            className="relative w-full max-w-md border-t-4 border-t-[#d4af37] bg-[#111111] p-5 sm:p-8"
+            aria-labelledby="edit-service-title"
+            tabIndex={-1}
+            className="salon-modal-dialog relative w-full max-w-md border-t-4 border-t-[#d4af37] bg-[#111111] p-5 sm:p-8"
           >
-            <button type="button" onClick={() => setIsEditModalOpen(false)} aria-label="Close dialog" className="absolute right-4 top-4 rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-sm text-gray-400 hover:text-white">
+            <button type="button" onClick={closeEditModal} disabled={isUpdatingService} aria-label="Close edit service dialog" className="salon-modal-icon-button absolute right-3 top-3 inline-flex items-center justify-center rounded-full border border-white/10 bg-white/[0.04] p-2 text-sm text-gray-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-50 sm:right-4 sm:top-4">
               x
             </button>
-            <h3 id="modal-title" className="salon-heading mb-6 border-b border-white/10 pb-4 pr-10 text-2xl sm:text-3xl">Edit Service</h3>
+            <h3 id="edit-service-title" className="salon-heading mb-6 border-b border-white/10 pb-4 pr-10 text-2xl sm:text-3xl">Edit Service</h3>
             <form onSubmit={handleUpdateService} className="flex flex-col gap-4">
               <div>
                 <label htmlFor="edit-service-name" className={labelClassName}>Service Name</label>
@@ -609,6 +657,9 @@ function ServiceManager() {
                 placeholder="Duration (Mins)"
                 labelClassName={labelClassName}
                 fieldClassName={fieldClassName}
+                min={15}
+                max={480}
+                integerOnly
               />
               <input
                 ref={editFileInputRef}
@@ -660,10 +711,10 @@ function ServiceManager() {
               )}
 
               <div className="mt-4 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-                <GoldButton type="button" variant="ghost" onClick={() => setIsEditModalOpen(false)} disabled={isUpdatingService} className="bg-gray-800 px-4 py-2 text-white hover:bg-gray-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-60">
+                <GoldButton type="button" variant="ghost" onClick={closeEditModal} disabled={isUpdatingService} className="salon-modal-action bg-gray-800 px-4 py-2 text-white hover:bg-gray-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-60">
                   Cancel
                 </GoldButton>
-                <GoldButton type="submit" disabled={!hasEditChanges || isUpdatingService} className={`px-4 py-2 ${mutedGoldButtonClassName}`}>
+                <GoldButton type="submit" disabled={!canUpdateService || isUpdatingService} className={`salon-modal-action px-4 py-2 ${mutedGoldButtonClassName}`}>
                   {isUpdatingService ? 'Saving...' : 'Save Changes'}
                 </GoldButton>
               </div>
@@ -673,24 +724,24 @@ function ServiceManager() {
           )}
 
           {isDeleteModalOpen && (
-        <div className="fixed inset-0 z-[9999] flex min-h-screen items-center justify-center bg-black/90 px-4 backdrop-blur-xl">
+        <div className="salon-modal-overlay fixed inset-0 z-[9999] flex min-h-screen items-center justify-center bg-black/90 px-3 py-4 backdrop-blur-xl sm:px-4 sm:py-6">
           <GlassCard
+            ref={deleteDialogRef}
             role="dialog"
             aria-modal="true"
-            aria-labelledby="modal-title"
-            className="w-full max-w-sm border-t-4 border-t-red-600 bg-[#111111] p-5 sm:p-6"
+            aria-labelledby="delete-service-title"
+            tabIndex={-1}
+            className="salon-modal-dialog w-full max-w-sm border-t-4 border-t-red-600 bg-[#111111] p-5 sm:p-6"
           >
-            <h4 id="modal-title" className="mb-3 text-xl font-semibold text-white">Delete Service</h4>
+            <h4 id="delete-service-title" className="mb-3 text-xl font-semibold text-white">Delete Service</h4>
             <p className="mb-6 text-gray-400">Are you sure you want to delete this? This action cannot be undone.</p>
             <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
               <GoldButton
                 type="button"
                 variant="ghost"
-                onClick={() => {
-                  setIsDeleteModalOpen(false);
-                  setItemToDelete(null);
-                }}
-                className="border border-white/20 bg-transparent px-4 py-2 text-white hover:bg-white/10 hover:text-white"
+                onClick={closeDeleteModal}
+                disabled={isDeletingService}
+                className="salon-modal-action border border-white/20 bg-transparent px-4 py-2 text-white hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Cancel
               </GoldButton>
@@ -698,7 +749,7 @@ function ServiceManager() {
                 type="button"
                 onClick={confirmDelete}
                 disabled={isDeletingService}
-                className="inline-flex items-center justify-center rounded-md bg-red-600/90 px-4 py-2 font-semibold text-white shadow-[0_0_15px_rgba(220,38,38,0.4)] transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-70"
+                className="salon-modal-action inline-flex items-center justify-center rounded-md bg-red-600/90 px-4 py-2 font-semibold text-white shadow-[0_0_15px_rgba(220,38,38,0.4)] transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {isDeletingService ? 'Deleting...' : 'Yes, Delete'}
               </button>

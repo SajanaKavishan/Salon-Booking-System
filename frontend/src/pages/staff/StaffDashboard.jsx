@@ -1,11 +1,20 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
+import { apiClient as axios } from '../../utils/apiConfig';
 import { DollarSign, RefreshCw } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { GoldButton, StatusBadge } from '../../components/admin/SystemUI';
 import API_BASE_URL from '../../utils/apiConfig';
+import { useSalonSettings } from '../../hooks/useSalonSettings';
 import { getStoredSession } from '../../utils/auth';
+import { storage } from '../../utils/storage';
+import { getAppointmentServicesLabel } from '../../utils/appointmentDisplay';
+import {
+  getSalonAppointmentTimestamp,
+  getSalonDateKey,
+  getSalonMinutes,
+  SALON_TIME_ZONE,
+} from '../../utils/salonTime';
 
 const timeToMinutes = (timeStr) => {
   if (!timeStr || typeof timeStr !== 'string') return 0;
@@ -32,14 +41,9 @@ const buildAppointmentDateTime = (appointment, timeValue = appointment?.startTim
   if (!appointment?.date) return null;
 
   const dateKey = String(appointment.date).slice(0, 10);
-  const [year, month, day] = dateKey.split('-').map(Number);
-  if ([year, month, day].some(Number.isNaN)) return null;
+  const appointmentTimestamp = getSalonAppointmentTimestamp(dateKey, timeValue);
 
-  const timeMinutes = timeToMinutes(timeValue);
-  const hours = Math.floor(timeMinutes / 60);
-  const minutes = timeMinutes % 60;
-
-  return new Date(year, month - 1, day, hours, minutes, 0, 0);
+  return appointmentTimestamp === null ? null : new Date(appointmentTimestamp);
 };
 
 const getAppointmentSortGroup = (appointment, currentTime = Date.now()) => {
@@ -61,7 +65,7 @@ const getAppointmentSortGroup = (appointment, currentTime = Date.now()) => {
     return 2;
   }
 
-  if (['completed', 'cancelled', 'canceled', 'rejected'].includes(status)) {
+  if (['completed', 'cancelled', 'canceled', 'cancelled_by_salon', 'cancelled by salon', 'rejected'].includes(status)) {
     return 3;
   }
 
@@ -100,22 +104,13 @@ const getAppointmentDateKey = (appointment) => (
   String(appointment?.date || appointment?.bookingDate || '').slice(0, 10)
 );
 
-const getTodayDateKey = () => {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, '0');
-  const day = String(today.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
+const getTodayDateKey = () => getSalonDateKey();
 
 const getLocalDateKey = (dateValue) => {
   const parsedDate = dateValue instanceof Date ? dateValue : new Date(dateValue);
   if (Number.isNaN(parsedDate.getTime())) return '';
 
-  const year = parsedDate.getFullYear();
-  const month = String(parsedDate.getMonth() + 1).padStart(2, '0');
-  const day = String(parsedDate.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return getSalonDateKey(parsedDate);
 };
 
 const getDateKeyFromValue = (dateValue) => {
@@ -154,9 +149,7 @@ const formatDisplayDay = (dateKey) => {
 };
 
 const isTomorrowDateKey = (dateKey) => {
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  return getLocalDateKey(tomorrow) === dateKey;
+  return getSalonDateKey(new Date(Date.now() + 24 * 60 * 60 * 1000)) === dateKey;
 };
 
 const addDays = (date, days) => {
@@ -184,54 +177,40 @@ const getWorkingHoursEndValue = (workingHours) => {
   return '17:00';
 };
 
-const getCurrentMinutes = (timestamp) => {
-  const currentDate = new Date(timestamp);
-  return currentDate.getHours() * 60 + currentDate.getMinutes();
-};
+const getCurrentMinutes = (timestamp) => getSalonMinutes(new Date(timestamp));
 
 const getStaffWorkingHours = (profile) => (
   profile?.workingHours || profile?.staffDetails?.workingHours || null
 );
 
-const getCurrentWeekRange = () => {
-  const now = new Date();
-  const dayIndex = now.getDay();
-  const mondayOffset = dayIndex === 0 ? -6 : 1 - dayIndex;
-  const start = new Date(now);
-  start.setDate(now.getDate() + mondayOffset);
-  start.setHours(0, 0, 0, 0);
-
-  const end = new Date(start);
-  end.setDate(start.getDate() + 6);
-  end.setHours(23, 59, 59, 999);
-
-  return { start, end };
+const addDaysToDateKey = (dateKey, days) => {
+  const parsedDate = new Date(`${dateKey}T00:00:00.000Z`);
+  parsedDate.setUTCDate(parsedDate.getUTCDate() + days);
+  return parsedDate.toISOString().slice(0, 10);
 };
 
-const getAppointmentDate = (appointment) => {
-  const rawDate = appointment?.bookingDate || appointment?.date;
-  if (!rawDate) return null;
+const getCurrentSalonWeekDateKeys = (currentTime) => {
+  const todayKey = getSalonDateKey(new Date(currentTime));
+  const today = new Date(`${todayKey}T00:00:00.000Z`);
+  const dayIndex = today.getUTCDay();
+  const mondayOffset = dayIndex === 0 ? -6 : 1 - dayIndex;
+  const startDateKey = addDaysToDateKey(todayKey, mondayOffset);
 
-  const dateKey = String(rawDate).slice(0, 10);
-  const [year, month, day] = dateKey.split('-').map(Number);
-  const parsedDate = [year, month, day].some(Number.isNaN)
-    ? new Date(rawDate)
-    : new Date(year, month - 1, day);
-
-  return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
+  return {
+    startDateKey,
+    endDateKey: addDaysToDateKey(startDateKey, 6),
+  };
 };
 
 const isCompletedAppointment = (appointment) => (
   String(appointment?.status || '').trim().toLowerCase() === 'completed'
 );
 
-const COMPLETION_WINDOW_MS = 10 * 60 * 1000;
-
-const canCompleteAppointment = (appointment, currentTime = Date.now()) => {
+const canCompleteAppointment = (appointment, currentTime = Date.now(), gracePeriodMinutes = 15) => {
   const endDateTime = buildAppointmentDateTime(appointment, appointment?.endTime);
   if (!endDateTime) return false;
 
-  return currentTime >= endDateTime.getTime() - COMPLETION_WINDOW_MS;
+  return currentTime >= endDateTime.getTime() - gracePeriodMinutes * 60 * 1000;
 };
 
 const formatCurrency = (amount) => (
@@ -240,14 +219,15 @@ const formatCurrency = (amount) => (
   }).format(Number(amount) || 0)}`
 );
 
-const getServicesLabel = (appointment) => (
-  Array.isArray(appointment?.services) && appointment.services.length > 0
-    ? appointment.services.map((service) => service.name || service).join(', ')
-    : appointment?.service || 'Service details unavailable'
-);
-
 function StaffDashboard() {
+  const { settings } = useSalonSettings();
   const navigate = useNavigate();
+  const configuredGracePeriod = Number(settings?.gracePeriod);
+  const gracePeriodMinutes = Number.isInteger(configuredGracePeriod)
+    && configuredGracePeriod >= 0
+    && configuredGracePeriod <= 120
+    ? configuredGracePeriod
+    : 15;
   const location = useLocation();
   const [_user, setUser] = useState(null);
   const [staffProfile, setStaffProfile] = useState(null);
@@ -260,10 +240,10 @@ function StaffDashboard() {
   const [actionKey, setActionKey] = useState('');
   const [processingAppointmentId, setProcessingAppointmentId] = useState('');
   const [currentTime, setCurrentTime] = useState(Date.now());
-  const staffName = localStorage.getItem('userName') || 'Staff';
+  const staffName = storage.get('userName') || 'Staff';
 
   const fetchSchedule = useCallback(async ({ showLoading = false } = {}) => {
-    const token = localStorage.getItem('token');
+    const token = storage.get('token');
 
     if (!token) {
       setIsLoading(false);
@@ -274,14 +254,10 @@ function StaffDashboard() {
     try {
       if (showLoading) setIsLoading(true);
       setError(null);
-      const config = {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      };
+      const config = {};
       const [appointmentsResponse, profileResponse, leavesResponse, metricsResponse, holidaysResponse] = await Promise.all([
         axios.get(`${API_BASE_URL}/api/appointments/staff`, config),
-        axios.get(`${API_BASE_URL}/api/users/me`, config),
+        axios.get(`${API_BASE_URL}/api/users/profile`, config),
         axios.get(`${API_BASE_URL}/api/leaves`, config),
         axios.get(`${API_BASE_URL}/api/roster/metrics`, config),
         axios.get(`${API_BASE_URL}/api/holidays`).catch((holidayError) => {
@@ -348,7 +324,10 @@ function StaffDashboard() {
   const localIsLeaveDay = useMemo(() => {
     const today = new Date();
     const todayKey = getTodayDateKey();
-    const todayDayName = new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(today);
+    const todayDayName = new Intl.DateTimeFormat('en-US', {
+      weekday: 'long',
+      timeZone: SALON_TIME_ZONE,
+    }).format(today);
     const offDays = Array.isArray(staffProfile?.offDays)
       ? staffProfile.offDays
       : staffProfile?.offDays
@@ -418,7 +397,10 @@ function StaffDashboard() {
     for (let offset = 1; offset <= 90; offset += 1) {
       const candidateDate = addDays(new Date(currentTime), offset);
       const candidateKey = getLocalDateKey(candidateDate);
-      const dayName = new Intl.DateTimeFormat('en-US', { weekday: 'long' }).format(candidateDate);
+      const dayName = new Intl.DateTimeFormat('en-US', {
+        weekday: 'long',
+        timeZone: SALON_TIME_ZONE,
+      }).format(candidateDate);
       const isRegisteredOffDay = offDays.some((day) => (
         String(day).trim().toLowerCase() === dayName.toLowerCase()
       ));
@@ -511,24 +493,22 @@ function StaffDashboard() {
   )).length;
   const completedSessions = todayAppointments.filter(isCompletedAppointment).length;
   const weeklyEarnings = useMemo(() => {
-    const { start, end } = getCurrentWeekRange();
+    const { startDateKey, endDateKey } = getCurrentSalonWeekDateKeys(currentTime);
 
     return appointments.reduce((total, appointment) => {
-      const appointmentDate = getAppointmentDate(appointment);
-      if (!isCompletedAppointment(appointment) || !appointmentDate) return total;
+      const appointmentDateKey = getAppointmentDateKey(appointment);
+      if (!isCompletedAppointment(appointment) || !appointmentDateKey) return total;
 
-      const appointmentTime = appointmentDate.getTime();
-      if (appointmentTime < start.getTime() || appointmentTime > end.getTime()) return total;
+      if (appointmentDateKey < startDateKey || appointmentDateKey > endDateKey) return total;
 
       return total + Number(appointment.totalAmount || 0);
     }, 0);
-  }, [appointments]);
+  }, [appointments, currentTime]);
 
   const handleStatusUpdate = async (appointmentId, status) => {
     if (processingAppointmentId === appointmentId) return;
 
     try {
-      const token = localStorage.getItem('token');
       setProcessingAppointmentId(appointmentId);
       setActionKey(`${appointmentId}-${status}`);
 
@@ -537,11 +517,7 @@ function StaffDashboard() {
       const response = await axios.put(
         endpoint,
         { status },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
+        {}
       );
 
       const updatedStatus = response.data.appointment?.status || status;
@@ -568,7 +544,7 @@ function StaffDashboard() {
     const startDateTime = buildAppointmentDateTime(appointment);
     const isStarted = startDateTime?.getTime() <= currentTime;
     const isProcessingAppointment = processingAppointmentId === appointment._id;
-    const canComplete = canCompleteAppointment(appointment, currentTime);
+    const canComplete = canCompleteAppointment(appointment, currentTime, gracePeriodMinutes);
     const actionWrapperClass = stacked
       ? 'grid gap-3'
       : 'flex flex-wrap justify-end gap-3';
@@ -593,11 +569,11 @@ function StaffDashboard() {
             <GoldButton
               type="button"
               variant="ghost"
-              onClick={() => handleStatusUpdate(appointment._id, 'Rejected')}
+              onClick={() => handleStatusUpdate(appointment._id, 'Cancelled by Salon')}
               disabled={isProcessingAppointment}
               className={`${buttonClass} border border-red-900/50 bg-[#1a1a1a] text-red-400 hover:border-transparent hover:bg-red-900/80 hover:text-white`}
             >
-              {actionKey === `${appointment._id}-Rejected` ? 'Working...' : 'Reject'}
+              {actionKey === `${appointment._id}-Cancelled by Salon` ? 'Working...' : 'Decline'}
             </GoldButton>
           </>
         )}
@@ -685,7 +661,9 @@ function StaffDashboard() {
             </div>
             <div className="sm:col-span-2">
               <p className="text-xs uppercase tracking-[0.16em] text-gray-500">Service</p>
-              <p className="mt-2 text-base font-semibold text-gray-100">{getServicesLabel(appointment)}</p>
+              <p className="mt-2 text-base font-semibold text-gray-100">
+                {getAppointmentServicesLabel(appointment, 'Service details unavailable')}
+              </p>
             </div>
           </div>
 
@@ -939,10 +917,10 @@ function StaffDashboard() {
           </div>
         ) : (
           <>
-            <div className="block md:hidden">
+            <div className="block lg:hidden">
               <div className="grid gap-4">
                 {todayAppointments.map((appointment) => {
-                  const services = getServicesLabel(appointment);
+                  const services = getAppointmentServicesLabel(appointment, 'Service details unavailable');
                   const actions = renderAppointmentActions(appointment, { stacked: true });
                   const customerPhone = appointment.user?.phone;
 
@@ -1011,7 +989,7 @@ function StaffDashboard() {
               </div>
             </div>
 
-            <div className="hidden md:block">
+            <div className="hidden lg:block">
               <div className="salon-scrollbar overflow-x-auto">
                 <table className="w-full min-w-[760px] text-left">
                   <thead>
@@ -1025,7 +1003,7 @@ function StaffDashboard() {
                   </thead>
                   <tbody>
                     {todayAppointments.map((appointment) => {
-                      const services = getServicesLabel(appointment);
+                      const services = getAppointmentServicesLabel(appointment, 'Service details unavailable');
 
                       return (
                         <tr key={appointment._id} className="border-b border-white/10 last:border-b-0 hover:bg-white/5 transition-colors">

@@ -1,12 +1,20 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import axios from 'axios';
+import { apiClient as axios } from '../../utils/apiConfig';
 import { CalendarCheck, ChevronDown } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useAppointments } from '../../context/useAppointments';
 import API_BASE_URL from '../../utils/apiConfig';
+import { getStoredAuthenticatedUserId } from '../../utils/auth';
+import { storage } from '../../utils/storage';
+import {
+  getAppointmentServicesLabel,
+  getAppointmentStylistName,
+  getAppointmentTotalAmount,
+} from '../../utils/appointmentDisplay';
 
-const HISTORY_STATUSES = ['completed', 'rejected', 'cancelled', 'canceled', 'no-show'];
-const HIDEABLE_HISTORY_STATUSES = ['completed', 'cancelled', 'canceled'];
+const SALON_CANCELLED_STATUSES = ['cancelled', 'canceled', 'cancelled_by_salon', 'cancelled by salon'];
+const HISTORY_STATUSES = ['completed', 'rejected', ...SALON_CANCELLED_STATUSES, 'no-show'];
+const HIDEABLE_HISTORY_STATUSES = ['completed', ...SALON_CANCELLED_STATUSES, 'no-show'];
 const HERO_IMAGE_URL = '/heroBg.jpg';
 
 const normalizeStatus = (status) => String(status || '').trim().toLowerCase();
@@ -16,11 +24,6 @@ const CURRENT_YEAR = String(new Date().getFullYear());
 const getAppointmentYear = (appointment) => {
   const parsedDate = new Date(getAppointmentDateValue(appointment));
   return Number.isNaN(parsedDate.getTime()) ? '' : String(parsedDate.getFullYear());
-};
-
-const formatServices = (services, fallback = 'Service not available') => {
-  if (!Array.isArray(services) || services.length === 0) return fallback;
-  return services.map((service) => service?.name || service).join(', ');
 };
 
 const formatDate = (date) => {
@@ -40,7 +43,7 @@ const statusClassName = (status) => {
   const normalizedStatus = normalizeStatus(status);
 
   if (normalizedStatus === 'completed') return 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300';
-  if (['cancelled', 'canceled', 'rejected', 'no-show'].includes(normalizedStatus)) {
+  if ([...SALON_CANCELLED_STATUSES, 'rejected', 'no-show'].includes(normalizedStatus)) {
     return 'border-rose-400/20 bg-rose-400/10 text-rose-300';
   }
   return 'border-white/10 bg-white/5 text-slate-300';
@@ -59,7 +62,7 @@ const filterButtonClassName = (isActive) => (
 );
 
 const filterCountClassName = (isActive) => (
-  `shrink-0 rounded-full px-1.5 py-0.5 text-[10px] ${
+  `shrink-0 rounded-full px-1.5 py-0.5 text-xs ${
     isActive
       ? 'bg-black/10 text-black'
       : 'bg-white/10 text-white/70'
@@ -67,7 +70,7 @@ const filterCountClassName = (isActive) => (
 );
 
 function History() {
-  const { appointments, replaceAppointments, upsertAppointment } = useAppointments();
+  const { appointments, replaceAppointments, upsertAppointment, clearAppointments } = useAppointments();
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [activeFilter, setActiveFilter] = useState('');
@@ -77,8 +80,12 @@ function History() {
   const yearMenuRef = useRef(null);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
+    const token = storage.get('token');
+    const requestUserId = getStoredAuthenticatedUserId();
+
+    clearAppointments();
+
+    if (!token || !requestUserId) {
       setErrorMessage('Please sign in to view your history.');
       setIsLoading(false);
       return;
@@ -86,15 +93,15 @@ function History() {
 
     const fetchAppointments = async () => {
       try {
-        const response = await axios.get(`${API_BASE_URL}/api/appointments`, {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        });
+        const response = await axios.get(`${API_BASE_URL}/api/appointments`);
         const apiAppointments = Array.isArray(response.data) ? response.data : [];
 
-        replaceAppointments(apiAppointments);
+        if (getStoredAuthenticatedUserId() !== requestUserId) return;
+        replaceAppointments(apiAppointments, { ownerUserId: requestUserId });
       } catch (error) {
+        if (getStoredAuthenticatedUserId() !== requestUserId) return;
+
+        clearAppointments();
         console.error('Error fetching history:', error);
         toast.error('Failed to load your history.');
       } finally {
@@ -103,7 +110,7 @@ function History() {
     };
 
     fetchAppointments();
-  }, [replaceAppointments]);
+  }, [clearAppointments, replaceAppointments]);
 
   const historyAppointments = useMemo(() => (
     appointments
@@ -129,12 +136,17 @@ function History() {
   const activeYearLabel = yearOptions.find((option) => option.value === activeYear)?.label || CURRENT_YEAR;
 
   const completedCount = historyAppointments.filter((appt) => normalizeStatus(appt.status) === 'completed').length;
-  const cancelledCount = historyAppointments.filter((appt) => ['cancelled', 'canceled'].includes(normalizeStatus(appt.status))).length;
+  const cancelledCount = historyAppointments.filter((appt) => SALON_CANCELLED_STATUSES.includes(normalizeStatus(appt.status))).length;
   const rejectedCount = historyAppointments.filter((appt) => normalizeStatus(appt.status) === 'rejected').length;
 
   const filteredAppointments = useMemo(() => {
     return historyAppointments.filter((appt) => {
-      const matchesStatus = !activeFilter || normalizeStatus(appt.status) === normalizeStatus(activeFilter);
+      const normalizedAppointmentStatus = normalizeStatus(appt.status);
+      const matchesStatus = !activeFilter || (
+        normalizeStatus(activeFilter) === 'cancelled'
+          ? SALON_CANCELLED_STATUSES.includes(normalizedAppointmentStatus)
+          : normalizedAppointmentStatus === normalizeStatus(activeFilter)
+      );
       const matchesYear = !isYearFilterActive || getAppointmentYear(appt) === selectedYear;
 
       return matchesStatus && matchesYear;
@@ -164,13 +176,7 @@ function History() {
     });
 
     try {
-      const token = localStorage.getItem('token');
-
-      await axios.put(`${API_BASE_URL}/api/appointments/${appointmentId}/hide`, {}, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
+      await axios.put(`${API_BASE_URL}/api/appointments/${appointmentId}/hide`, {});
 
       toast.success('Appointment removed from your history.');
     } catch (error) {
@@ -384,21 +390,21 @@ function History() {
                 >
                   <div className="min-w-0">
                     <h3 className="break-words text-base font-semibold text-white">
-                      {formatServices(appt.services)}
+                      {getAppointmentServicesLabel(appt)}
                     </h3>
                     <p className="mt-2 break-words text-sm text-slate-400">
                       {formatDate(getAppointmentDateValue(appt))} &bull; {appt.startTime || 'Time pending'}
                       {appt.endTime ? ` - ${appt.endTime}` : ''}
                     </p>
                     <p className="mt-1 break-words text-xs text-slate-500">
-                      Stylist: {appt.stylist?.name || appt.staffId?.name || appt.stylistName || 'Stylist not available'}
+                      Stylist: {getAppointmentStylistName(appt)}
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-3 md:justify-end">
                     <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusClassName(appt.status)}`}>
                       {appt.status}
                     </span>
-                    <span className="text-sm font-semibold text-[#d4af37]">Rs. {appt.totalAmount || 0}</span>
+                    <span className="text-sm font-semibold text-[#d4af37]">Rs. {getAppointmentTotalAmount(appt)}</span>
                     {canHideFromHistory(appt) && (
                       <button
                         type="button"

@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import axios from 'axios';
+import { apiClient as axios } from '../../utils/apiConfig';
 import { motion } from 'framer-motion';
 import { Scissors } from 'lucide-react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { clearAuthStorage } from '../../utils/auth';
 import API_BASE_URL from '../../utils/apiConfig';
+import { storage } from '../../utils/storage';
 
 const PENDING_APPOINTMENTS_REFRESH_EVENT = 'appointments:pending-count-refresh';
 
@@ -103,16 +104,19 @@ const customerSidebarItems = [
 function Sidebar({ isOpen = false, onClose = () => { } }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const [isDesktopViewport, setIsDesktopViewport] = useState(() => (
+    typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches
+  ));
   const [pendingCount, setPendingCount] = useState(0);
   const [pendingReviewsCount, setPendingReviewsCount] = useState(0);
   let storedUser = null;
   try {
-    storedUser = JSON.parse(localStorage.getItem('user'));
+    storedUser = JSON.parse(storage.get('user'));
   } catch {
     storedUser = null;
   }
 
-  const userRole = localStorage.getItem('userRole') || storedUser?.role;
+  const userRole = storage.get('userRole') || storedUser?.role;
   const userStorageId = storedUser?._id || storedUser?.id || userRole || 'user';
   const appointmentsSeenKey = `sidebar:appointments-seen:${userStorageId}`;
   const reviewsSeenKey = `sidebar:reviews-seen:${userStorageId}`;
@@ -135,11 +139,21 @@ function Sidebar({ isOpen = false, onClose = () => { } }) {
     : userRole === 'staff'
       ? 'Staff navigation'
       : 'Customer navigation';
+  const isMobileDrawerHidden = !isDesktopViewport && !isOpen;
+
+  useEffect(() => {
+    const desktopMediaQuery = window.matchMedia('(min-width: 768px)');
+    const handleViewportChange = (event) => setIsDesktopViewport(event.matches);
+
+    desktopMediaQuery.addEventListener('change', handleViewportChange);
+
+    return () => desktopMediaQuery.removeEventListener('change', handleViewportChange);
+  }, []);
 
   useEffect(() => {
     if (userRole !== 'admin' && userRole !== 'staff') return;
 
-    const token = localStorage.getItem('token');
+    const token = storage.get('token');
     if (!token) return;
 
     const controller = new AbortController();
@@ -149,9 +163,8 @@ function Sidebar({ isOpen = false, onClose = () => { } }) {
       if (isAppointmentsPage) return;
 
       try {
-        const since = localStorage.getItem(appointmentsSeenKey);
+        const since = storage.get(appointmentsSeenKey);
         const response = await axios.get(`${API_BASE_URL}/api/appointments/pending/count`, {
-          headers: { Authorization: `Bearer ${token}` },
           params: since ? { since } : undefined,
           signal: controller.signal
         });
@@ -170,19 +183,18 @@ function Sidebar({ isOpen = false, onClose = () => { } }) {
       if (userRole !== 'admin' || isReviewsPage) return;
 
       try {
-        let reviewsSince = localStorage.getItem(reviewsSeenKey);
+        let reviewsSince = storage.get(reviewsSeenKey);
 
         // On first use, establish a baseline instead of treating every
         // historical review as a new notification.
         if (!reviewsSince) {
           reviewsSince = new Date().toISOString();
-          localStorage.setItem(reviewsSeenKey, reviewsSince);
+          storage.set(reviewsSeenKey, reviewsSince);
           if (isCurrent) setPendingReviewsCount(0);
           return;
         }
 
         const response = await axios.get(`${API_BASE_URL}/api/appointments/reviews/pending-count`, {
-          headers: { Authorization: `Bearer ${token}` },
           params: { since: reviewsSince },
           signal: controller.signal
         });
@@ -218,11 +230,11 @@ function Sidebar({ isOpen = false, onClose = () => { } }) {
     const viewedAt = new Date().toISOString();
 
     if (isAppointmentsPage) {
-      localStorage.setItem(appointmentsSeenKey, viewedAt);
+      storage.set(appointmentsSeenKey, viewedAt);
     }
 
     if (isReviewsPage) {
-      localStorage.setItem(reviewsSeenKey, viewedAt);
+      storage.set(reviewsSeenKey, viewedAt);
     }
   }, [appointmentsSeenKey, isAppointmentsPage, isReviewsPage, reviewsSeenKey]);
 
@@ -234,8 +246,10 @@ function Sidebar({ isOpen = false, onClose = () => { } }) {
   return (
     <aside
       className={`fixed inset-y-0 left-0 z-40 w-[min(18rem,calc(100vw-2rem))] border-r border-white/10 bg-[#0d1117] text-white shadow-2xl shadow-black/30 transition-transform duration-300 ease-out md:w-80 md:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}
+      }`}
       aria-label={panelLabel}
+      aria-hidden={isMobileDrawerHidden}
+      inert={isMobileDrawerHidden ? '' : undefined}
     >
       <div className="flex h-full flex-col justify-between">
         <div className="min-h-0 overflow-y-auto px-4 pb-5 pt-5 sm:px-6 sm:pt-8 md:px-8 md:pt-10">
@@ -245,9 +259,9 @@ function Sidebar({ isOpen = false, onClose = () => { } }) {
                 <Scissors size={24} strokeWidth={2.1} />
               </div>
               <div className="min-w-0">
-                <h1 className="truncate font-serif text-[1.68rem] font-semibold leading-none tracking-wide text-white sm:text-[1.85rem] md:text-[2rem] md:tracking-wider">
+                <div className="truncate font-serif text-[1.68rem] font-semibold leading-none tracking-wide text-white sm:text-[1.85rem] md:text-[2rem] md:tracking-wider">
                   Salon<span className="text-[#D4AF37]">DEES</span>
-                </h1>
+                </div>
                 <p className="mt-2 truncate text-xs uppercase tracking-[0.32em] text-neutral-500 sm:text-sm md:text-base md:tracking-widest">{suiteLabel}</p>
               </div>
             </div>
@@ -298,12 +312,12 @@ function Sidebar({ isOpen = false, onClose = () => { } }) {
                       <span className="relative z-10 flex min-w-0 items-center gap-2">
                         <span className="min-w-0 truncate">{item.label}</span>
                         {item.label === 'Appointments' && visiblePendingCount > 0 && (
-                          <span className="flex h-5 min-w-5 shrink-0 animate-pulse items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold leading-none text-neutral-950">
+                          <span className="flex h-5 min-w-5 shrink-0 animate-pulse items-center justify-center rounded-full bg-amber-500 px-1 text-xs font-bold leading-none text-neutral-950">
                             {visiblePendingCount > 99 ? '99+' : visiblePendingCount}
                           </span>
                         )}
                         {item.label === 'Reviews' && visiblePendingReviewsCount > 0 && (
-                          <span className="flex h-5 min-w-5 shrink-0 animate-pulse items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold leading-none text-neutral-950">
+                          <span className="flex h-5 min-w-5 shrink-0 animate-pulse items-center justify-center rounded-full bg-amber-500 px-1 text-xs font-bold leading-none text-neutral-950">
                             {visiblePendingReviewsCount > 99 ? '99+' : visiblePendingReviewsCount}
                           </span>
                         )}

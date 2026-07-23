@@ -1,5 +1,11 @@
 const axios = require('axios');
+const mongoose = require('mongoose');
 const Holiday = require('../models/Holiday');
+const {
+  acquireHolidayScheduleLocks,
+  cancelAppointmentsForHolidayClosure,
+  findConflictingAppointmentsForPayload,
+} = require('./holidayClosureService');
 
 // Sri Lankan public holiday calendar URL from Google Calendar API
 const GOOGLE_SRI_LANKA_HOLIDAY_CALENDAR_URL =
@@ -67,26 +73,55 @@ const syncSriLankanPublicHolidays = async (year = getCurrentYear()) => {
     normalizedHolidays.map((holiday) => [holiday.date, holiday])
   );
   const uniqueHolidays = Array.from(uniqueHolidaysByDate.values());
-  const bulkOperations = uniqueHolidays.map((holiday) => {
-    const { isActive, ...holidayOnInsert } = holiday;
+  const bulkOperations = uniqueHolidays.map((holiday) => ({
+    updateOne: {
+      filter: { date: holiday.date },
+      update: { $set: holiday },
+      upsert: true,
+    },
+  }));
+  const session = await mongoose.startSession();
+  let writeResult = null;
+  let reactivated = 0;
+  let cancelledAppointments = 0;
+  let notificationsSent = 0;
 
-    return {
-      updateOne: {
-        filter: { date: holiday.date },
-        update: {
-          $set: { isActive: true },
-          $setOnInsert: holidayOnInsert,
-        },
-        upsert: true,
-      },
-    };
-  });
-  const writeResult = bulkOperations.length > 0
-    ? await Holiday.bulkWrite(bulkOperations, { ordered: false })
-    : null;
+  try {
+    await session.withTransaction(async () => {
+      cancelledAppointments = 0;
+      notificationsSent = 0;
+
+      for (const holiday of [...uniqueHolidays].sort((first, second) => first.date.localeCompare(second.date))) {
+        await acquireHolidayScheduleLocks(holiday.date, session);
+      }
+
+      reactivated = uniqueHolidays.length > 0
+        ? await Holiday.countDocuments({
+          date: { $in: uniqueHolidays.map((holiday) => holiday.date) },
+          isActive: false,
+        }).session(session)
+        : 0;
+
+      writeResult = bulkOperations.length > 0
+        ? await Holiday.bulkWrite(bulkOperations, { ordered: true, session })
+        : null;
+
+      for (const holiday of uniqueHolidays) {
+        const conflictingAppointments = await findConflictingAppointmentsForPayload(holiday, session);
+        const cancellationResult = await cancelAppointmentsForHolidayClosure(
+          conflictingAppointments,
+          holiday,
+          session
+        );
+        cancelledAppointments += cancellationResult.cancelledAppointments;
+        notificationsSent += cancellationResult.notificationsSent;
+      }
+    });
+  } finally {
+    await session.endSession();
+  }
 
   const inserted = writeResult?.upsertedCount || 0;
-  const reactivated = writeResult?.modifiedCount || 0;
   const skipped = Math.max(uniqueHolidays.length - inserted - reactivated, 0);
 
   const result = {
@@ -97,6 +132,8 @@ const syncSriLankanPublicHolidays = async (year = getCurrentYear()) => {
     inserted,
     reactivated,
     skipped,
+    cancelledAppointments,
+    notificationsSent,
   };
 
   console.log(

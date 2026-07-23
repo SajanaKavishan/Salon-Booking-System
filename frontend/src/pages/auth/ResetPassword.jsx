@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import axios from 'axios';
+import { apiClient as axios } from '../../utils/apiConfig';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { motion } from 'framer-motion';
@@ -8,6 +8,7 @@ import { FaEye, FaEyeSlash } from 'react-icons/fa';
 import Spinner from '../../components/common/Spinner';
 import { AuthShell } from '../../components/admin/SystemUI';
 import { apiUrl } from '../../utils/apiConfig';
+import { clearAuthStorage } from '../../utils/auth';
 
 const itemVariants = {
   hidden: { opacity: 0, y: 25 },
@@ -52,8 +53,8 @@ function ResetPassword() {
     setMessage('');
     setError('');
 
-    if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters long.');
+    if (formData.password.length < 8) {
+      setError('Password must be at least 8 characters long.');
       return;
     }
 
@@ -69,6 +70,7 @@ function ResetPassword() {
         password: formData.password,
       });
 
+      clearAuthStorage();
       const successMessage = response.data?.message || 'Password reset successful. You can now sign in.';
       setMessage(successMessage);
       setResetSucceeded(true);
@@ -118,7 +120,7 @@ function ResetPassword() {
                 Salon<span className="text-[#d4af37]">DEES</span>
               </span>
             </button>
-            <span className="text-[11px] uppercase tracking-[0.35em] text-[#d4af37]">Secure Reset</span>
+            <span className="text-xs uppercase tracking-[0.35em] text-[#d4af37]">Secure Reset</span>
             <p className="pt-2 text-sm leading-6 text-gray-400">
               Create a new password for your Salon DEES account.
             </p>
@@ -136,6 +138,7 @@ function ResetPassword() {
                   onChange={onChange}
                   placeholder="Enter new password"
                   required
+                  minLength={8}
                   autoComplete="new-password"
                   className="w-full rounded-md bg-[#edf2ff] px-4 py-3 pl-11 pr-11 text-sm text-gray-900 placeholder:text-gray-500 shadow-inner transition-all duration-300 focus:border-[#D4AF37] focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/40"
                 />
@@ -149,6 +152,7 @@ function ResetPassword() {
                   {showPassword ? <FaEyeSlash size={16} /> : <FaEye size={16} />}
                 </button>
               </div>
+              <p className="mt-1.5 text-xs text-gray-500">Use at least 8 characters.</p>
             </div>
 
             <div>
@@ -162,6 +166,7 @@ function ResetPassword() {
                   onChange={onChange}
                   placeholder="Confirm new password"
                   required
+                  minLength={8}
                   autoComplete="new-password"
                   className="w-full rounded-md bg-[#edf2ff] px-4 py-3 pl-11 pr-11 text-sm text-gray-900 placeholder:text-gray-500 shadow-inner transition-all duration-300 focus:border-[#D4AF37] focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/40"
                 />
@@ -178,13 +183,21 @@ function ResetPassword() {
             </div>
 
             {message && (
-              <div className="rounded-md border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm leading-6 text-emerald-200">
+              <div
+                role="status"
+                aria-live="polite"
+                className="rounded-md border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm leading-6 text-emerald-200"
+              >
                 {message}
               </div>
             )}
 
             {error && (
-              <div className="rounded-md border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm leading-6 text-red-200">
+              <div
+                role="status"
+                aria-live="polite"
+                className="rounded-md border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm leading-6 text-red-200"
+              >
                 {error}
               </div>
             )}
@@ -192,10 +205,11 @@ function ResetPassword() {
             <motion.button
               type="submit"
               disabled={isLoading || resetSucceeded}
+              aria-busy={isLoading}
               whileTap={{ scale: 0.99 }}
               className="flex w-full items-center justify-center rounded-md bg-[#d4af37] px-4 py-3 text-sm font-semibold text-black shadow-[0_12px_30px_rgba(212,175,55,0.25)] transition-all duration-200 hover:bg-[#b8952e] hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {isLoading ? <Spinner /> : 'Reset Password'}
+              {isLoading ? <Spinner label="Resetting password..." /> : 'Reset Password'}
             </motion.button>
           </form>
 

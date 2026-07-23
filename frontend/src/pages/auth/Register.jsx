@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import axios from 'axios';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { apiClient as axios } from '../../utils/apiConfig';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
 import { motion } from 'framer-motion';
@@ -8,6 +8,13 @@ import { Check, Scissors } from 'lucide-react';
 import Spinner from '../../components/common/Spinner';
 import { AuthShell } from '../../components/admin/SystemUI';
 import { apiUrl } from '../../utils/apiConfig';
+import { notifyAuthSessionChanged } from '../../utils/auth';
+import { storage } from '../../utils/storage';
+import {
+  buildAuthIntentPath,
+  sanitizeInternalPath,
+  sanitizeServiceId,
+} from '../../utils/authIntent';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -22,7 +29,7 @@ const itemVariants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: 'easeOut' } }
 };
 
-const MIN_PASSWORD_LENGTH = 6;
+const MIN_PASSWORD_LENGTH = 8;
 
 const getRoleRedirectPath = (role, isFirstLogin = false) => {
   if (role === 'admin') return '/admin';
@@ -38,6 +45,7 @@ const isValidPhoneNumber = (phoneValue) => {
 
 function Register() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -48,22 +56,47 @@ function Register() {
   const [isLoading, setIsLoading] = useState(false);
 
   const { name, email, phone, password } = formData;
+  const safeNextPath = sanitizeInternalPath(searchParams.get('next'));
+  const requestedServiceId = sanitizeServiceId(searchParams.get('serviceId'));
+  const returnTo = safeNextPath || (requestedServiceId ? '/customer/book' : '/dashboard');
+  const onboardingState = useMemo(() => ({
+    returnTo,
+    ...(requestedServiceId ? { preSelectedServiceId: requestedServiceId } : {}),
+  }), [requestedServiceId, returnTo]);
+  const loginPath = buildAuthIntentPath('/login', {
+    nextPath: safeNextPath,
+    serviceId: requestedServiceId,
+  });
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const userRole = localStorage.getItem('userRole');
+    const token = storage.get('token');
+    const userRole = storage.get('userRole');
 
     if (!token || !userRole) return;
 
     let isFirstLogin = false;
     try {
-      isFirstLogin = JSON.parse(localStorage.getItem('user') || '{}')?.isFirstLogin === true;
+      isFirstLogin = JSON.parse(storage.get('user', '{}'))?.isFirstLogin === true;
     } catch {
       isFirstLogin = false;
     }
 
-    navigate(getRoleRedirectPath(userRole, isFirstLogin), { replace: true });
-  }, [navigate]);
+    if (userRole === 'customer' && isFirstLogin) {
+      navigate('/onboarding', { replace: true, state: onboardingState });
+      return;
+    }
+
+    const redirectPath = safeNextPath
+      || (userRole === 'customer' && requestedServiceId
+        ? '/customer/book'
+        : getRoleRedirectPath(userRole, false));
+    navigate(redirectPath, {
+      replace: true,
+      ...(userRole === 'customer' && requestedServiceId
+        ? { state: { preSelectedServiceId: requestedServiceId } }
+        : {}),
+    });
+  }, [navigate, onboardingState, requestedServiceId, safeNextPath]);
 
   const onChange = (e) => {
     setFormData((prevState) => ({
@@ -95,12 +128,14 @@ function Register() {
         email: email.trim(),
         phone: phone.trim(),
         password,
+        ...(safeNextPath ? { next: safeNextPath } : {}),
+        ...(requestedServiceId ? { serviceId: requestedServiceId } : {}),
       });
 
-      localStorage.setItem('token', response.data.token);
-      localStorage.setItem('userRole', response.data.role || 'customer');
-      localStorage.setItem('userName', response.data.name || '');
-      localStorage.setItem(
+      storage.set('token', response.data.token);
+      storage.set('userRole', response.data.role || 'customer');
+      storage.set('userName', response.data.name || '');
+      storage.set(
         'user',
         JSON.stringify({
           id: response.data._id,
@@ -114,8 +149,9 @@ function Register() {
         })
       );
 
+      notifyAuthSessionChanged();
       toast.success('Registration successful!');
-      navigate('/onboarding');
+      navigate('/onboarding', { state: onboardingState });
     } catch (error) {
       toast.error(error.response?.data?.message || 'Registration failed. Please try again.');
     } finally {
@@ -152,7 +188,7 @@ function Register() {
               Salon<span className="text-[#d4af37]">DEES</span>
             </span>
           </button>
-          <span className="text-[11px] uppercase tracking-[0.35em] text-gray-400">Start Your Client Account</span>
+          <span className="text-xs uppercase tracking-[0.35em] text-gray-300">Start Your Client Account</span>
         </motion.div>
 
         <motion.div variants={itemVariants} className="mt-8">
@@ -200,7 +236,7 @@ function Register() {
               Salon<span className="text-[#d4af37]">DEES</span>
             </span>
           </div>
-          <span className="mt-3 text-[11px] uppercase tracking-[0.35em] text-gray-400">
+          <span className="mt-3 text-xs uppercase tracking-[0.35em] text-gray-300">
             Luxury Salon Experience
           </span>
         </div>
@@ -240,6 +276,7 @@ function Register() {
                 placeholder="Enter your email"
                 required
                 autoComplete="email"
+                inputMode="email"
                 className="w-full rounded-md bg-slate-100 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/40 focus:border-[#D4AF37] transition-all duration-300"
               />
             </div>
@@ -255,6 +292,7 @@ function Register() {
                 placeholder="0771234567 or +94771234567"
                 required
                 autoComplete="tel"
+                inputMode="tel"
                 pattern={String.raw`(?:\+94|0)7[0-9]{8}`}
                 title="Enter a valid Sri Lankan mobile number, such as 0771234567 or +94771234567."
                 className="w-full rounded-md bg-slate-100 px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/40 focus:border-[#D4AF37] transition-all duration-300"
@@ -290,16 +328,17 @@ function Register() {
             <motion.button
               type="submit"
               disabled={isLoading}
+              aria-busy={isLoading}
               whileTap={{ scale: 0.99 }}
               className="mt-5 flex w-full items-center justify-center rounded-md bg-[#D4AF37] px-4 py-2.5 text-sm font-semibold text-black shadow-[0_12px_30px_rgba(212,175,55,0.25)] transition-all duration-200 hover:scale-[1.01] hover:bg-[#b8952e] active:scale-[0.99]"
             >
-              {isLoading ? <Spinner /> : 'Create Account'}
+              {isLoading ? <Spinner label="Creating account..." /> : 'Create Account'}
             </motion.button>
           </form>
 
           <p className="mt-6 text-center text-sm text-gray-400">
             Already have an account?{' '}
-            <Link to="/login" className="font-medium text-[#d4af37] transition hover:text-yellow-400 hover:underline">
+            <Link to={loginPath} className="font-medium text-[#d4af37] transition hover:text-yellow-400 hover:underline">
               Sign in here
             </Link>
           </p>

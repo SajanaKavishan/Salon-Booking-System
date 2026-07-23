@@ -1,19 +1,48 @@
-const express = require("express");
-const mongoose = require("mongoose"); 
-const dns = require("dns");
 const path = require("path");
 const dotenv = require("dotenv");
-const cors = require("cors");
-const helmet = require("helmet");
-const { startHolidaySyncScheduler } = require("./services/holidaySyncService");
 
 dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
 
+const isProduction = process.env.NODE_ENV === "production";
+if (isProduction && !String(process.env.FRONTEND_URL || "").trim()) {
+    throw new Error(
+        "Critical configuration error: FRONTEND_URL must be configured in production. Server startup aborted."
+    );
+}
+
+const REQUIRED_ENVIRONMENT_VARIABLES = ["JWT_SECRET", "MONGO_URI", "GOOGLE_CLIENT_ID"];
+const missingEnvironmentVariables = REQUIRED_ENVIRONMENT_VARIABLES.filter(
+    (variableName) => !String(process.env[variableName] || "").trim()
+);
+
+if (missingEnvironmentVariables.length > 0) {
+    console.error(
+        `[FATAL] Missing required environment variables: ${missingEnvironmentVariables.join(", ")}. Server startup aborted.`
+    );
+    process.exit(1);
+}
+
+const express = require("express");
+const mongoose = require("mongoose");
+const dns = require("dns");
+const cors = require("cors");
+const helmet = require("helmet");
+const { startHolidaySyncScheduler } = require("./services/holidaySyncService");
+const {
+    attachCorrelationId,
+    errorHandler,
+    maskProductionServerErrors,
+} = require("./middleware/errorMiddleware");
+
 const app = express();
+
+app.set('trust proxy', 1);
 
 mongoose.set("bufferCommands", false);
 
 app.use(helmet());
+app.use(attachCorrelationId);
+app.use(maskProductionServerErrors);
 
 const configuredClientOrigins = Array.from(new Set(
     [process.env.CLIENT_URL, process.env.FRONTEND_URL, process.env.BACKEND_URL]
@@ -22,16 +51,11 @@ const configuredClientOrigins = Array.from(new Set(
             .map((origin) => origin.trim())
             .filter(Boolean))
 ));
-const isProduction = process.env.NODE_ENV === "production";
 const fallbackClientOrigins = ["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173"];
 const allowedOrigins = Array.from(new Set([
     ...configuredClientOrigins,
     ...(isProduction ? [] : fallbackClientOrigins),
 ]));
-
-if (isProduction && configuredClientOrigins.length === 0) {
-    throw new Error("Critical configuration error: CLIENT_URL, FRONTEND_URL, or BACKEND_URL must be configured in production.");
-}
 
 const mongoOptions = { 
     family: 4,
@@ -97,6 +121,13 @@ app.use("/api/leaves", ensureMongoConnection, require("./routes/leaveRoutes")); 
 app.use("/api/dashboard", ensureMongoConnection, require("./routes/dashboardRoutes")); // Admin dashboard summary routes
 app.use("/api/chatbot", ensureMongoConnection, require("./routes/chatRoutes")); // Public AI chatbot route
 
+app.use("/api", (_req, res) => {
+    res.status(404).json({
+        success: false,
+        message: "API route not found",
+    });
+});
+
 async function connectMongo() { // Function to establish a connection to MongoDB with error handling and DNS fallback
     if (!process.env.MONGO_URI) {
         console.log("MongoDB connection skipped: MONGO_URI is not set.");
@@ -130,18 +161,7 @@ app.get("/", (req, res) => { // Basic route to check if the server is running
     res.send("Salon Management API is running!");
 });
 
-app.use((err, req, res, next) => {
-    const statusCode = err.status || err.statusCode || 500;
-
-    if (res.headersSent) {
-        return next(err);
-    }
-
-    return res.status(statusCode).json({
-        success: false,
-        message: err.message || "Internal Server Error",
-    });
-});
+app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 

@@ -2,17 +2,26 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { DollarSign } from 'lucide-react';
-import axios from 'axios';
+import { apiClient as axios } from '../../utils/apiConfig';
 import { toast } from 'react-toastify';
 import { useAppointments } from '../../context/useAppointments';
 import ActiveBookingCard from '../../components/customer/ActiveBookingCard';
 import AppointmentReviewModal from '../../components/customer/AppointmentReviewModal';
 import DashboardHeader from '../../components/customer/DashboardHeader';
+import { useModalFocus } from '../../hooks/useModalFocus';
+import { useSalonSettings } from '../../hooks/useSalonSettings';
 import API_BASE_URL from '../../utils/apiConfig';
+import { getStoredAuthenticatedUserId } from '../../utils/auth';
+import { storage } from '../../utils/storage';
+import {
+  formatSalonDate,
+  getSalonAppointmentTimestamp,
+  getSalonDateKey,
+} from '../../utils/salonTime';
 
-const HISTORY_STATUSES = ['completed', 'rejected', 'cancelled', 'canceled', 'no-show'];
+const HISTORY_STATUSES = ['completed', 'rejected', 'cancelled', 'canceled', 'cancelled_by_salon', 'cancelled by salon', 'no-show'];
 const UPCOMING_STATUSES = ['pending', 'approved', 'confirmed'];
-const HIDEABLE_HISTORY_STATUSES = ['completed', 'cancelled', 'canceled'];
+const HIDEABLE_HISTORY_STATUSES = ['completed', 'cancelled', 'canceled', 'cancelled_by_salon', 'cancelled by salon', 'no-show'];
 const REVIEW_PROMPT_STORAGE_PREFIX = 'salonDismissedReviewPrompts';
 const MotionDiv = motion.div;
 
@@ -32,16 +41,7 @@ const formatServices = (services, fallback = 'Service not available') => {
 };
 
 const formatDate = (date) => {
-  if (!date) return 'Date pending';
-
-  const parsedDate = new Date(date);
-  if (Number.isNaN(parsedDate.getTime())) return 'Date pending';
-
-  return parsedDate.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric'
-  });
+  return formatSalonDate(date);
 };
 
 const statusClassName = (status) => {
@@ -49,7 +49,7 @@ const statusClassName = (status) => {
 
   if (normalizedStatus === 'approved' || normalizedStatus === 'confirmed') return 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300';
   if (normalizedStatus === 'pending') return 'border-amber-400/20 bg-amber-400/10 text-amber-300';
-  if (['cancelled', 'canceled', 'rejected', 'no-show'].includes(normalizedStatus)) {
+  if (['cancelled', 'canceled', 'cancelled_by_salon', 'cancelled by salon', 'rejected', 'no-show'].includes(normalizedStatus)) {
     return 'border-rose-400/20 bg-rose-400/10 text-rose-300';
   }
   if (normalizedStatus === 'completed') return 'border-emerald-400/20 bg-emerald-400/10 text-emerald-300';
@@ -59,24 +59,6 @@ const statusClassName = (status) => {
 const canHideFromHistory = (appointment) => (
   HIDEABLE_HISTORY_STATUSES.includes(normalizeAppointmentStatus(appointment?.status))
 );
-
-const timeToMinutes = (timeValue) => {
-  if (!timeValue || typeof timeValue !== 'string') return 0;
-
-  const [rawTime, modifier] = timeValue.trim().split(' ');
-  const [rawHours, rawMinutes] = rawTime.split(':');
-  let hours = Number(rawHours);
-  const minutes = Number(rawMinutes);
-
-  if (Number.isNaN(hours) || Number.isNaN(minutes)) return 0;
-  if (modifier) {
-    const normalizedModifier = modifier.toUpperCase();
-    if (hours === 12) hours = 0;
-    if (normalizedModifier === 'PM') hours += 12;
-  }
-
-  return hours * 60 + minutes;
-};
 
 const getAppointmentDateKey = (dateValue) => {
   if (!dateValue) return '';
@@ -97,34 +79,65 @@ const getAppointmentStartTimestamp = (appointment) => {
   const dateKey = getAppointmentDateKey(appointment?.date || appointment?.bookingDate);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return null;
 
-  const [year, month, day] = dateKey.split('-').map(Number);
   const startTime = getAppointmentStartTime(appointment);
-  const startMinutes = startTime ? timeToMinutes(startTime) : 0;
-
-  return new Date(
-    year,
-    month - 1,
-    day,
-    Math.floor(startMinutes / 60),
-    startMinutes % 60,
-    0,
-    0
-  ).getTime();
+  return getSalonAppointmentTimestamp(dateKey, startTime || '00:00');
 };
 
-const isUpcomingAppointment = (appointment, now = new Date()) => {
+const getAppointmentEndTime = (appointment) => {
+  if (appointment?.adjustedEndTime) return appointment.adjustedEndTime;
+  if (appointment?.endTime) return appointment.endTime;
+
+  if (typeof appointment?.timeSlot === 'string') {
+    const [, slotEndTime] = appointment.timeSlot.split(/\s+-\s+/);
+    return slotEndTime || '';
+  }
+
+  return '';
+};
+
+const getAppointmentEffectiveEndTimestamp = (appointment) => {
+  const dateKey = getAppointmentDateKey(appointment?.date || appointment?.bookingDate);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return null;
+
+  const endTime = getAppointmentEndTime(appointment);
+  if (endTime) {
+    return getSalonAppointmentTimestamp(dateKey, endTime);
+  }
+
+  const appointmentStart = getAppointmentStartTimestamp(appointment);
+  const totalDuration = Number(appointment?.totalDuration);
+  if (appointmentStart === null || !Number.isFinite(totalDuration) || totalDuration <= 0) {
+    return null;
+  }
+
+  return appointmentStart + totalDuration * 60 * 1000;
+};
+
+const isUpcomingAppointment = (appointment, now = Date.now()) => {
   if (!UPCOMING_STATUSES.includes(normalizeAppointmentStatus(appointment?.status))) {
     return false;
   }
+
+  const appointmentEnd = getAppointmentEffectiveEndTimestamp(appointment);
+  if (appointmentEnd !== null) return now < appointmentEnd;
 
   const appointmentStart = getAppointmentStartTimestamp(appointment);
   if (appointmentStart === null) return false;
 
   const comparisonTime = getAppointmentStartTime(appointment)
-    ? now.getTime()
-    : new Date(now).setHours(0, 0, 0, 0);
+    ? now
+    : getSalonAppointmentTimestamp(getSalonDateKey(new Date(now)), '00:00');
 
   return appointmentStart >= comparisonTime;
+};
+
+const isPastAppointment = (appointment, now = Date.now()) => {
+  if (HISTORY_STATUSES.includes(normalizeAppointmentStatus(appointment?.status))) {
+    return true;
+  }
+
+  const appointmentEnd = getAppointmentEffectiveEndTimestamp(appointment);
+  return appointmentEnd !== null && now >= appointmentEnd;
 };
 
 const getStylistDisplayName = (appointment) => {
@@ -133,7 +146,7 @@ const getStylistDisplayName = (appointment) => {
 
   // If it's a hex ID (24-char MongoDB ObjectId), it slipped through - show fallback
   if (typeof stylistName === 'string' && /^[0-9a-fA-F]{24}$/.test(stylistName)) {
-    return 'Any Available Artist';
+    return 'Stylist unavailable';
   }
 
   // If stylist name is a string, return it directly
@@ -146,8 +159,8 @@ const getStylistDisplayName = (appointment) => {
     return stylistName.name;
   }
 
-  // If no stylist assigned, show "Any Available Artist"
-  return 'Any Available Artist';
+  // Legacy appointments without an assignment display a neutral unavailable state.
+  return 'Stylist not assigned';
 };
 
 const canCancelAppointment = (appointment) => {
@@ -157,11 +170,10 @@ const canCancelAppointment = (appointment) => {
 
   // ISO string එකේ date එක විතරක් වෙන් කරලා ගන්නවා
   const cleanDate = appointmentDate.split('T')[0];
-  const [year, month, day] = cleanDate.split('-').map(Number);
+  const appointmentStart = getSalonAppointmentTimestamp(cleanDate, appointment.startTime);
+  if (appointmentStart === null) return false;
 
-  const startMinutes = timeToMinutes(appointment.startTime);
-  const appointmentStart = new Date(year, month - 1, day, Math.floor(startMinutes / 60), startMinutes % 60);
-  const hoursUntilAppointment = (appointmentStart.getTime() - Date.now()) / (1000 * 60 * 60);
+  const hoursUntilAppointment = (appointmentStart - Date.now()) / (1000 * 60 * 60);
 
   return hoursUntilAppointment >= 2;
 };
@@ -176,7 +188,7 @@ const getReviewPromptStorageKey = (currentUser) => (
 
 const readDismissedReviewPromptIds = (currentUser) => {
   try {
-    const parsedIds = JSON.parse(localStorage.getItem(getReviewPromptStorageKey(currentUser)) || '[]');
+    const parsedIds = JSON.parse(storage.get(getReviewPromptStorageKey(currentUser), '[]'));
     return Array.isArray(parsedIds) ? parsedIds.filter(Boolean) : [];
   } catch {
     return [];
@@ -184,7 +196,7 @@ const readDismissedReviewPromptIds = (currentUser) => {
 };
 
 const saveDismissedReviewPromptIds = (currentUser, appointmentIds) => {
-  localStorage.setItem(
+  storage.set(
     getReviewPromptStorageKey(currentUser),
     JSON.stringify(Array.from(new Set(appointmentIds.filter(Boolean))))
   );
@@ -192,7 +204,8 @@ const saveDismissedReviewPromptIds = (currentUser, appointmentIds) => {
 
 function Dashboard() {
   const navigate = useNavigate();
-  const { appointments, replaceAppointments, upsertAppointment } = useAppointments();
+  const { appointments, replaceAppointments, upsertAppointment, clearAppointments } = useAppointments();
+  const { settings } = useSalonSettings();
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [appointmentToCancel, setAppointmentToCancel] = useState(null);
@@ -200,34 +213,47 @@ function Dashboard() {
   const [hidingAppointmentIds, setHidingAppointmentIds] = useState([]);
   const [dismissedReviewAppointmentIds, setDismissedReviewAppointmentIds] = useState([]);
   const [temporarilyClosedReviewAppointmentIds, setTemporarilyClosedReviewAppointmentIds] = useState([]);
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
+  const closeCancellationDialog = useCallback(() => {
+    if (!isCancelling) setAppointmentToCancel(null);
+  }, [isCancelling]);
+  const cancellationDialogRef = useModalFocus({
+    isOpen: Boolean(appointmentToCancel),
+    onClose: closeCancellationDialog,
+    canClose: !isCancelling,
+  });
 
   const fetchAppointments = useCallback(async () => {
-    const token = localStorage.getItem('token');
+    const token = storage.get('token');
+    const requestUserId = getStoredAuthenticatedUserId();
 
-    if (!token) {
+    clearAppointments();
+    setIsLoading(true);
+
+    if (!token || !requestUserId) {
       setIsLoading(false);
       return;
     }
 
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/appointments`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
+      const response = await axios.get(`${API_BASE_URL}/api/appointments`);
       const apiAppointments = Array.isArray(response.data) ? response.data : [];
 
-      replaceAppointments(apiAppointments);
+      if (getStoredAuthenticatedUserId() !== requestUserId) return;
+      replaceAppointments(apiAppointments, { ownerUserId: requestUserId });
     } catch (error) {
+      if (getStoredAuthenticatedUserId() !== requestUserId) return;
+
+      clearAppointments();
       console.error('Error fetching appointments:', error);
       toast.error('Failed to load your appointments.');
     } finally {
       setIsLoading(false);
     }
-  }, [replaceAppointments]);
+  }, [clearAppointments, replaceAppointments]);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
+    const storedUser = storage.get('user');
 
     if (storedUser) {
       try {
@@ -253,22 +279,28 @@ function Dashboard() {
     setDismissedReviewAppointmentIds(readDismissedReviewPromptIds(user));
   }, [user]);
 
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 30000);
+
+    return () => window.clearInterval(intervalId);
+  }, []);
+
   const upcomingAppointments = useMemo(
     () => {
-      const now = new Date();
-
       return appointments
-        .filter((appt) => isUpcomingAppointment(appt, now))
+        .filter((appt) => isUpcomingAppointment(appt, currentTime))
         .sort((a, b) => (getAppointmentStartTimestamp(a) ?? 0) - (getAppointmentStartTimestamp(b) ?? 0));
     },
-    [appointments]
+    [appointments, currentTime]
   );
 
   const pastAppointments = useMemo(
     () => appointments
-      .filter((appt) => HISTORY_STATUSES.includes(normalizeAppointmentStatus(appt?.status)) && !appt?.isHiddenByCustomer)
+      .filter((appt) => isPastAppointment(appt, currentTime) && !appt?.isHiddenByCustomer)
       .sort((a, b) => new Date(b?.date).getTime() - new Date(a?.date).getTime()),
-    [appointments]
+    [appointments, currentTime]
   );
 
   // Only count COMPLETED appointments for Total Visits metric
@@ -315,14 +347,9 @@ function Dashboard() {
     setIsCancelling(true);
 
     try {
-      const token = localStorage.getItem('token');
       const appointmentId = appointmentToCancel._id || appointmentToCancel.id;
 
-      const response = await axios.delete(`${API_BASE_URL}/api/appointments/${appointmentId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
+      const response = await axios.delete(`${API_BASE_URL}/api/appointments/${appointmentId}`);
 
       upsertAppointment({
         _id: appointmentId,
@@ -358,13 +385,7 @@ function Dashboard() {
     });
 
     try {
-      const token = localStorage.getItem('token');
-
-      await axios.put(`${API_BASE_URL}/api/appointments/${appointmentId}/hide`, {}, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
+      await axios.put(`${API_BASE_URL}/api/appointments/${appointmentId}/hide`, {});
 
       toast.success('Appointment removed from your history.');
     } catch (error) {
@@ -416,7 +437,7 @@ function Dashboard() {
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-400">Total Spend</p>
               <p className="mt-2 break-words text-xl font-bold text-white sm:text-2xl">Rs. {isLoading ? '...' : totalSpend.toLocaleString()}</p>
-              <p className="mt-1 text-sm text-neutral-400">All appointment payments</p>
+              <p className="mt-1 text-sm text-neutral-400">Completed appointment payments</p>
             </div>
           </div>
 
@@ -463,6 +484,7 @@ function Dashboard() {
                   getStylistDisplayName={getStylistDisplayName}
                   statusClassName={statusClassName}
                   canCancelAppointment={canCancelAppointment}
+                  gracePeriodMinutes={settings.gracePeriod}
                   onCancel={() => setAppointmentToCancel(appointment)}
                   onAppointmentUpdated={handleAppointmentUpdated}
                 />
@@ -533,11 +555,11 @@ function Dashboard() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={() => {
-              if (!isCancelling) setAppointmentToCancel(null);
-            }}
+            onClick={closeCancellationDialog}
           >
             <MotionDiv
+              ref={cancellationDialogRef}
+              tabIndex={-1}
               role="dialog"
               aria-modal="true"
               aria-labelledby="cancel-session-title"
@@ -566,8 +588,9 @@ function Dashboard() {
               <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-end">
                 <button
                   type="button"
+                  autoFocus
                   disabled={isCancelling}
-                  onClick={() => setAppointmentToCancel(null)}
+                  onClick={closeCancellationDialog}
                   className="rounded-full border border-white/15 px-5 py-3 text-xs font-semibold uppercase tracking-[0.14em] text-white/70 transition hover:border-[#D4AF37]/45 hover:text-[#D4AF37] disabled:cursor-not-allowed disabled:opacity-50 sm:tracking-[0.24em]"
                 >
                   No, Retain Booking
@@ -592,7 +615,8 @@ function Dashboard() {
           user={user}
           onClose={() => temporarilyCloseReviewPrompt(pendingReviewAppointment._id || pendingReviewAppointment.id)}
           onDismissPermanently={() => markReviewPromptSeen(pendingReviewAppointment._id || pendingReviewAppointment.id)}
-          onReviewSubmitted={(updatedAppointment) => {
+          onReviewSubmitted={(updatedAppointment, updatedUser) => {
+            if (updatedUser) setUser(updatedUser);
             markReviewPromptSeen(pendingReviewAppointment._id || pendingReviewAppointment.id);
             handleAppointmentUpdated(updatedAppointment);
             fetchAppointments();

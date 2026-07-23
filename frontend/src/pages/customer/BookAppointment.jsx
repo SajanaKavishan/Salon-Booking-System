@@ -1,10 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { AnimatePresence, motion } from 'framer-motion';
 
-import axios from 'axios';
+import { apiClient as axios } from '../../utils/apiConfig';
 
-import { CalendarDays, Check, ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { CalendarDays, Check, ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
 
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -13,20 +13,13 @@ import { toast } from 'react-toastify';
 import Spinner from '../../components/common/Spinner';
 
 import { useSalonSettings } from '../../hooks/useSalonSettings';
+import { useModalFocus } from '../../hooks/useModalFocus';
 
 import { useAppointments } from '../../context/useAppointments';
+import { storage } from '../../utils/storage';
 import API_BASE_URL from '../../utils/apiConfig';
 
 const SRI_LANKAN_MOBILE_REGEX = /^(?:\+94|0)[7][0-9]{8}$/;
-
-const getLocalDateKey = () => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-
-  return `${year}-${month}-${day}`;
-};
 
 const MONTH_LABELS = [
   'January',
@@ -97,6 +90,14 @@ function BookingCalendarPicker({ id, value, onChange, holidays = [], minDate, we
       holidays
         .filter((holiday) => holiday.date && holiday.isFullDay !== false)
         .map((holiday) => holiday.date)
+    ),
+    [holidays]
+  );
+  const holidaysByDate = useMemo(
+    () => new Map(
+      holidays
+        .filter((holiday) => holiday.date)
+        .map((holiday) => [holiday.date, holiday])
     ),
     [holidays]
   );
@@ -197,7 +198,7 @@ function BookingCalendarPicker({ id, value, onChange, holidays = [], minDate, we
             <button
               type="button"
               onClick={() => moveMonth(-1)}
-              className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-900 hover:text-[#c5a880]"
+              className="flex h-11 w-11 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-900 hover:text-[#c5a880]"
               aria-label="Previous month"
             >
               <ChevronLeft className="h-4 w-4" />
@@ -208,14 +209,15 @@ function BookingCalendarPicker({ id, value, onChange, holidays = [], minDate, we
             <button
               type="button"
               onClick={() => moveMonth(1)}
-              className="flex h-9 w-9 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-900 hover:text-[#c5a880]"
+              className="flex h-11 w-11 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-zinc-900 hover:text-[#c5a880]"
               aria-label="Next month"
             >
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
 
-          <div className="grid grid-cols-7 gap-1 text-center">
+          <div className="overflow-x-auto pb-1">
+          <div className="grid min-w-[332px] grid-cols-7 gap-1 text-center">
             {WEEKDAY_LABELS.map((weekday) => (
               <div key={weekday} className="py-2 text-xs font-semibold text-zinc-500">
                 {weekday}
@@ -226,11 +228,18 @@ function BookingCalendarPicker({ id, value, onChange, holidays = [], minDate, we
               const dateKey = toDateKey(calendarDate);
               const isCurrentMonth = calendarDate.getMonth() === viewDate.getMonth();
               const isSelected = dateKey === value;
+              const holiday = holidaysByDate.get(dateKey);
               const isHoliday = holidayDateKeys.has(dateKey);
               const isFullDayHoliday = fullDayHolidayKeys.has(dateKey);
               const isWeekend = calendarDate.getDay() === 0 || calendarDate.getDay() === 6;
               const isPast = minimumDate ? dateKey < minDate : false;
               const isDisabled = isPast || (!weekendBookings && isWeekend) || isFullDayHoliday;
+              const holidayName = String(holiday?.name || 'Salon closure').trim();
+              const closureAnnouncement = !holiday
+                ? ''
+                : isFullDayHoliday
+                  ? `Closed: ${holidayName}`
+                  : `Partially closed: ${holidayName}. Open from ${holiday.hours?.start || 'the listed start time'} to ${holiday.hours?.end || 'the listed end time'}`;
 
               return (
                 <button
@@ -238,7 +247,7 @@ function BookingCalendarPicker({ id, value, onChange, holidays = [], minDate, we
                   type="button"
                   onClick={() => handleSelectDate(calendarDate)}
                   disabled={isDisabled}
-                  className={`relative flex h-9 items-center justify-center rounded-lg text-sm transition-all disabled:cursor-not-allowed ${
+                  className={`relative flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-sm transition-all disabled:cursor-not-allowed ${
                     isSelected
                       ? 'bg-[#c5a880] font-bold text-black'
                       : isDisabled
@@ -247,7 +256,7 @@ function BookingCalendarPicker({ id, value, onChange, holidays = [], minDate, we
                           ? 'text-zinc-200 hover:bg-[#c5a880]/20 hover:text-[#c5a880]'
                           : 'text-zinc-700 hover:bg-zinc-900/70 hover:text-zinc-500'
                   } ${isHoliday && !isSelected ? 'bg-red-500/5 text-red-300/70 ring-1 ring-inset ring-red-500/15' : ''}`}
-                  aria-label={`${formatDisplayDate(dateKey)}${isHoliday ? ' closed' : ''}`}
+                  aria-label={`${formatDisplayDate(dateKey)}${closureAnnouncement ? `. ${closureAnnouncement}` : ''}`}
                 >
                   {calendarDate.getDate()}
                   {isHoliday && (
@@ -261,6 +270,7 @@ function BookingCalendarPicker({ id, value, onChange, holidays = [], minDate, we
               );
             })}
           </div>
+          </div>
         </div>
       )}
     </div>
@@ -272,6 +282,10 @@ function BookingCalendarPicker({ id, value, onChange, holidays = [], minDate, we
 function BookAppointment({ userProfile, customerData }) {
 
   const hasHydrated = useRef(false);
+
+  const bookingContentScrollRef = useRef(null);
+
+  const isSubmittingRef = useRef(false);
 
   const [step, setStep] = useState(1);
 
@@ -297,6 +311,8 @@ function BookAppointment({ userProfile, customerData }) {
 
   const [isPhoneVerificationModalOpen, setIsPhoneVerificationModalOpen] = useState(false);
 
+  const [bookingSuccessMessage, setBookingSuccessMessage] = useState('');
+
   const [phoneVerificationStep, setPhoneVerificationStep] = useState('confirm'); // 'confirm' or 'edit'
 
   const [phoneVerificationInput, setPhoneVerificationInput] = useState('');
@@ -307,7 +323,7 @@ function BookAppointment({ userProfile, customerData }) {
 
     try {
 
-      return JSON.parse(localStorage.getItem('user')) || null;
+      return JSON.parse(storage.get('user')) || null;
 
     } catch {
 
@@ -335,13 +351,32 @@ function BookAppointment({ userProfile, customerData }) {
 
   const [holidays, setHolidays] = useState([]);
 
+  const [operationalDate, setOperationalDate] = useState('');
+
+  const [isOperationalDateLoading, setIsOperationalDateLoading] = useState(true);
+
   const { settings } = useSalonSettings();
+
+  const configuredGracePeriod = Number(settings?.gracePeriod);
+  const gracePeriodMinutes = Number.isInteger(configuredGracePeriod)
+    && configuredGracePeriod >= 0
+    && configuredGracePeriod <= 120
+    ? configuredGracePeriod
+    : 15;
 
   const navigate = useNavigate();
 
   const location = useLocation();
 
   const { upsertAppointment } = useAppointments();
+
+  useLayoutEffect(() => {
+    bookingContentScrollRef.current?.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    bookingContentScrollRef.current
+      ?.closest('[data-route-scroll-container]')
+      ?.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [step]);
 
 
 
@@ -354,8 +389,8 @@ function BookAppointment({ userProfile, customerData }) {
     : '';
 
   const todayHoliday = useMemo(
-    () => holidays.find((holiday) => holiday.date === getLocalDateKey()) || null,
-    [holidays]
+    () => holidays.find((holiday) => holiday.date === operationalDate) || null,
+    [holidays, operationalDate]
   );
 
   const selectedHoliday = useMemo(
@@ -383,6 +418,39 @@ function BookAppointment({ userProfile, customerData }) {
     return () => {
       isCancelled = true;
     };
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    const fetchOperationalDate = async () => {
+      try {
+        const response = await axios.get(
+          `${API_BASE_URL}/api/appointments/availability/meta`,
+          { signal: controller.signal }
+        );
+        const nextOperationalDate = response.data?.operationalDate;
+
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(String(nextOperationalDate || ''))) {
+          throw new Error('The server returned an invalid operational date.');
+        }
+
+        setOperationalDate(nextOperationalDate);
+      } catch (error) {
+        if (axios.isCancel(error) || error.name === 'CanceledError' || controller.signal.aborted) {
+          return;
+        }
+
+        console.error('Error synchronizing salon date:', error);
+        setOperationalDate('');
+        toast.error('Could not synchronize the salon date. Please refresh before booking.');
+      } finally {
+        if (!controller.signal.aborted) setIsOperationalDateLoading(false);
+      }
+    };
+
+    fetchOperationalDate();
+    return () => controller.abort();
   }, []);
 
   const fallbackAvatar = (
@@ -415,17 +483,21 @@ function BookAppointment({ userProfile, customerData }) {
 
     useEffect(() => {
 
+      const controller = new AbortController();
+
       const fetchOptions = async () => {
 
         try {
 
           const [servicesRes, staffRes] = await Promise.all([
 
-            axios.get(`${API_BASE_URL}/api/services`),
+            axios.get(`${API_BASE_URL}/api/services`, { signal: controller.signal }),
 
-            axios.get(`${API_BASE_URL}/api/staff/public-list`)
+            axios.get(`${API_BASE_URL}/api/staff/public-list`, { signal: controller.signal })
 
           ]);
+
+          if (controller.signal.aborted) return;
 
           const fetchedServices = Array.isArray(servicesRes.data?.data)
             ? servicesRes.data.data
@@ -441,13 +513,15 @@ function BookAppointment({ userProfile, customerData }) {
 
         } catch (error) {
 
+          if (controller.signal.aborted || axios.isCancel(error)) return;
+
           console.error('Error fetching data:', error);
 
           toast.error('Failed to load services and staff.');
 
         } finally {
 
-          setIsOptionsLoading(false);
+          if (!controller.signal.aborted) setIsOptionsLoading(false);
 
         }
 
@@ -457,6 +531,8 @@ function BookAppointment({ userProfile, customerData }) {
 
       fetchOptions();
 
+      return () => controller.abort();
+
     }, []);
 
 
@@ -465,7 +541,9 @@ function BookAppointment({ userProfile, customerData }) {
 
     useEffect(() => {
 
-      const token = localStorage.getItem('token');
+      const controller = new AbortController();
+
+      const token = storage.get('token');
 
       if (!token) {
 
@@ -483,9 +561,11 @@ function BookAppointment({ userProfile, customerData }) {
 
           const response = await axios.get(`${API_BASE_URL}/api/users/me`, {
 
-            headers: { Authorization: `Bearer ${token}` }
+            signal: controller.signal
 
           });
+
+          if (controller.signal.aborted) return;
 
           const profileData = response.data || {};
 
@@ -497,11 +577,13 @@ function BookAppointment({ userProfile, customerData }) {
 
         } catch (error) {
 
+          if (controller.signal.aborted || axios.isCancel(error)) return;
+
           console.error('Error hydrating user profile:', error);
 
         } finally {
 
-          setIsUserProfileHydrated(true);
+          if (!controller.signal.aborted) setIsUserProfileHydrated(true);
 
         }
 
@@ -510,6 +592,8 @@ function BookAppointment({ userProfile, customerData }) {
 
 
       hydrateUserProfile();
+
+      return () => controller.abort();
 
     }, []);
 
@@ -621,9 +705,13 @@ function BookAppointment({ userProfile, customerData }) {
       setStep(resolvedStylist ? location.state.startStep || 3 : 2);
       hasHydrated.current = true;
       toast.info(
-        resolvedStylist
-          ? 'Your affected service and artist are ready. Pick a new date and time.'
-          : 'Your affected service is selected. Choose a stylist for the new booking.'
+        location.state.closureReschedule
+          ? resolvedStylist
+            ? 'Your cancelled booking is ready to rebook. Pick a new date and time.'
+            : 'Your cancelled booking services are selected. Choose a stylist to continue.'
+          : resolvedStylist
+            ? 'Your affected service and artist are ready. Pick a new date and time.'
+            : 'Your affected service is selected. Choose a stylist for the new booking.'
       );
 
     }, [location.state, servicesList, stylistsList]);
@@ -750,9 +838,9 @@ function BookAppointment({ userProfile, customerData }) {
 
 
 
-      const selectedDate = new Date(`${date}T00:00:00`);
+      const selectedDate = new Date(`${date}T00:00:00.000Z`);
 
-      const day = selectedDate.getDay();
+      const day = selectedDate.getUTCDay();
 
 
 
@@ -932,6 +1020,11 @@ function BookAppointment({ userProfile, customerData }) {
 
           );
 
+          const responseOperationalDate = responses.find(
+            (response) => /^\d{4}-\d{2}-\d{2}$/.test(String(response.data?.operationalDate || ''))
+          )?.data?.operationalDate;
+          if (responseOperationalDate) setOperationalDate(responseOperationalDate);
+
           const uniqueSlots = Array.from(
 
             new Map(
@@ -1016,7 +1109,7 @@ function BookAppointment({ userProfile, customerData }) {
 
     const selectedStylist = stylistOptions.find((stylistItem) => stylistItem._id === stylist);
 
-    const formattedDate = date ? new Date(`${date}T00:00:00`).toLocaleDateString() : 'Not selected';
+    const formattedDate = date ? formatDisplayDate(date) : 'Not selected';
 
     const canMoveToStylist = selectedServices.length > 0;
 
@@ -1038,18 +1131,18 @@ function BookAppointment({ userProfile, customerData }) {
     }, [phoneVerificationInput]);
     const isPhoneVerificationInputValid = Boolean(phoneVerificationInput.trim() && !phoneVerificationError);
 
-    useEffect(() => {
-      if (!isPhoneVerificationModalOpen) return undefined;
-
-      const handleEscapeKey = (event) => {
-        if (event.key === 'Escape' && !isPhoneVerificationLoading) {
-          setIsPhoneVerificationModalOpen(false);
-        }
-      };
-
-      window.addEventListener('keydown', handleEscapeKey);
-      return () => window.removeEventListener('keydown', handleEscapeKey);
-    }, [isPhoneVerificationLoading, isPhoneVerificationModalOpen]);
+    const closePhoneVerificationModal = () => {
+      if (!isPhoneVerificationLoading) setIsPhoneVerificationModalOpen(false);
+    };
+    const phoneVerificationDialogRef = useModalFocus({
+      isOpen: isPhoneVerificationModalOpen,
+      onClose: closePhoneVerificationModal,
+      canClose: !isPhoneVerificationLoading,
+    });
+    const bookingSuccessDialogRef = useModalFocus({
+      isOpen: Boolean(bookingSuccessMessage),
+      onClose: () => navigate('/customer/dashboard'),
+    });
 
 
 
@@ -1129,6 +1222,8 @@ function BookAppointment({ userProfile, customerData }) {
 
     const handleBooking = async (customerMobileNumber = '') => {
 
+      if (isSubmittingRef.current) return;
+
       if (selectedServices.length === 0) {
 
         toast.error('Please select at least one service.');
@@ -1157,17 +1252,16 @@ function BookAppointment({ userProfile, customerData }) {
 
 
 
+      isSubmittingRef.current = true;
       setIsSubmitting(true);
 
 
 
       try {
 
-        const token = localStorage.getItem('token');
+        const selectedDate = new Date(`${date}T00:00:00.000Z`);
 
-        const selectedDate = new Date(`${date}T00:00:00`);
-
-        const day = selectedDate.getDay();
+        const day = selectedDate.getUTCDay();
 
 
 
@@ -1226,15 +1320,7 @@ function BookAppointment({ userProfile, customerData }) {
 
           bookingData,
 
-          {
-
-            headers: {
-
-              Authorization: `Bearer ${token}`
-
-            }
-
-          }
+          {}
 
         );
 
@@ -1243,6 +1329,9 @@ function BookAppointment({ userProfile, customerData }) {
         // Construct the appointment object from response
 
         const createdAppointment = response.data?.appointment || response.data || {};
+        const createdStatus = String(response.data?.status || createdAppointment?.status || 'pending')
+          .trim()
+          .toLowerCase();
 
         
 
@@ -1272,7 +1361,7 @@ function BookAppointment({ userProfile, customerData }) {
 
           stylistName: stylistName,
 
-          status: createdAppointment?.status || 'Pending',
+          status: createdAppointment?.status || response.data?.status || 'Pending',
 
           totalAmount: createdAppointment?.totalAmount || 0,
 
@@ -1290,11 +1379,18 @@ function BookAppointment({ userProfile, customerData }) {
 
         // Add appointment to global context
 
-        upsertAppointment(appointmentToAdd);
+        upsertAppointment(appointmentToAdd, {
+          ownerUserId: user?._id || user?.id,
+        });
 
 
 
-        toast.success('Booking Confirmed! Your appointment is locked into the calendar.');
+        const successMessage = createdStatus === 'pending'
+          ? 'Booking request submitted! Awaiting salon approval.'
+          : 'Booking submitted successfully.';
+
+        toast.success(successMessage);
+        setBookingSuccessMessage(successMessage);
 
         
 
@@ -1316,8 +1412,6 @@ function BookAppointment({ userProfile, customerData }) {
 
         
 
-        navigate('/customer/dashboard');
-
       } catch (error) {
 
         console.error('Booking Error:', error);
@@ -1326,6 +1420,7 @@ function BookAppointment({ userProfile, customerData }) {
 
       } finally {
 
+        isSubmittingRef.current = false;
         setIsSubmitting(false);
 
       }
@@ -1434,8 +1529,6 @@ function BookAppointment({ userProfile, customerData }) {
 
       try {
 
-        const token = localStorage.getItem('token');
-
         
 
         // Update user profile with new phone number
@@ -1446,15 +1539,7 @@ function BookAppointment({ userProfile, customerData }) {
 
           { phone: newPhone },
 
-          {
-
-            headers: {
-
-              Authorization: `Bearer ${token}`
-
-            }
-
-          }
+          {}
 
         );
 
@@ -1476,7 +1561,7 @@ function BookAppointment({ userProfile, customerData }) {
 
         setUser(updatedUser);
 
-        localStorage.setItem('user', JSON.stringify(updatedUser));
+        storage.set('user', JSON.stringify(updatedUser));
 
         toast.success('Phone number updated successfully.');
 
@@ -1583,6 +1668,8 @@ function BookAppointment({ userProfile, customerData }) {
                     <React.Fragment key={label}>
 
                       <div
+
+                        aria-current={isActive ? 'step' : undefined}
 
                         className={`flex h-9 w-9 items-center justify-center rounded-full border text-xs font-semibold transition ${
 
@@ -1704,13 +1791,13 @@ function BookAppointment({ userProfile, customerData }) {
 
 
 
-              <div className={`min-h-0 flex-1 pr-0 sm:pr-1 ${step === 3 ? 'overflow-visible md:overflow-hidden' : 'overflow-visible md:overflow-y-auto'} ${step === 4 ? 'md:[scrollbar-width:none] md:[&::-webkit-scrollbar]:hidden' : ''}`}>
+              <div ref={bookingContentScrollRef} className={`min-h-0 flex-1 pr-0 sm:pr-1 ${step === 3 ? 'overflow-visible md:overflow-hidden' : 'overflow-visible md:overflow-y-auto'} ${step === 4 ? 'md:[scrollbar-width:none] md:[&::-webkit-scrollbar]:hidden' : ''}`}>
 
               {isOptionsLoading ? (
 
                 <div className="flex h-full min-h-60 items-center justify-center">
 
-                  <Spinner />
+                  <Spinner label="Loading booking options..." />
 
                 </div>
 
@@ -1979,7 +2066,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                                     {isPreferred && (
 
-                                      <span className="rounded-full border border-[#D4AF37]/40 bg-[#D4AF37]/10 px-2.5 py-1 text-[10px] uppercase tracking-[0.2em] text-[#D4AF37]">
+                                      <span className="rounded-full border border-[#D4AF37]/40 bg-[#D4AF37]/10 px-2.5 py-1 text-xs uppercase tracking-[0.2em] text-[#D4AF37]">
 
                                         Your Preferred Stylist
 
@@ -2021,14 +2108,24 @@ function BookAppointment({ userProfile, customerData }) {
 
                             <label htmlFor="appointment-date-picker" className="text-sm font-medium text-white/60">Select date</label>
 
-                            <BookingCalendarPicker
-                              id="appointment-date-picker"
-                              value={date}
-                              onChange={setDate}
-                              holidays={holidays}
-                              minDate={getLocalDateKey()}
-                              weekendBookings={settings.weekendBookings}
-                            />
+                            {isOperationalDateLoading ? (
+                              <div className="mt-3 flex min-h-11 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900">
+                                <Spinner label="Loading available dates..." />
+                              </div>
+                            ) : operationalDate ? (
+                              <BookingCalendarPicker
+                                id="appointment-date-picker"
+                                value={date}
+                                onChange={setDate}
+                                holidays={holidays}
+                                minDate={operationalDate}
+                                weekendBookings={settings.weekendBookings}
+                              />
+                            ) : (
+                              <p className="mt-3 text-sm leading-6 text-red-300">
+                                Salon date unavailable. Refresh the page to continue booking.
+                              </p>
+                            )}
 
                           </div>
 
@@ -2070,7 +2167,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                             <div className="flex min-h-40 items-center justify-center rounded-[1.5rem] border border-white/8 bg-white/[0.02]">
 
-                              <Spinner />
+                              <Spinner label="Loading available times..." />
 
                             </div>
 
@@ -2090,7 +2187,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                                     onClick={() => setTimeSlot(slot)}
 
-                                    className={`rounded-full border px-3 py-3 text-[11px] font-semibold uppercase tracking-[0.12em] transition-all duration-300 sm:px-4 sm:text-xs sm:tracking-[0.22em] ${
+                                    className={`rounded-full border px-3 py-3 text-xs font-semibold uppercase tracking-[0.12em] transition-all duration-300 sm:px-4 sm:tracking-[0.22em] ${
 
                                       timeSlot === slot
 
@@ -2278,13 +2375,15 @@ function BookAppointment({ userProfile, customerData }) {
 
                           <p className="mt-3 text-sm leading-6 text-zinc-300">
 
-                            To respect the time of both our stylists and other clients, we offer a maximum 15-minute grace period. If you expect to arrive later than 15 minutes, please notify the salon immediately.
+                            To respect the time of both our stylists and other clients, we offer a maximum {gracePeriodMinutes}-minute grace period. If you expect to arrive later, please notify the salon immediately.
 
                           </p>
 
-                          <label className="relative mt-4 flex cursor-pointer items-start gap-3">
+                          <label htmlFor="grace-period-policy-consent" className="relative mt-4 flex cursor-pointer items-start gap-3">
 
                             <input
+
+                              id="grace-period-policy-consent"
 
                               type="checkbox"
 
@@ -2384,6 +2483,8 @@ function BookAppointment({ userProfile, customerData }) {
 
                   disabled={!canConfirmBooking}
 
+                  aria-busy={isSubmitting}
+
                   whileHover={canConfirmBooking ? { scale: 1.03 } : undefined}
 
                   whileTap={canConfirmBooking ? { scale: 0.98 } : undefined}
@@ -2392,7 +2493,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                 >
 
-                  {isSubmitting ? <Spinner /> : 'Confirm Appointment'}
+                  {isSubmitting ? <Spinner label="Confirming appointment..." /> : 'Confirm Appointment'}
 
                 </motion.button>
 
@@ -2406,16 +2507,49 @@ function BookAppointment({ userProfile, customerData }) {
 
 
 
+        {bookingSuccessMessage && (
+          <div className="salon-modal-overlay fixed inset-0 z-[70] flex items-center justify-center bg-black/85 px-3 py-4 backdrop-blur-md sm:px-4">
+            <div
+              ref={bookingSuccessDialogRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="booking-success-title"
+              aria-describedby="booking-success-description"
+              tabIndex={-1}
+              className="salon-modal-dialog w-full max-w-md rounded-2xl border border-[#D4AF37]/30 bg-[#0b0b0b] p-6 text-center shadow-[0_0_50px_rgba(212,175,55,0.16)] sm:p-8"
+            >
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-[#D4AF37]/40 bg-[#D4AF37]/10 text-[#D4AF37]">
+                <Check className="h-7 w-7" aria-hidden="true" />
+              </div>
+              <h2 id="booking-success-title" className="mt-5 font-brand text-2xl text-white">
+                Request Submitted
+              </h2>
+              <p id="booking-success-description" className="mt-3 text-sm leading-6 text-zinc-300">
+                {bookingSuccessMessage}
+              </p>
+              <button
+                type="button"
+                onClick={() => navigate('/customer/dashboard')}
+                className="salon-modal-action mt-7 w-full rounded-full bg-[#D4AF37] px-5 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-black transition hover:bg-amber-300 focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/50 focus:ring-offset-2 focus:ring-offset-black"
+              >
+                View My Bookings
+              </button>
+            </div>
+          </div>
+        )}
+
         {isPhoneVerificationModalOpen && (
 
-          <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/85 px-4 py-6 backdrop-blur-sm">
+          <div className="salon-modal-overlay fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/85 px-3 py-4 backdrop-blur-sm sm:px-4 sm:py-6">
 
             <motion.div
+              ref={phoneVerificationDialogRef}
               role="dialog"
               aria-modal="true"
               aria-labelledby="phone-modal-title"
+              tabIndex={-1}
 
-              className="w-full max-w-md rounded-[1.75rem] border border-[#D4AF37]/30 bg-[#0b0b0b] p-6 shadow-2xl"
+              className="salon-modal-dialog relative w-full max-w-md rounded-[1.75rem] border border-[#D4AF37]/30 bg-[#0b0b0b] p-5 shadow-2xl sm:p-6"
 
               initial={{ scale: 0.95, opacity: 0 }}
 
@@ -2425,11 +2559,21 @@ function BookAppointment({ userProfile, customerData }) {
 
             >
 
+              <button
+                type="button"
+                onClick={closePhoneVerificationModal}
+                disabled={isPhoneVerificationLoading}
+                aria-label="Close phone verification dialog"
+                className="salon-modal-icon-button absolute right-3 top-3 inline-flex items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-white/60 transition hover:border-[#D4AF37]/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-50 sm:right-4 sm:top-4"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+
               {phoneVerificationStep === 'confirm' ? (
 
                 <>
 
-                  <h3 id="phone-modal-title" className="font-brand text-xl text-[#D4AF37]">Verify Your Contact Number</h3>
+                  <h3 id="phone-modal-title" className="pr-12 font-brand text-xl text-[#D4AF37]">Verify Your Contact Number</h3>
 
                   <p className="mt-3 text-sm leading-6 text-white/70">
 
@@ -2463,7 +2607,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                       disabled={isPhoneVerificationLoading}
 
-                      className="flex-1 rounded-full border border-white/15 px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-white transition hover:border-white/30 hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-50 sm:tracking-[0.3em]"
+                      className="salon-modal-action flex-1 rounded-full border border-white/15 px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-white transition hover:border-white/30 hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-50 sm:tracking-[0.3em]"
 
                     >
 
@@ -2479,7 +2623,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                       disabled={isPhoneVerificationLoading || !hasConfirmedPhone}
 
-                      className="flex-1 rounded-full bg-[#D4AF37] px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-black transition hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-60 sm:tracking-[0.3em]"
+                      className="salon-modal-action flex-1 rounded-full bg-[#D4AF37] px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-black transition hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-60 sm:tracking-[0.3em]"
 
                     >
 
@@ -2495,7 +2639,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                 <>
 
-                  <h3 id="phone-modal-title" className="font-brand text-xl text-[#D4AF37]">Update Mobile Number</h3>
+                  <h3 id="phone-modal-title" className="pr-12 font-brand text-xl text-[#D4AF37]">Update Mobile Number</h3>
 
                   <p className="mt-3 text-sm leading-6 text-white/70">
 
@@ -2559,7 +2703,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                       disabled={isPhoneVerificationLoading}
 
-                      className="flex-1 rounded-full border border-white/15 px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-white transition hover:border-white/30 hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-50 sm:tracking-[0.3em]"
+                      className="salon-modal-action flex-1 rounded-full border border-white/15 px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-white transition hover:border-white/30 hover:bg-white/[0.05] disabled:cursor-not-allowed disabled:opacity-50 sm:tracking-[0.3em]"
 
                     >
 
@@ -2575,7 +2719,7 @@ function BookAppointment({ userProfile, customerData }) {
 
                       disabled={isPhoneVerificationLoading || !isPhoneVerificationInputValid}
 
-                      className="flex-1 rounded-full bg-[#D4AF37] px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-black transition hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-60 sm:tracking-[0.3em]"
+                      className="salon-modal-action flex-1 rounded-full bg-[#D4AF37] px-4 py-3 text-xs font-semibold uppercase tracking-[0.16em] text-black transition hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-60 sm:tracking-[0.3em]"
 
                     >
 

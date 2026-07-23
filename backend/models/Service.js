@@ -30,7 +30,12 @@ const serviceSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: '',
-    }
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+      index: true,
+    },
   },
   {
     timestamps: true,

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import axios from 'axios';
+import { apiClient as axios } from '../../utils/apiConfig';
 import { CalendarDays, ChevronLeft, ChevronRight, Plus, Trash2, X } from 'lucide-react';
 import {
   addDays,
@@ -12,7 +12,10 @@ import {
   startOfMonth
 } from 'date-fns';
 import { toast } from 'react-toastify';
+import ScheduleConflictDialog from '../../components/admin/ScheduleConflictDialog';
 import { GlassCard, GoldButton, SectionPanel } from '../../components/admin/SystemUI';
+import { useModalFocus } from '../../hooks/useModalFocus';
+import { storage } from '../../utils/storage';
 import { WEEKLY_OPENING_HOURS, defaultOpeningHours, useSalonSettings } from '../../hooks/useSalonSettings';
 import API_BASE_URL from '../../utils/apiConfig';
 
@@ -238,7 +241,7 @@ function OpeningHoursScheduler({ value, onChange }) {
           <p className="text-sm font-semibold text-white">Opening Hours</p>
           <p className="mt-1 text-xs leading-5 text-gray-400">Create time slots, then assign each day once. Unselected days stay closed.</p>
         </div>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#d4af37]/80">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#d4af37]">
           {selectedDayCount}/7 Open Days
         </p>
       </div>
@@ -287,7 +290,7 @@ function OpeningHoursScheduler({ value, onChange }) {
 
                 <div className="grid w-full gap-3 sm:grid-cols-[minmax(9rem,1fr)_auto_minmax(9rem,1fr)] sm:items-end lg:w-[23rem] lg:flex-none">
                   <div className="block">
-                    <label htmlFor={startTimeId} className="mb-1.5 block text-xs font-medium text-gray-400">Start Time</label>
+                    <label htmlFor={startTimeId} className="mb-1.5 block text-xs font-medium text-gray-300">Start Time</label>
                     <input
                       id={startTimeId}
                       type="time"
@@ -300,7 +303,7 @@ function OpeningHoursScheduler({ value, onChange }) {
                   <span className="hidden pb-3 text-sm font-semibold text-zinc-600 sm:block">to</span>
 
                   <div className="block">
-                    <label htmlFor={endTimeId} className="mb-1.5 block text-xs font-medium text-gray-400">End Time</label>
+                    <label htmlFor={endTimeId} className="mb-1.5 block text-xs font-medium text-gray-300">End Time</label>
                     <input
                       id={endTimeId}
                       type="time"
@@ -626,7 +629,7 @@ function HolidayMultiDateCalendar({ selectedDates = [], onChange, holidays = [],
         </button>
       </div>
 
-      <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold uppercase tracking-wider text-slate-500">
+      <div className="grid grid-cols-7 gap-1 text-center text-xs font-bold uppercase tracking-wider text-gray-300">
         {HOLIDAY_WEEKDAY_LABELS.map((day, index) => (
           <span key={`${day}-${index}`}>{day}</span>
         ))}
@@ -770,6 +773,7 @@ function SettingsPage() {
   const { settings, setSettings, isLoading, settingsError, cancelChanges } = useSalonSettings();
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
+  const [scheduleConflictDetails, setScheduleConflictDetails] = useState(null);
   const [savedSettingsSignature, setSavedSettingsSignature] = useState('');
   const [holidays, setHolidays] = useState([]);
   const [holidayForm, setHolidayForm] = useState({
@@ -789,16 +793,26 @@ function SettingsPage() {
   const [holidayConflict, setHolidayConflict] = useState(null);
   const [editingHolidayId, setEditingHolidayId] = useState(null);
   const [holidayDeleteTarget, setHolidayDeleteTarget] = useState(null);
+  const holidayConflictDialogRef = useModalFocus({
+    isOpen: Boolean(holidayConflict),
+    onClose: () => setHolidayConflict(null),
+    canClose: !isHolidaySaving
+  });
+  const holidayDeleteDialogRef = useModalFocus({
+    isOpen: Boolean(holidayDeleteTarget),
+    onClose: () => setHolidayDeleteTarget(null),
+    canClose: !isHolidaySaving
+  });
 
   const requireAuthConfig = () => {
-    const token = localStorage.getItem('token');
+    const token = storage.get('token');
 
     if (!token) {
       toast.error('Your session has expired. Please sign in again.');
       return null;
     }
 
-    return { headers: { Authorization: `Bearer ${token}` } };
+    return {};
   };
 
   const fetchHolidays = async () => {
@@ -900,9 +914,24 @@ function SettingsPage() {
         ...nextSettings
       }));
       setSavedSettingsSignature(getSettingsSignature(nextSettings));
+      setScheduleConflictDetails(null);
       toast.success('Settings updated successfully.');
     } catch (error) {
       console.error('Error saving settings:', error);
+      const responseStatus = error.response?.status;
+      const responseData = error.response?.data;
+      if (
+        [400, 409].includes(responseStatus)
+        && Array.isArray(responseData?.conflicts)
+        && responseData.conflicts.length > 0
+      ) {
+        setScheduleConflictDetails({
+          message: responseData.message,
+          conflicts: responseData.conflicts,
+        });
+        return;
+      }
+
       toast.error(error.response?.data?.message || 'Failed to save settings.');
     } finally {
       isSavingRef.current = false;
@@ -1253,6 +1282,7 @@ function SettingsPage() {
                   value={settings.supportEmail}
                   onChange={handleProfileChange}
                   autoComplete="email"
+                  inputMode="email"
                   className="salon-field"
                 />
               </div>
@@ -1262,11 +1292,12 @@ function SettingsPage() {
                   <label htmlFor="settings-contact-number" className="mb-2 block text-sm font-medium text-gray-300">Contact Number</label>
                   <input
                     id="settings-contact-number"
-                    type="text"
+                    type="tel"
                     name="contactNumber"
                     value={settings.contactNumber}
                     onChange={handleProfileChange}
                     autoComplete="tel"
+                    inputMode="tel"
                     className="salon-field"
                   />
                 </div>
@@ -1516,7 +1547,7 @@ function SettingsPage() {
                                 : ' - Full day'}
                             </p>
                             {holiday.isSystemGenerated && (
-                              <p className="mt-1 text-[11px] uppercase tracking-wider text-[#d4af37]/70">Synced public holiday</p>
+                              <p className="mt-1 text-xs uppercase tracking-wider text-[#d4af37]">Synced public holiday</p>
                             )}
                           </div>
                           <div className="flex shrink-0 items-center gap-2">
@@ -1566,11 +1597,24 @@ function SettingsPage() {
         </div>
       )}
 
+      <ScheduleConflictDialog
+        details={scheduleConflictDetails}
+        onClose={() => setScheduleConflictDetails(null)}
+        contextLabel="Operating Hours Conflict"
+      />
+
       {holidayConflict && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-md">
-          <div className="w-full max-w-lg rounded-2xl border border-red-500/30 bg-[#0b0b0d] p-6 shadow-2xl">
+          <div
+            ref={holidayConflictDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="holiday-conflict-dialog-title"
+            tabIndex={-1}
+            className="w-full max-w-lg rounded-2xl border border-red-500/30 bg-[#0b0b0d] p-6 shadow-2xl"
+          >
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-red-400">Closure Conflict</p>
-            <h3 className="mt-3 text-2xl font-bold text-white">Warning</h3>
+            <h3 id="holiday-conflict-dialog-title" className="mt-3 text-2xl font-bold text-white">Warning</h3>
             <p className="mt-4 text-sm leading-6 text-zinc-300">
               There are {holidayConflict.appointmentCount} active appointments scheduled on this date.
               Proceeding will automatically CANCEL them and notify clients.
@@ -1602,8 +1646,15 @@ function SettingsPage() {
 
       {holidayDeleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl border border-zinc-800 bg-[#0c0c0e] p-6 shadow-2xl">
-            <h3 className="text-xl font-bold text-white">Re-open Salon?</h3>
+          <div
+            ref={holidayDeleteDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="holiday-delete-dialog-title"
+            tabIndex={-1}
+            className="w-full max-w-md rounded-xl border border-zinc-800 bg-[#0c0c0e] p-6 shadow-2xl"
+          >
+            <h3 id="holiday-delete-dialog-title" className="text-xl font-bold text-white">Re-open Salon?</h3>
             <p className="mt-3 text-sm leading-6 text-zinc-400">
               Are you sure you want to re-open the salon on this date? Clients will be able to book slots.
             </p>

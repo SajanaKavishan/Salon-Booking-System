@@ -85,7 +85,7 @@ const markAsRead = async (req, res) => {
     const message = await Message.findByIdAndUpdate(
       req.params.id,
       { isRead: true },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!message) {

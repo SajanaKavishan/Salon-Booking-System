@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import axios from 'axios';
+import { apiClient as axios } from '../utils/apiConfig';
 import API_BASE_URL from '../utils/apiConfig';
 
 export const WEEKLY_OPENING_HOURS = [

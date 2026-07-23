@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
+import { apiClient as axios } from '../../utils/apiConfig';
 import { AlertTriangle, Check, Globe, Loader2, Star, Trash2, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 import API_BASE_URL from '../../utils/apiConfig';
+import { useModalFocus } from '../../hooks/useModalFocus';
+import { storage } from '../../utils/storage';
 
 const formatDateTime = (dateValue) => {
   if (!dateValue) return 'Date unavailable';
@@ -63,10 +65,18 @@ function ReviewManagement() {
   const [updatingReviewId, setUpdatingReviewId] = useState(null);
   const [deletingReviewId, setDeletingReviewId] = useState(null);
   const [reviewPendingDelete, setReviewPendingDelete] = useState(null);
+  const closeDeleteDialog = useCallback(() => {
+    if (!deletingReviewId) setReviewPendingDelete(null);
+  }, [deletingReviewId]);
+  const deleteDialogRef = useModalFocus({
+    isOpen: Boolean(reviewPendingDelete),
+    onClose: closeDeleteDialog,
+    canClose: !deletingReviewId,
+  });
 
   const authConfig = useMemo(() => {
-    const token = localStorage.getItem('token');
-    return token ? { headers: { Authorization: `Bearer ${token}` } } : null;
+    const token = storage.get('token');
+    return token ? {} : null;
   }, []);
 
   const fetchReviews = useCallback(async (signal) => {
@@ -370,11 +380,11 @@ function ReviewManagement() {
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm"
           role="presentation"
-          onClick={() => {
-            if (!deletingReviewId) setReviewPendingDelete(null);
-          }}
+          onClick={closeDeleteDialog}
         >
           <div
+            ref={deleteDialogRef}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby="delete-review-title"
@@ -398,7 +408,7 @@ function ReviewManagement() {
 
               <button
                 type="button"
-                onClick={() => setReviewPendingDelete(null)}
+                onClick={closeDeleteDialog}
                 disabled={Boolean(deletingReviewId)}
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-zinc-500 transition hover:bg-white/5 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
                 aria-label="Cancel delete review"
@@ -410,7 +420,7 @@ function ReviewManagement() {
             <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <button
                 type="button"
-                onClick={() => setReviewPendingDelete(null)}
+                onClick={closeDeleteDialog}
                 disabled={Boolean(deletingReviewId)}
                 className="inline-flex min-h-11 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900 px-4 text-sm font-semibold text-zinc-200 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
               >

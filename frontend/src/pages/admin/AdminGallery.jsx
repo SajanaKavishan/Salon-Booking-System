@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import axios from 'axios';
+import { apiClient as axios } from '../../utils/apiConfig';
 import { AlertTriangle, ImagePlus, Trash2, Upload, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { GoldButton } from '../../components/admin/SystemUI';
@@ -59,12 +59,7 @@ function AdminGallery() {
   const isDeletingRef = useRef(false);
 
   const getAuthConfig = () => {
-    const token = localStorage.getItem('token');
-    return {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    };
+    return {};
   };
 
   useEffect(() => {

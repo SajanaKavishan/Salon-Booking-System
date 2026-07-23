@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
+import { apiClient as axios } from '../../utils/apiConfig';
 import { motion } from 'framer-motion';
 import API_BASE_URL from '../../utils/apiConfig';
+import { storage } from '../../utils/storage';
 
 const HERO_IMAGE_URL = '/heroBg.jpg';
 const FALLBACK_AVAILABILITY_MESSAGE = 'Ready to elevate your aesthetic? Explore our master stylists and reserve your luxury grooming experience today.';
@@ -27,7 +28,7 @@ function DashboardHeader({ firstName, nextAppointment, formatDate, onBook }) {
     let isMounted = true;
 
     const fetchAvailabilityMessage = async () => {
-      const token = localStorage.getItem('token');
+      const token = storage.get('token');
 
       if (!token) {
         if (isMounted) setIsAvailabilityLoading(false);
@@ -35,11 +36,7 @@ function DashboardHeader({ firstName, nextAppointment, formatDate, onBook }) {
       }
 
       try {
-        const response = await axios.get(`${API_BASE_URL}/api/users/dashboard-banner`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const response = await axios.get(`${API_BASE_URL}/api/users/dashboard-banner`);
 
         if (!isMounted) return;
 

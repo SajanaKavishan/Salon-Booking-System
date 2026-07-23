@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
+import { safeGetStorageItem, safeSetStorageItem } from '../../utils/storage';
 
 function ThemeToggle() {
   const [isDarkMode, setIsDarkMode] = useState(() => {
-    const savedTheme = localStorage.getItem('theme');
+    const savedTheme = safeGetStorageItem('theme');
     if (savedTheme === 'dark') return true;
     if (savedTheme === 'light') return false;
     return window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -16,7 +17,7 @@ function ThemeToggle() {
   // This effect listens for a custom 'themeChange' event, which allows other components to synchronize their theme state when the theme is toggled. When the event is triggered, it checks the current theme in localStorage and updates the isDarkMode state accordingly. This way, if the theme is changed in one component, all components that listen for this event will update their theme state to match.
   useEffect(() => {
     const syncTheme = () => {
-      const currentTheme = localStorage.getItem('theme');
+      const currentTheme = safeGetStorageItem('theme');
       setIsDarkMode(currentTheme === 'dark');
     };
 
@@ -29,7 +30,7 @@ function ThemeToggle() {
   const toggleTheme = () => {
     const newTheme = !isDarkMode;
     setIsDarkMode(newTheme);
-    localStorage.setItem('theme', newTheme ? 'dark' : 'light');
+    safeSetStorageItem('theme', newTheme ? 'dark' : 'light');
     
     // After toggling the theme, we dispatch a custom 'themeChange' event to notify other components that the theme has changed. This allows for synchronization of the theme state across different components that may also be listening for this event, ensuring a consistent user experience throughout the app when the theme is toggled.
     window.dispatchEvent(new Event('themeChange'));
@@ -45,7 +46,7 @@ function ThemeToggle() {
       }`}
     >
       <span
-        className={`absolute text-[10px] font-extrabold tracking-wider transition-opacity duration-300 w-full text-center ${
+        className={`absolute text-xs font-extrabold tracking-wider transition-opacity duration-300 w-full text-center ${
           isDarkMode ? 'pr-8 text-white' : 'pl-8 text-black'
         }`}
       >

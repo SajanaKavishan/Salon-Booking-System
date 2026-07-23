@@ -5,9 +5,19 @@ const Service = require('../models/Service'); // Import the Service model to int
 const Staff = require('../models/Staff'); // Import the Staff model to interact with the staff collection
 const User = require('../models/User');
 const Holiday = require('../models/Holiday');
+const SalonSettings = require('../models/SalonSettings');
 const sendEmail = require('../utils/sendEmail'); // Import the sendEmail utility function to send email notifications to users about their appointment status updates
 const generateAvailableSlots = require('../utils/slotGenerator');
-const { isStaffOnApprovedLeave } = require('../utils/slotGenerator');
+const {
+    getAvailabilityWindow,
+    isStaffOnApprovedLeave,
+} = require('../utils/slotGenerator');
+const {
+    SALON_TIME_ZONE,
+    getSalonAppointmentDateTime,
+    getSalonDateTime,
+    getSalonDateTimeParts,
+} = require('../utils/salonTime');
 const { ensureSettingsDocument, defaultSettings } = require('./settingsController');
 
 // Utility function to escape HTML special characters in a string to prevent XSS attacks when rendering user-provided content in HTML. It replaces &, <, >, ", and ' with their corresponding HTML entities.
@@ -120,19 +130,168 @@ const minutesToTime = (mins) => {
     return `${hours < 10 ? '0' : ''}${hours}:${String(minutes).padStart(2, '0')} ${modifier}`;
 };
 
-// Utility function to get the local date key in the format "YYYY-MM-DD" for a given date or the current date if no date is provided. This is used for consistent date comparisons and storage in the database.
-const getLocalDateKey = (date = new Date()) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-};
+// Use the salon's timezone instead of the deployment server's local timezone.
+const getLocalDateKey = () => getSalonDateTimeParts().dateKey;
 
 // Utility function to create a custom error object for appointment-related errors. It takes a message and an optional status code (defaulting to 400) and returns an Error object with the specified message and status code.
 const createAppointmentError = (message, statusCode = 400) => {
     const error = new Error(message);
     error.statusCode = statusCode;
     return error;
+};
+
+const CANCELLED_BY_SALON_STATUS = 'CANCELLED_BY_SALON';
+const DEFAULT_GRACE_PERIOD_MINUTES = 15;
+const SALON_SCHEDULE_LOCK_ID = 'schedule:salon';
+const getStaffScheduleLockId = (staffId) => `schedule:staff:${String(staffId)}`;
+
+const loadAppointmentSettings = async () => {
+    try {
+        return await ensureSettingsDocument();
+    } catch (error) {
+        console.warn('Salon settings could not be loaded. Using safe appointment defaults:', error.message);
+        return defaultSettings;
+    }
+};
+
+const getGracePeriodMinutes = (settings) => {
+    const configuredGracePeriod = Number(settings?.gracePeriod);
+
+    return Number.isInteger(configuredGracePeriod)
+        && configuredGracePeriod >= 0
+        && configuredGracePeriod <= 120
+        ? configuredGracePeriod
+        : DEFAULT_GRACE_PERIOD_MINUTES;
+};
+
+const VALID_APPOINTMENT_STATUSES = [
+    'pending',
+    'confirmed',
+    'cancelled',
+    CANCELLED_BY_SALON_STATUS,
+    'completed',
+    'no-show',
+];
+const APPOINTMENT_STATUS_TRANSITIONS = Object.freeze({
+    pending: new Set(['confirmed', 'cancelled', CANCELLED_BY_SALON_STATUS]),
+    confirmed: new Set(['completed', 'cancelled', CANCELLED_BY_SALON_STATUS, 'no-show']),
+    completed: new Set(),
+    cancelled: new Set(),
+    [CANCELLED_BY_SALON_STATUS]: new Set(),
+    'no-show': new Set(),
+    // Historical rejected appointments remain terminal but cannot be newly created.
+    rejected: new Set(),
+});
+
+const resolveStatusTransition = ({
+    currentStatus,
+    requestedStatus,
+    overrideStatusTransition = false,
+    overrideReason,
+    userRole,
+}) => {
+    const normalizedCurrentStatus = Appointment.normalizeStatus(currentStatus);
+    const normalizedRequestedStatus = Appointment.normalizeStatus(requestedStatus);
+
+    if (!VALID_APPOINTMENT_STATUSES.includes(normalizedRequestedStatus)) {
+        throw createAppointmentError(
+            `Invalid status. Must be one of: ${VALID_APPOINTMENT_STATUSES.join(', ')}`,
+            400
+        );
+    }
+
+    const allowedTransitions = APPOINTMENT_STATUS_TRANSITIONS[normalizedCurrentStatus] || new Set();
+    if (allowedTransitions.has(normalizedRequestedStatus)) {
+        return {
+            currentStatus: normalizedCurrentStatus,
+            requestedStatus: normalizedRequestedStatus,
+            isOverride: false,
+            overrideReason: '',
+        };
+    }
+
+    if (overrideStatusTransition !== true) {
+        throw createAppointmentError(
+            `Status transition from ${normalizedCurrentStatus} to ${normalizedRequestedStatus} is not allowed.`,
+            400
+        );
+    }
+
+    if (userRole !== 'admin') {
+        throw createAppointmentError('Only administrators can override appointment status transitions.', 403);
+    }
+
+    const normalizedOverrideReason = typeof overrideReason === 'string' ? overrideReason.trim() : '';
+    if (!normalizedOverrideReason) {
+        throw createAppointmentError('A non-empty overrideReason is required to override a status transition.', 400);
+    }
+
+    if (normalizedOverrideReason.length > 300) {
+        throw createAppointmentError('overrideReason cannot exceed 300 characters.', 400);
+    }
+
+    return {
+        currentStatus: normalizedCurrentStatus,
+        requestedStatus: normalizedRequestedStatus,
+        isOverride: true,
+        overrideReason: normalizedOverrideReason,
+    };
+};
+
+const isMissingOrAnyStylist = (stylistId) => {
+    if (stylistId == null) return true;
+    const normalizedStylistId = String(stylistId).trim().toLowerCase();
+    return !normalizedStylistId
+        || normalizedStylistId === 'any'
+        || normalizedStylistId === 'any available stylist'
+        || normalizedStylistId === 'any stylist';
+};
+
+const ADMIN_OVERRIDE_KEYS = [
+    'ignoreLeadTimeBuffer',
+    'ignoreStaffLeave',
+    'ignoreWorkingHours',
+];
+
+const resolveAdminOverrides = (requestBody = {}, userRole) => {
+    if (requestBody.bypassBuffer === true) {
+        throw createAppointmentError(
+            'bypassBuffer is no longer supported. Use the granular admin override flags.',
+            400
+        );
+    }
+
+    const overrides = ADMIN_OVERRIDE_KEYS.reduce((resolved, key) => ({
+        ...resolved,
+        [key]: requestBody[key] === true,
+    }), {});
+    const hasAnyOverride = ADMIN_OVERRIDE_KEYS.some((key) => overrides[key]);
+
+    if (hasAnyOverride && userRole !== 'admin') {
+        throw createAppointmentError('Only administrators can apply schedule overrides.', 403);
+    }
+
+    const requiresReason = overrides.ignoreStaffLeave || overrides.ignoreWorkingHours;
+    const overrideReason = typeof requestBody.overrideReason === 'string'
+        ? requestBody.overrideReason.trim()
+        : '';
+
+    if (requiresReason && overrideReason.length < 5) {
+        throw createAppointmentError(
+            'An overrideReason of at least 5 characters is required for staff leave or working hours overrides.',
+            400
+        );
+    }
+
+    if (overrideReason.length > 300) {
+        throw createAppointmentError('overrideReason cannot exceed 300 characters.', 400);
+    }
+
+    return {
+        ...overrides,
+        hasAnyOverride,
+        overrideReason,
+    };
 };
 
 // Utility function to parse and validate a booking date value. It extracts the date key in "YYYY-MM-DD" format and creates a Date object for the appointment. If the date is invalid, it throws an error.
@@ -152,9 +311,9 @@ const parseBookingDateKey = (dateValue) => {
 
 // Utility function to assert that a given appointment date and start time are not in the past. It compares the provided date key and start minutes against the current local date and time, throwing an error if the appointment is in the past.
 const assertNotPastDateTime = (dateKey, startMins) => {
-    const todayKey = getLocalDateKey();
-    const now = new Date();
-    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    const salonNow = getSalonDateTimeParts();
+    const todayKey = salonNow.dateKey;
+    const currentMinutes = salonNow.minutes;
 
     if (dateKey < todayKey || (dateKey === todayKey && startMins <= currentMinutes)) {
         throw createAppointmentError('Cannot book appointments for past dates or times');
@@ -177,8 +336,7 @@ const getAppointmentScheduleStart = (appointment) => {
         throw createAppointmentError('Appointment date and start time are required to update this status.');
     }
 
-    const startMinutes = timeToMinutes(startTime);
-    return new Date(year, month - 1, day, Math.floor(startMinutes / 60), startMinutes % 60, 0, 0);
+    return getSalonAppointmentDateTime(dateKey, startTime).toJSDate();
 };
 
 // Utility function to calculate the end datetime of an appointment based on its date and end time. It returns a Date object representing the exact end time of the appointment, or null if the date or end time is invalid.
@@ -198,10 +356,46 @@ const getAppointmentScheduleEnd = (appointment) => {
     }
 
     try {
-        const endMinutes = timeToMinutes(endTime);
-        return new Date(year, month - 1, day, Math.floor(endMinutes / 60), endMinutes % 60, 0, 0);
+        return getSalonAppointmentDateTime(dateKey, endTime).toJSDate();
     } catch {
         return null;
+    }
+};
+
+const assertAppointmentStatusTiming = ({
+    appointment,
+    requestedStatus,
+    gracePeriodMinutes,
+    now = getSalonDateTime(),
+}) => {
+    if (!['completed', 'no-show'].includes(requestedStatus)) return;
+
+    const appointmentStart = getSalonDateTime(getAppointmentScheduleStart(appointment));
+
+    if (requestedStatus === 'no-show') {
+        const noShowThreshold = appointmentStart.plus({ minutes: gracePeriodMinutes });
+
+        if (now.toMillis() < noShowThreshold.toMillis()) {
+            throw createAppointmentError(
+                `Appointments can only be marked no-show after the ${gracePeriodMinutes}-minute grace period.`
+            );
+        }
+
+        return;
+    }
+
+    const appointmentEndValue = getAppointmentScheduleEnd(appointment);
+    if (!appointmentEndValue) {
+        throw createAppointmentError('Appointment date and end time are required to complete this appointment.');
+    }
+
+    const completionWindowStarts = getSalonDateTime(appointmentEndValue)
+        .minus({ minutes: gracePeriodMinutes });
+
+    if (now.toMillis() < completionWindowStarts.toMillis()) {
+        throw createAppointmentError(
+            `Appointments can only be completed from ${gracePeriodMinutes} minutes before the end time.`
+        );
     }
 };
 
@@ -233,6 +427,31 @@ const slotRangesMatch = (firstSlotRange, secondSlotRange) => (
     && firstSlotRange.end === secondSlotRange.end
 );
 
+const rangesConflictWithBuffer = (firstRange, secondRange, bufferMinutes = 0) => {
+    const normalizedBuffer = Math.max(0, Number(bufferMinutes) || 0);
+    return (
+        firstRange.start < secondRange.end + normalizedBuffer
+        && firstRange.end > secondRange.start - normalizedBuffer
+    );
+};
+
+const hasDownstreamScheduleConflict = ({
+    downstreamAppointments,
+    appointmentStartMinutes,
+    candidateAdjustedEndMinutes,
+    bufferMinutes,
+}) => downstreamAppointments.some((downstreamAppointment) => {
+    const [slotStartTime] = typeof downstreamAppointment.timeSlot === 'string'
+        ? downstreamAppointment.timeSlot.split(/\s+-\s+/)
+        : [];
+    const downstreamStart = Number.isFinite(downstreamAppointment.startMinutes)
+        ? downstreamAppointment.startMinutes
+        : timeToMinutes(downstreamAppointment.startTime || slotStartTime);
+
+    return downstreamStart > appointmentStartMinutes
+        && candidateAdjustedEndMinutes + bufferMinutes > downstreamStart;
+});
+
 // Utility function to find an overlapping appointment for a specific staff member on a given date and time range. It checks for existing appointments that conflict with the requested start and end times, considering both numeric minute fields and legacy time slot formats. It returns the overlapping appointment if found, or null if no overlap exists.
 const findOverlappingAppointmentForStaff = async ({ date, staffId, startMins, endMins, session }) => {
     const startDate = new Date(`${date}T00:00:00.000Z`);
@@ -240,7 +459,7 @@ const findOverlappingAppointmentForStaff = async ({ date, staffId, startMins, en
     endDate.setUTCDate(endDate.getUTCDate() + 1);
 
     const appointmentScope = {
-        status: { $nin: ['cancelled', 'canceled', 'rejected', 'Cancelled', 'Canceled', 'Rejected'] },
+        status: { $nin: ['cancelled', 'canceled', 'CANCELLED_BY_SALON', 'rejected', 'completed', 'no-show', 'Cancelled', 'Canceled', 'Cancelled by Salon', 'Rejected', 'Completed', 'No-Show'] },
         $or: [
             { date, stylist: staffId },
             { date, staffId },
@@ -251,29 +470,135 @@ const findOverlappingAppointmentForStaff = async ({ date, staffId, startMins, en
 
     const numericOverlap = await Appointment.findOne({
         ...appointmentScope,
+        adjustedEndTime: { $in: [null, ''] },
         startMinutes: { $lt: endMins },
         endMinutes: { $gt: startMins },
     }).select('_id').session(session || null).lean();
 
     if (numericOverlap) return numericOverlap;
 
+    const adjustedAppointments = await Appointment.find({
+        ...appointmentScope,
+        adjustedEndTime: { $exists: true, $nin: [null, ''] },
+    }).select('_id startMinutes startTime endTime adjustedEndTime timeSlot').session(session || null).lean();
+
+    const adjustedOverlap = adjustedAppointments.find((appointment) => {
+        const [slotStartTime] = typeof appointment.timeSlot === 'string'
+            ? appointment.timeSlot.split(/\s+-\s+/)
+            : [];
+        const existingStart = Number.isFinite(appointment.startMinutes)
+            ? appointment.startMinutes
+            : timeToMinutes(appointment.startTime || slotStartTime);
+        const effectiveEndTime = appointment.adjustedEndTime || appointment.endTime;
+        const existingEnd = timeToMinutes(effectiveEndTime);
+
+        return startMins < existingEnd && endMins > existingStart;
+    });
+
+    if (adjustedOverlap) return adjustedOverlap;
+
     // Appointments created before numeric interval fields were introduced still
     // participate in conflict detection until a data migration backfills them.
     const appointments = await Appointment.find({
         ...appointmentScope,
+        adjustedEndTime: { $in: [null, ''] },
         $and: [
             { $or: [{ startMinutes: { $exists: false } }, { endMinutes: { $exists: false } }] },
         ],
-    }).select('startTime endTime timeSlot status').session(session || null).lean();
+    }).select('startTime endTime adjustedEndTime timeSlot status').session(session || null).lean();
 
     return appointments.find((appointment) => {
         const [slotStartTime, slotEndTime] = typeof appointment.timeSlot === 'string'
             ? appointment.timeSlot.split(/\s+-\s+/)
             : [];
         const existingStart = timeToMinutes(appointment.startTime || slotStartTime);
-        const existingEnd = timeToMinutes(appointment.endTime || slotEndTime);
+        const effectiveEndTime = appointment.adjustedEndTime || appointment.endTime;
+        const existingEnd = timeToMinutes(effectiveEndTime || slotEndTime);
 
         return startMins < existingEnd && endMins > existingStart;
+    });
+};
+
+// Buffer conflicts are checked separately from exact overlaps so an admin can
+// waive only the configured rest gap without ever authorizing double-booking.
+const findBufferConflictForStaff = async ({
+    date,
+    staffId,
+    startMins,
+    endMins,
+    bufferMinutes,
+    session,
+}) => {
+    const normalizedBuffer = Number(bufferMinutes);
+    if (!Number.isFinite(normalizedBuffer) || normalizedBuffer <= 0) return null;
+
+    const startDate = new Date(`${date}T00:00:00.000Z`);
+    const endDate = new Date(startDate);
+    endDate.setUTCDate(endDate.getUTCDate() + 1);
+    const appointmentScope = {
+        status: { $nin: ['cancelled', 'canceled', 'CANCELLED_BY_SALON', 'rejected', 'completed', 'no-show', 'Cancelled', 'Canceled', 'Cancelled by Salon', 'Rejected', 'Completed', 'No-Show'] },
+        $or: [
+            { date, stylist: staffId },
+            { date, staffId },
+            { bookingDate: { $gte: startDate, $lt: endDate }, stylist: staffId },
+            { bookingDate: { $gte: startDate, $lt: endDate }, staffId },
+        ],
+    };
+
+    const numericConflict = await Appointment.findOne({
+        ...appointmentScope,
+        adjustedEndTime: { $in: [null, ''] },
+        startMinutes: { $lt: endMins + normalizedBuffer },
+        endMinutes: { $gt: startMins - normalizedBuffer },
+    }).select('_id').session(session || null).lean();
+
+    if (numericConflict) return numericConflict;
+
+    const adjustedAppointments = await Appointment.find({
+        ...appointmentScope,
+        adjustedEndTime: { $exists: true, $nin: [null, ''] },
+    }).select('_id startMinutes startTime endTime adjustedEndTime timeSlot').session(session || null).lean();
+
+    const adjustedConflict = adjustedAppointments.find((appointment) => {
+        const [slotStartTime] = typeof appointment.timeSlot === 'string'
+            ? appointment.timeSlot.split(/\s+-\s+/)
+            : [];
+        const existingStart = Number.isFinite(appointment.startMinutes)
+            ? appointment.startMinutes
+            : timeToMinutes(appointment.startTime || slotStartTime);
+        const effectiveEndTime = appointment.adjustedEndTime || appointment.endTime;
+        const existingEnd = timeToMinutes(effectiveEndTime);
+
+        return rangesConflictWithBuffer(
+            { start: startMins, end: endMins },
+            { start: existingStart, end: existingEnd },
+            normalizedBuffer
+        );
+    });
+
+    if (adjustedConflict) return adjustedConflict;
+
+    const legacyAppointments = await Appointment.find({
+        ...appointmentScope,
+        adjustedEndTime: { $in: [null, ''] },
+        $and: [
+            { $or: [{ startMinutes: { $exists: false } }, { endMinutes: { $exists: false } }] },
+        ],
+    }).select('_id startTime endTime adjustedEndTime timeSlot').session(session || null).lean();
+
+    return legacyAppointments.find((appointment) => {
+        const [slotStartTime, slotEndTime] = typeof appointment.timeSlot === 'string'
+            ? appointment.timeSlot.split(/\s+-\s+/)
+            : [];
+        const existingStart = timeToMinutes(appointment.startTime || slotStartTime);
+        const effectiveEndTime = appointment.adjustedEndTime || appointment.endTime;
+        const existingEnd = timeToMinutes(effectiveEndTime || slotEndTime);
+
+        return rangesConflictWithBuffer(
+            { start: startMins, end: endMins },
+            { start: existingStart, end: existingEnd },
+            normalizedBuffer
+        );
     });
 };
 
@@ -301,16 +626,32 @@ const assertNoRangeOverlap = (ranges, message) => {
 };
 
 // Utility function to validate that a set of shifted appointment plans for a stylist on a specific date do not violate salon or stylist operating hours, holidays, off days, approved leaves, or overlap with existing appointments. It throws an error if any validation fails.
-const validateShiftPlanBoundaries = async ({ stylistId, dateKey, bookingDate, shiftedPlans }) => {
+const validateShiftPlanBoundaries = async ({
+    stylistId,
+    dateKey,
+    bookingDate,
+    shiftedPlans,
+    session = null,
+}) => {
     if (shiftedPlans.length === 0) return;
 
     const nextDate = new Date(bookingDate);
     nextDate.setUTCDate(nextDate.getUTCDate() + 1);
 
-    const [settings, staff, holiday, outsideAppointments] = await Promise.all([
-        ensureSettingsDocument(),
-        Staff.findById(stylistId).select('name userId workingHours offDays').lean(),
-        Holiday.findOne({ date: dateKey, isActive: { $ne: false } }).select('name isFullDay hours').lean(),
+    const settingsQuery = session
+        ? SalonSettings.findOne({ key: 'global' }).session(session).lean()
+        : ensureSettingsDocument();
+
+    const [storedSettings, staff, holiday, outsideAppointments] = await Promise.all([
+        settingsQuery,
+        Staff.findById(stylistId)
+            .select('name userId workingHours offDays')
+            .session(session)
+            .lean(),
+        Holiday.findOne({ date: dateKey, isActive: { $ne: false } })
+            .select('name isFullDay hours')
+            .session(session)
+            .lean(),
         Appointment.find({
             _id: { $nin: shiftedPlans.map((plan) => plan.appointment._id) },
             $or: [
@@ -320,8 +661,12 @@ const validateShiftPlanBoundaries = async ({ stylistId, dateKey, bookingDate, sh
                 { bookingDate: { $gte: bookingDate, $lt: nextDate }, staffId: stylistId },
             ],
             status: { $in: ['pending', 'confirmed'] },
-        }).select('startTime endTime timeSlot').lean(),
+        })
+            .select('startTime endTime adjustedEndTime timeSlot')
+            .session(session)
+            .lean(),
     ]);
+    const settings = storedSettings || defaultSettings;
 
     if (!staff) {
         throw createAppointmentError('Selected stylist was not found.', 404);
@@ -359,7 +704,7 @@ const validateShiftPlanBoundaries = async ({ stylistId, dateKey, bookingDate, sh
         throw createAppointmentError('Cannot shift appointments because this stylist is off on this date.');
     }
 
-    if (await isStaffOnApprovedLeave(staff, bookingDate, nextDate)) {
+    if (await isStaffOnApprovedLeave(staff, bookingDate, nextDate, { session })) {
         throw createAppointmentError('Cannot shift appointments because this stylist is on approved leave for this date.');
     }
 
@@ -391,10 +736,11 @@ const validateShiftPlanBoundaries = async ({ stylistId, dateKey, bookingDate, sh
         const [slotStartTime, slotEndTime] = typeof appointment.timeSlot === 'string'
             ? appointment.timeSlot.split(/\s+-\s+/)
             : [];
+        const effectiveEndTime = appointment.adjustedEndTime || appointment.endTime;
 
         return {
             start: timeToMinutes(appointment.startTime || slotStartTime),
-            end: timeToMinutes(appointment.endTime || slotEndTime),
+            end: timeToMinutes(effectiveEndTime || slotEndTime),
         };
     });
 
@@ -436,6 +782,8 @@ const getStaffAvailability = async (req, res) => {
 
         return res.status(200).json({
             success: true,
+            operationalDate: getLocalDateKey(),
+            timeZone: SALON_TIME_ZONE,
             availableSlots
         });
     } catch (error) {
@@ -454,6 +802,14 @@ const getStaffAvailability = async (req, res) => {
     }
 };
 
+// @desc    Get the salon-anchored operational date used by booking clients
+// @route   GET /api/appointments/availability/meta
+// @access  Public
+const getAvailabilityMeta = (_req, res) => res.status(200).json({
+    operationalDate: getLocalDateKey(),
+    timeZone: SALON_TIME_ZONE,
+});
+
 // @desc    Create new appointment
 // @route   POST /api/appointments
 // @access  Private/Customer or Admin
@@ -464,7 +820,7 @@ const createAppointment = async (req, res) => {
                 message: 'Staff accounts cannot create customer bookings directly.'
             });
         }
-        // Extract relevant fields from the request body, supporting both legacy and current field names for stylist, date, and time slot. It also handles optional bypassing of buffer checks for admin users.
+        // Extract relevant fields from the request body, supporting both legacy and current field names.
         const {
             staffId,
             stylist: legacyStylist,
@@ -475,11 +831,17 @@ const createAppointment = async (req, res) => {
             services,
             customerMobile,
             customerId,
-            bypassBuffer = false,
         } = req.body;
         const stylist = staffId || legacyStylist;
         const dateValue = bookingDate || legacyDate;
-        const isAdminBypass = bypassBuffer === true && req.user?.role === 'admin';
+
+        if (isMissingOrAnyStylist(stylist)) {
+            return res.status(400).json({
+                message: 'A specific stylist must be selected for every booking.'
+            });
+        }
+
+        const adminOverrides = resolveAdminOverrides(req.body, req.user?.role);
         const [slotStartTime] = typeof timeSlot === 'string'
             ? timeSlot.split(/\s+-\s+/)
             : [];
@@ -503,7 +865,7 @@ const createAppointment = async (req, res) => {
         }
 
         const requestedSlotRange = timeSlot ? parseSlotRange(timeSlot) : null;
-        if (!isAdminBypass && !requestedSlotRange) {
+        if (!requestedSlotRange) {
             return res.status(400).json({ message: 'Please select an available appointment time slot.' });
         }
 
@@ -544,7 +906,7 @@ const createAppointment = async (req, res) => {
         }
 
         const dayOfWeek = appointmentDate.getUTCDay();
-        if (!isAdminBypass && !settings.weekendBookings && (dayOfWeek === 0 || dayOfWeek === 6)) {
+        if (!adminOverrides.ignoreWorkingHours && !settings.weekendBookings && (dayOfWeek === 0 || dayOfWeek === 6)) {
             return res.status(400).json({ message: 'Weekend bookings are currently unavailable.' });
         }
 
@@ -553,7 +915,10 @@ const createAppointment = async (req, res) => {
             return res.status(400).json({ message: 'One or more selected services are invalid.' });
         }
 
-        const selectedServices = await Service.find({ _id: { $in: requestedServiceIds } });
+        const selectedServices = await Service.find({
+            _id: { $in: requestedServiceIds },
+            isActive: { $ne: false },
+        });
         if (selectedServices.length !== requestedServiceIds.length) {
             return res.status(400).json({ message: 'One or more selected services are invalid.' });
         }
@@ -581,6 +946,9 @@ const createAppointment = async (req, res) => {
 
         const formattedStartTime = minutesToTime(startMins);
         const formattedEndTime = minutesToTime(endMins);
+        const configuredBufferMinutes = Number.isFinite(Number(settings.defaultBufferTime))
+            ? Number(settings.defaultBufferTime)
+            : Number(defaultSettings.defaultBufferTime);
 
         if (holiday?.isFullDay === false) {
             const closedStart = timeToMinutes(holiday.hours?.start);
@@ -593,92 +961,54 @@ const createAppointment = async (req, res) => {
             }
         }
 
-        let stylistId = stylist;
-        if (!stylistId || stylistId === 'Any Available Stylist') {
-            const dayOfWeek = appointmentDate.getUTCDay();
-            const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-            const dayName = days[dayOfWeek];
-
-            const staffList = await Staff.find({});
-            const workingStaff = staffList.filter(s => {
-                const offDaysList = Array.isArray(s.offDays)
-                    ? s.offDays
-                    : typeof s.offDays === 'string'
-                        ? s.offDays.split(',').map(d => d.trim())
-                        : [];
-                return !offDaysList.map(d => d.toLowerCase()).includes(dayName.toLowerCase());
-            });
-
-            let assignedStaff = null;
-            for (let s of workingStaff) {
-                if (await isStaffOnApprovedLeave(s, appointmentDate, nextAppointmentDate)) {
-                    continue;
-                }
-
-                if (isAdminBypass) {
-                    assignedStaff = s;
-                    break;
-                }
-
-                const existingAppointments = await Appointment.find({
-                    date: date,
-                    stylist: s._id,
-                    status: { $nin: ['cancelled', 'rejected', 'Rejected', 'Cancelled'] }
-                });
-
-                let hasOverlap = false;
-                for (let appt of existingAppointments) {
-                    const existingStart = timeToMinutes(appt.startTime);
-                    const existingEnd = timeToMinutes(appt.endTime);
-                    if ((startMins < existingEnd) && (endMins > existingStart)) {
-                        hasOverlap = true;
-                        break;
-                    }
-                }
-
-                if (!hasOverlap) {
-                    assignedStaff = s;
-                    break;
-                }
-            }
-
-            if (!assignedStaff) {
-                return res.status(400).json({ message: "No stylists are available at the selected time." });
-            }
-
-            stylistId = assignedStaff._id;
-        }
+        const stylistId = String(stylist).trim();
 
         if (!stylistId || !mongoose.isValidObjectId(stylistId)) {
             return res.status(400).json({ message: 'Please select a valid stylist.' });
         }
 
-        const finalStylist = await Staff.findById(stylistId);
+        const finalStylist = await Staff.findOne({
+            _id: stylistId,
+            isActive: { $ne: false },
+        });
         if (!finalStylist) {
             return res.status(400).json({ message: 'Selected stylist was not found.' });
         }
 
         const stylistName = finalStylist.name;
 
-        if (!isAdminBypass && await isStaffOnApprovedLeave(finalStylist, appointmentDate, nextAppointmentDate)) {
+        const existingExactOverlap = await findOverlappingAppointmentForStaff({
+            date,
+            staffId: stylistId,
+            startMins,
+            endMins,
+            session: null,
+        });
+        if (existingExactOverlap) {
+            return res.status(409).json({ message: 'This time slot overlaps with an existing booking' });
+        }
+
+        if (!adminOverrides.ignoreStaffLeave && await isStaffOnApprovedLeave(finalStylist, appointmentDate, nextAppointmentDate)) {
             return res.status(400).json({ message: 'This stylist is on approved leave for the selected date.' });
         }
 
-        if (!isAdminBypass) {
-            const generatedSlots = await generateAvailableSlots({
-                staffId: stylistId,
-                date,
-                serviceDuration: totalDuration,
-            });
-            const isGeneratedSlotAvailable = generatedSlots.some(({ slot }) => (
-                slotRangesMatch(parseSlotRange(slot), serverSlotRange)
-            ));
+        const generatedSlots = await generateAvailableSlots({
+            staffId: stylistId,
+            date,
+            serviceDuration: totalDuration,
+            leadTimeGraceMinutes: 5,
+            ignoreBuffer: adminOverrides.ignoreLeadTimeBuffer,
+            ignoreStaffLeave: adminOverrides.ignoreStaffLeave,
+            ignoreWorkingHours: adminOverrides.ignoreWorkingHours,
+        });
+        const isGeneratedSlotAvailable = generatedSlots.some(({ slot }) => (
+            slotRangesMatch(parseSlotRange(slot), serverSlotRange)
+        ));
 
-            if (!isGeneratedSlotAvailable) {
-                return res.status(400).json({
-                    message: 'Selected time slot is no longer available. Please choose another slot.'
-                });
-            }
+        if (!isGeneratedSlotAvailable) {
+            return res.status(400).json({
+                message: 'Selected time slot is no longer available under the active scheduling rules.'
+            });
         }
 
         const session = await mongoose.startSession();
@@ -686,14 +1016,133 @@ const createAppointment = async (req, res) => {
 
         try {
             await session.withTransaction(async () => {
-                // MongoDB transactions do not predicate-lock an empty overlap query.
-                // Updating this deterministic staff/day document makes concurrent
-                // booking transactions contend on the same document and serialize.
+                // Schedule-scope locks serialize booking against salon/staff schedule
+                // mutations. Acquiring them before the date locks also establishes a
+                // transaction snapshot that includes every schedule update committed
+                // before this booking entered the lock boundary.
+                await AppointmentScheduleLock.findOneAndUpdate(
+                    { _id: SALON_SCHEDULE_LOCK_ID },
+                    { $inc: { revision: 1 } },
+                    { upsert: true, returnDocument: 'after', session, setDefaultsOnInsert: true }
+                );
+
+                await AppointmentScheduleLock.findOneAndUpdate(
+                    { _id: getStaffScheduleLockId(stylistId) },
+                    { $inc: { revision: 1 } },
+                    { upsert: true, returnDocument: 'after', session, setDefaultsOnInsert: true }
+                );
+
+                // MongoDB transactions do not predicate-lock empty date queries.
+                // These deterministic date locks serialize closure, leave, and
+                // appointment checks for the requested staff/date.
+                await AppointmentScheduleLock.findOneAndUpdate(
+                    { _id: `holiday:${date}` },
+                    { $inc: { revision: 1 } },
+                    { upsert: true, returnDocument: 'after', session, setDefaultsOnInsert: true }
+                );
+
                 await AppointmentScheduleLock.findOneAndUpdate(
                     { _id: `${stylistId}:${date}` },
                     { $inc: { revision: 1 } },
-                    { upsert: true, new: true, session, setDefaultsOnInsert: true }
+                    { upsert: true, returnDocument: 'after', session, setDefaultsOnInsert: true }
                 );
+
+                const [transactionalSettingsDocument, transactionalStaff] = await Promise.all([
+                    SalonSettings.findOne({ key: 'global' })
+                        .select('openingHours weekendBookings defaultBufferTime')
+                        .session(session)
+                        .lean(),
+                    Staff.findOne({
+                        _id: stylistId,
+                        isActive: { $ne: false },
+                    })
+                        .select('name userId workingHours offDays')
+                        .session(session)
+                        .lean(),
+                ]);
+
+                if (!transactionalStaff) {
+                    throw createAppointmentError('Selected stylist is no longer available.');
+                }
+
+                const transactionalSettings = transactionalSettingsDocument || defaultSettings;
+                const transactionalBufferValue = Number(transactionalSettings.defaultBufferTime);
+                const transactionalBufferMinutes = Number.isFinite(transactionalBufferValue)
+                    ? Math.max(0, transactionalBufferValue)
+                    : Number(defaultSettings.defaultBufferTime);
+
+                if (!adminOverrides.ignoreWorkingHours) {
+                    const requestedDayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek];
+                    const transactionalOffDays = Array.isArray(transactionalStaff.offDays)
+                        ? transactionalStaff.offDays
+                        : [];
+                    const isTransactionalOffDay = transactionalOffDays.some(
+                        (offDay) => String(offDay).trim().toLowerCase() === requestedDayName.toLowerCase()
+                    );
+
+                    if (isTransactionalOffDay) {
+                        throw createAppointmentError('Selected stylist is currently off on this date.');
+                    }
+
+                    if (!transactionalSettings.weekendBookings && (dayOfWeek === 0 || dayOfWeek === 6)) {
+                        throw createAppointmentError('Weekend bookings are currently unavailable.');
+                    }
+
+                    const transactionalSalonHours = transactionalSettings.openingHours?.[requestedDayName.toLowerCase()]
+                        || defaultSettings.openingHours[requestedDayName.toLowerCase()];
+                    const transactionalAvailabilityWindow = getAvailabilityWindow(
+                        transactionalStaff.workingHours,
+                        transactionalSalonHours
+                    );
+
+                    if (
+                        !transactionalAvailabilityWindow
+                        || startMins < transactionalAvailabilityWindow.start
+                        || endMins > transactionalAvailabilityWindow.end
+                    ) {
+                        throw createAppointmentError(
+                            'Selected time slot is outside the current salon or staff operating hours.'
+                        );
+                    }
+                }
+
+                if (!adminOverrides.ignoreStaffLeave) {
+                    const transactionalApprovedLeave = await isStaffOnApprovedLeave(
+                        transactionalStaff,
+                        appointmentDate,
+                        nextAppointmentDate,
+                        { session }
+                    );
+
+                    if (transactionalApprovedLeave) {
+                        throw createAppointmentError(
+                            'Staff member is on approved leave for this time slot.'
+                        );
+                    }
+                }
+
+                // Re-check closure state after acquiring the shared staff/day
+                // lock so a concurrent holiday transaction cannot be bypassed.
+                const transactionalHoliday = await Holiday.findOne({
+                    date,
+                    isActive: { $ne: false },
+                }).select('name isFullDay hours').session(session).lean();
+
+                if (transactionalHoliday && transactionalHoliday.isFullDay !== false) {
+                    throw createAppointmentError(
+                        `The salon is closed on this date for ${transactionalHoliday.name}. Please select another date.`
+                    );
+                }
+
+                if (transactionalHoliday?.isFullDay === false) {
+                    const closureStart = timeToMinutes(transactionalHoliday.hours?.start);
+                    const closureEnd = timeToMinutes(transactionalHoliday.hours?.end);
+                    if (startMins < closureEnd && endMins > closureStart) {
+                        throw createAppointmentError(
+                            `The salon is closed from ${transactionalHoliday.hours.start} to ${transactionalHoliday.hours.end} on this date for ${transactionalHoliday.name}. Please select another time.`
+                        );
+                    }
+                }
 
                 const overlappingAppointment = await findOverlappingAppointmentForStaff({
                     date,
@@ -708,6 +1157,24 @@ const createAppointment = async (req, res) => {
                         'This time slot overlaps with an existing booking',
                         409
                     );
+                }
+
+                if (!adminOverrides.ignoreLeadTimeBuffer) {
+                    const bufferConflict = await findBufferConflictForStaff({
+                        date,
+                        staffId: stylistId,
+                        startMins,
+                        endMins,
+                        bufferMinutes: transactionalBufferMinutes,
+                        session,
+                    });
+
+                    if (bufferConflict) {
+                        throw createAppointmentError(
+                            `This time slot violates the configured ${transactionalBufferMinutes}-minute buffer gap.`,
+                            409
+                        );
+                    }
                 }
 
                 appointment = new Appointment({
@@ -725,7 +1192,24 @@ const createAppointment = async (req, res) => {
                     bookingDate: appointmentDate,
                     timeSlot: `${formattedStartTime} - ${formattedEndTime}`,
                     stylist: stylistId,
-                    status: 'pending'
+                    status: 'pending',
+                    serviceSnapshot: selectedServices.map((service) => ({
+                        name: service.name,
+                        price: service.price,
+                        duration: service.duration,
+                    })),
+                    stylistSnapshot: {
+                        name: stylistName,
+                    },
+                    ...(adminOverrides.hasAnyOverride ? {
+                        adminOverride: {
+                            ignoreLeadTimeBuffer: adminOverrides.ignoreLeadTimeBuffer,
+                            ignoreStaffLeave: adminOverrides.ignoreStaffLeave,
+                            ignoreWorkingHours: adminOverrides.ignoreWorkingHours,
+                            reason: adminOverrides.overrideReason,
+                            authorizedBy: req.user._id,
+                        },
+                    } : {}),
                 });
 
                 await appointment.save({ session });
@@ -777,6 +1261,7 @@ const createAppointment = async (req, res) => {
 
         res.status(201).json({
             message: "Appointment created successfully!",
+            status: appointment.status,
             appointment: appointment
         });
 
@@ -818,14 +1303,26 @@ const getMyAppointments = async (req, res) => {
     }
 };
 
+const MAX_APPOINTMENT_LIST_LIMIT = 500;
+const getAppointmentListLimit = (requestedLimit) => {
+    const parsedLimit = Number.parseInt(requestedLimit, 10);
+    if (!Number.isInteger(parsedLimit) || parsedLimit <= 0) {
+        return MAX_APPOINTMENT_LIST_LIMIT;
+    }
+
+    return Math.min(parsedLimit, MAX_APPOINTMENT_LIST_LIMIT);
+};
+
 const getAllAppointments = async (req, res) => {
-    try {        // Find all appointments and populate the user field with the user's name and email for better readability. The services field is also populated to include the name, price, and duration of each service in the appointment. The appointments are sorted by creation date in descending order, so the most recent appointments will appear first in the response. This route is intended for admin users to view all appointments.
+    try {
+        const limit = getAppointmentListLimit(req.query?.limit);
         const appointments = await Appointment.find({})
             .populate('user', 'name email phone')
             .populate('services', 'name price')
             .populate('staffId', 'name')
             .populate('stylist', 'name')
-            .sort({ createdAt: -1 });
+            .sort({ createdAt: -1 })
+            .limit(limit);
         res.status(200).json(appointments);
     }catch (error) {
         console.error("Get All Appointments Error:", error);
@@ -846,21 +1343,16 @@ const getStaffAssignmentIdsForUser = async (user) => {
     if (!user || user.role !== 'staff') return [];
 
     const userId = user._id || user.id;
-    const linkedStaffMembers = userId
-        ? await Staff.find({ userId }).select('_id')
-        : [];
-    const staffMembers = linkedStaffMembers.length > 0
-        ? linkedStaffMembers
-        : await Staff.find({ name: user.name }).select('_id');
-
-    if (staffMembers.length === 0) {
-        throw createHttpError('Staff profile configuration incomplete. Please contact the administrator.', 409);
+    if (!userId) {
+        throw createHttpError('Staff profile unlinked or not found', 409);
     }
 
-    return [
-        ...(userId ? [userId] : []),
-        ...staffMembers.map((staffMember) => staffMember._id)
-    ];
+    const staffMember = await Staff.findOne({ userId }).select('_id userId');
+    if (!staffMember) {
+        throw createHttpError('Staff profile unlinked or not found', 409);
+    }
+
+    return [userId, staffMember._id];
 };
 
 // @desc    Get staff assignment IDs for admin requests
@@ -877,10 +1369,11 @@ const getStaffAssignmentIdsForAdminRequest = async (staffId) => {
 
     const staffByProfileId = await Staff.findById(staffId).select('_id userId');
     if (staffByProfileId) {
-        return [
-            ...(staffByProfileId.userId ? [staffByProfileId.userId] : []),
-            staffByProfileId._id,
-        ];
+        if (!staffByProfileId.userId) {
+            throw createHttpError('Staff profile unlinked or not found', 409);
+        }
+
+        return [staffByProfileId.userId, staffByProfileId._id];
     }
 
     const staffUser = await User.findOne({ _id: staffId, role: 'staff' }).select('_id');
@@ -888,15 +1381,12 @@ const getStaffAssignmentIdsForAdminRequest = async (staffId) => {
         throw createHttpError('Staff member not found.', 404);
     }
 
-    const linkedStaffMembers = await Staff.find({ userId: staffUser._id }).select('_id');
-    if (linkedStaffMembers.length === 0) {
-        throw createHttpError('Staff profile configuration incomplete. Please contact the administrator.', 409);
+    const linkedStaffMember = await Staff.findOne({ userId: staffUser._id }).select('_id userId');
+    if (!linkedStaffMember) {
+        throw createHttpError('Staff profile unlinked or not found', 409);
     }
 
-    return [
-        staffUser._id,
-        ...linkedStaffMembers.map((staffMember) => staffMember._id),
-    ];
+    return [staffUser._id, linkedStaffMember._id];
 };
 
 // Utility function to build a MongoDB query for staff assignments based on an array of staff IDs. It returns a query object that can be used to filter appointments by either the stylist or staffId fields, allowing for flexible querying of appointments associated with specific staff members.
@@ -1006,28 +1496,7 @@ const getStaffEarningsScopeQuery = async (req) => {
         return buildStaffAssignmentQuery(await getStaffAssignmentIdsForAdminRequest(req.query.staffId));
     }
 
-    throw createHttpError('Unauthorized', 401);
-};
-
-// Utility function to format a Date object into a string key in the format "YYYY-MM-DD". This is useful for creating consistent keys for mapping revenue data by date.
-const formatDateKey = (date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-
-    return `${year}-${month}-${day}`;
-};
-
-const startOfDay = (date) => {
-    const nextDate = new Date(date);
-    nextDate.setHours(0, 0, 0, 0);
-    return nextDate;
-};
-
-const endOfDay = (date) => {
-    const nextDate = new Date(date);
-    nextDate.setHours(23, 59, 59, 999);
-    return nextDate;
+    throw createHttpError('Forbidden', 403);
 };
 
 const STAFF_EARNINGS_RANGE_LABELS = {
@@ -1051,9 +1520,9 @@ const normalizeStaffEarningsRange = (range) => {
 };
 
 // Utility function to determine the date range for staff earnings reports based on the specified year and range. It validates the year input, normalizes the range, and calculates the appropriate start and end dates for the earnings report, returning an object containing the year, range, label, start date, and end date.
-const getStaffEarningsWindow = ({ year, range } = {}) => {
-    const now = new Date();
-    const currentYear = now.getFullYear();
+const getStaffEarningsWindow = ({ year, range } = {}, now) => {
+    const salonNow = getSalonDateTime(now);
+    const currentYear = salonNow.year;
     const requestedYear = Number(year ?? currentYear);
 
     if (!Number.isInteger(requestedYear) || requestedYear < 2000 || requestedYear > currentYear) {
@@ -1067,41 +1536,55 @@ const getStaffEarningsWindow = ({ year, range } = {}) => {
 
     if (isRollingRange) {
         const days = normalizedRange === 'LAST_7_DAYS' ? 7 : 30;
-        const startDate = startOfDay(now);
-        startDate.setDate(startDate.getDate() - (days - 1));
+        const startDateTime = salonNow.startOf('day').minus({ days: days - 1 });
+        const endDateTime = salonNow.endOf('day');
 
         return {
             year: requestedYear,
             range: normalizedRange,
             label: STAFF_EARNINGS_RANGE_LABELS[normalizedRange],
-            startDate,
-            endDate: endOfDay(now),
+            startDate: startDateTime.toUTC().toJSDate(),
+            endDate: endDateTime.toUTC().toJSDate(),
+            startDateKey: startDateTime.toISODate(),
+            endDateKey: endDateTime.toISODate(),
+            startDateTime,
+            endDateTime,
         };
     }
 
-    const startDate = startOfDay(new Date(requestedYear, 0, 1));
-    const endDate = normalizedRange === 'YTD' && requestedYear === currentYear
-        ? endOfDay(now)
-        : endOfDay(new Date(requestedYear, 11, 31));
+    const startDateTime = salonNow
+        .set({ year: requestedYear, month: 1, day: 1 })
+        .startOf('day');
+    const endDateTime = normalizedRange === 'YTD' && requestedYear === currentYear
+        ? salonNow.endOf('day')
+        : salonNow.set({ year: requestedYear, month: 12, day: 31 }).endOf('day');
 
     return {
         year: requestedYear,
         range: normalizedRange,
         label: STAFF_EARNINGS_RANGE_LABELS[normalizedRange],
-        startDate,
-        endDate,
+        startDate: startDateTime.toUTC().toJSDate(),
+        endDate: endDateTime.toUTC().toJSDate(),
+        startDateKey: startDateTime.toISODate(),
+        endDateKey: endDateTime.toISODate(),
+        startDateTime,
+        endDateTime,
     };
 };
 
-// Utility function to extract the booking date from an appointment object. It checks for the presence of a valid bookingDate property, and if not found, it attempts to parse the date from the legacy date field. If neither is available or valid, it returns null.
-const getAppointmentDateValue = (appointment) => {
+// Resolve appointment calendar dates in the salon timezone for earnings grouping.
+const getAppointmentSalonDateTime = (appointment) => {
     if (appointment.bookingDate instanceof Date && !Number.isNaN(appointment.bookingDate.getTime())) {
-        return appointment.bookingDate;
+        return getSalonDateTime(appointment.bookingDate);
     }
 
     if (appointment.date) {
-        const parsedDate = new Date(`${String(appointment.date).slice(0, 10)}T00:00:00.000Z`);
-        return Number.isNaN(parsedDate.getTime()) ? null : parsedDate;
+        const dateKey = String(appointment.date).slice(0, 10);
+        try {
+            return getSalonAppointmentDateTime(dateKey, '00:00');
+        } catch {
+            return null;
+        }
     }
 
     return null;
@@ -1112,12 +1595,12 @@ const buildStaffRevenueTrends = (appointments, window) => {
     const revenueByPeriod = new Map();
 
     appointments.forEach((appointment) => {
-        const appointmentDate = getAppointmentDateValue(appointment);
-        if (!appointmentDate) return;
+        const appointmentDateTime = getAppointmentSalonDateTime(appointment);
+        if (!appointmentDateTime) return;
 
         const key = ['FULL_YEAR', 'YTD'].includes(window.range)
-            ? String(appointmentDate.getMonth())
-            : formatDateKey(appointmentDate);
+            ? String(appointmentDateTime.month)
+            : appointmentDateTime.toISODate();
 
         revenueByPeriod.set(
             key,
@@ -1126,26 +1609,26 @@ const buildStaffRevenueTrends = (appointments, window) => {
     });
 
     if (['FULL_YEAR', 'YTD'].includes(window.range)) {
-        const endMonth = window.range === 'YTD' ? window.endDate.getMonth() : 11;
+        const endMonth = window.range === 'YTD' ? window.endDateTime.month : 12;
 
         return ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-            .slice(0, endMonth + 1)
+            .slice(0, endMonth)
             .map((month, index) => ({
                 label: month,
-                revenue: revenueByPeriod.get(String(index)) || 0,
+                revenue: revenueByPeriod.get(String(index + 1)) || 0,
             }));
     }
 
     const trends = [];
-    const cursor = startOfDay(window.startDate);
+    let cursor = window.startDateTime.startOf('day');
 
-    while (cursor <= window.endDate) {
-        const key = formatDateKey(cursor);
+    while (cursor.toMillis() <= window.endDateTime.toMillis()) {
+        const key = cursor.toISODate();
         trends.push({
-            label: cursor.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+            label: cursor.toFormat('MMM d'),
             revenue: revenueByPeriod.get(key) || 0,
         });
-        cursor.setDate(cursor.getDate() + 1);
+        cursor = cursor.plus({ days: 1 });
     }
 
     return trends;
@@ -1159,9 +1642,9 @@ const buildStaffAvailableYears = async (staffQuery, currentYear) => {
     }).select('bookingDate date');
 
     const years = appointments
-        .map(getAppointmentDateValue)
+        .map(getAppointmentSalonDateTime)
         .filter(Boolean)
-        .map((date) => date.getFullYear())
+        .map((dateTime) => dateTime.year)
         .filter((year) => Number.isInteger(year) && year <= currentYear);
 
     return Array.from(new Set([currentYear, ...years]))
@@ -1174,17 +1657,19 @@ const buildStaffAvailableYears = async (staffQuery, currentYear) => {
 const getStaffAppointments = async (req, res) => {
     try {
         if (req.user.role !== 'staff' && req.user.role !== 'admin') {
-            return res.status(401).json({ message: 'Unauthorized' });
+            return res.status(403).json({ message: 'Forbidden' });
         }
 
         const query = await getStaffAppointmentQuery(req.user);
+        const limit = getAppointmentListLimit(req.query?.limit);
 
         const appointments = await Appointment.find(query)
             .populate('user', 'name email phone')
             .populate('services', 'name price duration')
             .populate('staffId', 'name')
             .populate('stylist', 'name')
-            .sort({ date: 1, startTime: 1 });
+            .sort({ date: 1, startTime: 1 })
+            .limit(limit);
 
         res.status(200).json(appointments);
     } catch (error) {
@@ -1203,12 +1688,12 @@ const getStaffAppointments = async (req, res) => {
 const getStaffEarningsSummary = async (req, res) => {
     try {
         if (req.user.role !== 'staff' && req.user.role !== 'admin') {
-            return res.status(401).json({ message: 'Unauthorized' });
+            return res.status(403).json({ message: 'Forbidden' });
         }
 
         const window = getStaffEarningsWindow(req.query);
         const staffQuery = await getStaffEarningsScopeQuery(req);
-        const currentYear = new Date().getFullYear();
+        const currentYear = getSalonDateTime().year;
         const [appointments, availableYears] = await Promise.all([
             Appointment.find({
                 ...staffQuery,
@@ -1222,8 +1707,8 @@ const getStaffEarningsSummary = async (req, res) => {
                     },
                     {
                         date: {
-                            $gte: formatDateKey(window.startDate),
-                            $lte: formatDateKey(window.endDate),
+                            $gte: window.startDateKey,
+                            $lte: window.endDateKey,
                         },
                     },
                 ],
@@ -1260,6 +1745,8 @@ const getStaffEarningsSummary = async (req, res) => {
 // @route   POST /api/appointments/:id/review
 // @access  Private
 const submitAppointmentReview = async (req, res) => {
+    let session;
+
     try {
         const numericRating = Number(req.body.rating);
         const feedback = typeof req.body.feedback === 'string' ? req.body.feedback.trim() : '';
@@ -1273,64 +1760,87 @@ const submitAppointmentReview = async (req, res) => {
             return res.status(400).json({ message: 'Feedback must be 500 characters or fewer.' });
         }
 
-        const appointment = await Appointment.findById(req.params.id);
+        session = await mongoose.startSession();
+        let updatedAppointment;
+        let updatedPreferredStylist;
 
-        if (!appointment) {
-            return res.status(404).json({ message: 'Appointment not found.' });
-        }
+        await session.withTransaction(async () => {
+            const appointment = await Appointment.findById(req.params.id).session(session);
 
-        if (appointment.user.toString() !== req.user.id.toString()) {
-            return res.status(401).json({ message: 'You are not authorized to review this appointment.' });
-        }
-
-        if (Appointment.normalizeStatus(appointment.status) !== 'completed') {
-            return res.status(400).json({ message: 'Only completed appointments can be reviewed.' });
-        }
-
-        if (appointment.rating != null) {
-            return res.status(400).json({ message: 'This appointment has already been reviewed.' });
-        }
-
-        const isFiveStarReview = numericRating === 5;
-        const preferredStylistProfileId = appointment.stylist || appointment.staffId;
-        let preferredStylistUserId = null;
-
-        if (makePreferred) {
-            if (!preferredStylistProfileId) {
-                return res.status(400).json({ message: 'This appointment does not have an assigned stylist.' });
+            if (!appointment) {
+                throw createAppointmentError('Appointment not found.', 404);
             }
 
-            const preferredStylistProfile = await Staff.findById(preferredStylistProfileId).select('userId');
-            if (!preferredStylistProfile?.userId) {
-                return res.status(400).json({
-                    message: 'This stylist profile is not linked to a staff user account.',
-                });
+            if (appointment.user.toString() !== req.user.id.toString()) {
+                throw createAppointmentError('You are not authorized to review this appointment.', 403);
             }
 
-            preferredStylistUserId = preferredStylistProfile.userId;
-        }
+            if (Appointment.normalizeStatus(appointment.status) !== 'completed') {
+                throw createAppointmentError('Only completed appointments can be reviewed.');
+            }
 
-        appointment.rating = numericRating;
-        appointment.feedback = feedback;
-        appointment.isReviewApproved = isFiveStarReview;
-        appointment.reviewSubmittedAt = new Date();
+            if (appointment.rating != null) {
+                throw createAppointmentError('This appointment has already been reviewed.');
+            }
 
-        const updatedAppointment = await appointment.save();
+            let preferredStylistUserId = null;
+            if (makePreferred) {
+                const preferredStylistProfileId = appointment.stylist || appointment.staffId;
+                if (!preferredStylistProfileId) {
+                    throw createAppointmentError('This appointment does not have an assigned stylist.');
+                }
 
-        // VIP consent gate: only update the preferred stylist when the customer explicitly opts in.
-        if (preferredStylistUserId) {
-            await User.findByIdAndUpdate(req.user.id, {
-                preferredStylist: preferredStylistUserId,
-            });
-        }
+                const preferredStylistProfile = await Staff.findById(preferredStylistProfileId)
+                    .select('userId')
+                    .session(session);
+                if (!preferredStylistProfile?.userId) {
+                    throw createAppointmentError(
+                        'This stylist profile is not linked to a staff user account.'
+                    );
+                }
+
+                preferredStylistUserId = preferredStylistProfile.userId;
+            }
+
+            appointment.rating = numericRating;
+            appointment.feedback = feedback;
+            appointment.isReviewApproved = numericRating === 5;
+            appointment.reviewSubmittedAt = new Date();
+            updatedAppointment = await appointment.save({ session });
+
+            // VIP consent gate: update the preference in the same transaction so
+            // either both writes commit or the review remains retryable.
+            if (preferredStylistUserId) {
+                const updatedUser = await User.findOneAndUpdate(
+                    { _id: req.user.id },
+                    { $set: { preferredStylist: preferredStylistUserId } },
+                    { returnDocument: 'after', runValidators: true, session }
+                );
+
+                if (!updatedUser) {
+                    throw createAppointmentError('Customer account not found.', 409);
+                }
+
+                updatedPreferredStylist = updatedUser.preferredStylist?.toString() || '';
+            }
+        });
 
         return res.status(200).json({
             message: 'Review submitted successfully.',
             appointment: updatedAppointment,
+            ...(updatedPreferredStylist !== undefined
+                ? { preferredStylist: updatedPreferredStylist }
+                : {}),
         });
     } catch (error) {
         console.error('Submit Appointment Review Error:', error);
-        return res.status(500).json({ message: 'Server Error: Could not submit appointment review.' });
+        return res.status(error.statusCode || 500).json({
+            message: error.statusCode
+                ? error.message
+                : 'Server Error: Could not submit appointment review.',
+        });
+    } finally {
+        if (session) await session.endSession();
     }
 };
 
@@ -1346,9 +1856,21 @@ const getPublicReviews = async (_req, res) => {
             .populate('user', 'name')
             .populate('stylist', 'name')
             .populate('services', 'name')
-            .sort({ createdAt: -1 });
+            .sort({ reviewSubmittedAt: -1, createdAt: -1 })
+            .lean();
 
-        return res.status(200).json(reviews);
+        const publicReviewDtos = reviews.map((appointment) => ({
+            rating: appointment.rating,
+            feedback: appointment.feedback,
+            reviewSubmittedAt: appointment.reviewSubmittedAt,
+            customerDisplayName: appointment.user?.name || 'Customer',
+            stylistName: appointment.stylist?.name || 'Stylist',
+            serviceNames: Array.isArray(appointment.services)
+                ? appointment.services.map((service) => service?.name).filter(Boolean)
+                : [],
+        }));
+
+        return res.status(200).json(publicReviewDtos);
     } catch (error) {
         console.error('Get Public Reviews Error:', error);
         return res.status(500).json({ message: 'Server Error: Could not fetch public reviews.' });
@@ -1366,7 +1888,7 @@ const getAppointmentsReviews = async (_req, res) => {
             .populate('user', 'name email')
             .populate('stylist', 'name')
             .populate('services', 'name')
-            .sort({ createdAt: -1 });
+            .sort({ reviewSubmittedAt: -1, createdAt: -1 });
 
         return res.status(200).json(reviews);
     } catch (error) {
@@ -1443,22 +1965,16 @@ const deleteAppointment = async (req, res) => {
 
         // Check if the user is the owner of the appointment or an admin
         if (appointment.user.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
-            return res.status(401).json({ message: "You are not authorized to delete this appointment." });
+            return res.status(403).json({ message: "You are not authorized to delete this appointment." });
         }
 
-        // Robust date parsing: Parse YYYY-MM-DD and HH:MM AM/PM separately to handle timezones correctly
-        const [year, month, day] = appointment.date.split('-').map(Number);
-        const timeMins = timeToMinutes(appointment.startTime);
-        const hours = Math.floor(timeMins / 60);
-        const minutes = timeMins % 60;
-
-        // Create appointment date using UTC to avoid timezone issues: YYYY-MM-DD at HH:MM AM/PM
-        const appointmentDateObj = new Date(year, month - 1, day, hours, minutes, 0, 0);
-        const nowDate = new Date();
-
-        // Calculate difference in milliseconds, then convert to hours with precision
-        const diffInMs = appointmentDateObj.getTime() - nowDate.getTime();
-        const diffInHours = diffInMs / (1000 * 60 * 60);
+        const appointmentDateKey = appointment.date
+            || appointment.bookingDate?.toISOString().slice(0, 10);
+        const appointmentDateTime = getSalonAppointmentDateTime(
+            appointmentDateKey,
+            appointment.startTime
+        );
+        const diffInHours = appointmentDateTime.diff(getSalonDateTime(), 'hours').hours;
 
         // Block cancellation if appointment is less than 2 hours away or in the past
         if (diffInHours < 2) {
@@ -1469,12 +1985,29 @@ const deleteAppointment = async (req, res) => {
             });
         }
 
-        if (['cancelled', 'rejected', 'completed', 'no-show'].includes(Appointment.normalizeStatus(appointment.status))) {
+        if (['cancelled', 'CANCELLED_BY_SALON', 'rejected', 'completed', 'no-show'].includes(Appointment.normalizeStatus(appointment.status))) {
             return res.status(400).json({ message: `This appointment is already ${appointment.status.toLowerCase()}.` });
         }
 
-        appointment.status = 'cancelled';
-        const updatedAppointment = await appointment.save();
+        const cancellationFilter = {
+            _id: req.params.id,
+            status: { $in: ['pending', 'confirmed'] },
+        };
+        if (req.user.role !== 'admin') {
+            cancellationFilter.user = req.user._id;
+        }
+
+        const updatedAppointment = await Appointment.findOneAndUpdate(
+            cancellationFilter,
+            { $set: { status: 'cancelled' } },
+            { new: true, runValidators: true }
+        );
+
+        if (!updatedAppointment) {
+            return res.status(409).json({
+                message: 'Appointment status changed before cancellation could be applied. Please refresh and try again.',
+            });
+        }
 
         res.status(200).json({
             id: req.params.id,
@@ -1493,18 +2026,20 @@ const deleteAppointment = async (req, res) => {
 // @access  Private/Admin
 const updateAppointmentStatus = async (req, res) => {
     try {
-        const { status } = req.body;
-        
-        // Validate status value
-        const validStatuses = ['pending', 'confirmed', 'cancelled', 'rejected', 'completed', 'no-show'];
+        const {
+            status,
+            overrideStatusTransition = false,
+            overrideReason,
+        } = req.body;
         const normalizedStatus = Appointment.normalizeStatus(status);
-        if (!status || !validStatuses.includes(normalizedStatus)) {
-            return res.status(400).json({ 
-                message: `Invalid status. Must be one of: ${validStatuses.join(', ')}` 
+        if (!status || !VALID_APPOINTMENT_STATUSES.includes(normalizedStatus)) {
+            return res.status(400).json({
+                message: `Invalid status. Must be one of: ${VALID_APPOINTMENT_STATUSES.join(', ')}`
             });
         }
         
-        const settings = await ensureSettingsDocument();
+        const settings = await loadAppointmentSettings();
+        const gracePeriodMinutes = getGracePeriodMinutes(settings);
         const salonName = settings?.salonName || defaultSettings.salonName;
         const supportEmail = settings?.supportEmail || defaultSettings.supportEmail;
         const contactNumber = settings?.contactNumber || defaultSettings.contactNumber;
@@ -1514,6 +2049,14 @@ const updateAppointmentStatus = async (req, res) => {
         if (!appointment) {
             return res.status(404).json({ message: "Appointment not found." });
         }
+
+        const transition = resolveStatusTransition({
+            currentStatus: appointment.status,
+            requestedStatus: normalizedStatus,
+            overrideStatusTransition,
+            overrideReason,
+            userRole: req.user?.role,
+        });
 
         if (req.user.role === 'staff') {
             const assignedStaffIds = [appointment.stylist, appointment.staffId]
@@ -1529,35 +2072,51 @@ const updateAppointmentStatus = async (req, res) => {
             }
         }
 
-        if (['completed', 'no-show'].includes(normalizedStatus)) {
-            let appointmentStart;
-
-            try {
-                appointmentStart = getAppointmentScheduleStart(appointment);
-            } catch (scheduleError) {
-                return res.status(scheduleError.statusCode || 400).json({
-                    message: scheduleError.message || 'Appointment date and start time are required to update this status.',
-                });
-            }
-
-            if (appointmentStart.getTime() > Date.now()) {
-                return res.status(400).json({
-                    message: 'Cannot mark a future appointment as completed or no-show',
-                });
-            }
+        try {
+            assertAppointmentStatusTiming({
+                appointment,
+                requestedStatus: normalizedStatus,
+                gracePeriodMinutes,
+            });
+        } catch (scheduleError) {
+            return res.status(scheduleError.statusCode || 400).json({
+                message: scheduleError.message || 'Appointment timing could not be validated.',
+            });
         }
 
-        const previousStatus = Appointment.normalizeStatus(appointment.status);
-        appointment.status = normalizedStatus;
-        const updatedAppointment = await appointment.save();
+        const updatedAppointment = await Appointment.findOneAndUpdate(
+            {
+                _id: appointment._id,
+                status: appointment.status,
+            },
+            { $set: { status: transition.requestedStatus } },
+            {
+                returnDocument: 'after',
+                runValidators: true,
+            }
+        )
+            .populate('user', 'name email')
+            .populate('services', 'name');
 
-        console.log('[AUDIT] Admin appointment status override', {
-            adminId: req.user._id.toString(),
-            appointmentId: updatedAppointment._id.toString(),
-            previousStatus,
-            newStatus: normalizedStatus,
-            timestamp: new Date().toISOString()
-        });
+        if (!updatedAppointment) {
+            return res.status(409).json({
+                message: 'Appointment status changed before this update could be applied. Please refresh and try again.',
+            });
+        }
+
+        if (transition.isOverride) {
+            console.info('[AUDIT] Appointment status transition override', {
+                event: 'APPOINTMENT_STATUS_TRANSITION_OVERRIDE',
+                actorId: req.user._id.toString(),
+                actorRole: req.user.role,
+                appointmentId: updatedAppointment._id.toString(),
+                previousStatus: transition.currentStatus,
+                newStatus: transition.requestedStatus,
+                reason: transition.overrideReason,
+                correlationId: req.correlationId || req.get?.('x-correlation-id') || null,
+                timestamp: new Date().toISOString(),
+            });
+        }
 
         // Part of the code to send an email notification to the user about the status update of their appointment. The email includes the appointment details and a message indicating the new status of the appointment. This enhances the user experience by keeping them informed about the status of their appointments in a timely manner.
         if (settings.customerEmails && appointment.user && appointment.user.email) {
@@ -1576,7 +2135,7 @@ const updateAppointmentStatus = async (req, res) => {
 
             const statusColor = emailStatusKey === 'confirmed'
                 ? '#27ae60'
-                : ['rejected', 'cancelled', 'no-show'].includes(emailStatusKey)
+                : ['rejected', 'cancelled', CANCELLED_BY_SALON_STATUS, 'no-show'].includes(emailStatusKey)
                     ? '#e74c3c'
                     : '#f39c12';
 
@@ -1616,11 +2175,12 @@ const updateAppointmentStatus = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Update Status Error:", error.message);
-        console.error("Full Error Stack:", error);
-        res.status(500).json({ 
-            message: "Server Error: Could not update appointment status.",
-            error: error.message 
+        const statusCode = error.statusCode || 500;
+        console.error("Update Status Error:", error);
+        res.status(statusCode).json({
+            message: statusCode >= 500
+                ? "Server Error: Could not update appointment status."
+                : error.message,
         });
     }
 };
@@ -1632,17 +2192,18 @@ const updateAppointmentStatusByStaff = async (req, res) => {
     try {
         const { status } = req.body;
         const requestedStatus = Appointment.normalizeStatus(status);
-        const allowedStatuses = ['confirmed', 'rejected', 'completed', 'no-show'];
+        const allowedStatuses = ['confirmed', CANCELLED_BY_SALON_STATUS, 'completed', 'no-show'];
 
         if (!allowedStatuses.includes(requestedStatus)) {
             return res.status(400).json({ message: 'This status transition is not allowed for staff.' });
         }
 
         if (req.user.role !== 'staff' && req.user.role !== 'admin') {
-            return res.status(401).json({ message: 'Unauthorized' });
+            return res.status(403).json({ message: 'Forbidden' });
         }
 
-        const settings = await ensureSettingsDocument();
+        const settings = await loadAppointmentSettings();
+        const gracePeriodMinutes = getGracePeriodMinutes(settings);
         const salonName = settings?.salonName || defaultSettings.salonName;
         const supportEmail = settings?.supportEmail || defaultSettings.supportEmail;
         const contactNumber = settings?.contactNumber || defaultSettings.contactNumber;
@@ -1659,21 +2220,48 @@ const updateAppointmentStatusByStaff = async (req, res) => {
             const staffIds = (await getStaffAssignmentIdsForUser(req.user)).map((staffId) => staffId.toString());
             const assignedStaffId = appointment.stylist || appointment.staffId;
             if (!assignedStaffId || !staffIds.includes(assignedStaffId.toString())) {
-                return res.status(401).json({ message: 'You are not assigned to this appointment.' });
+                return res.status(403).json({ message: 'You are not assigned to this appointment.' });
             }
         }
 
         const currentStatus = Appointment.normalizeStatus(appointment.status);
+        let transition;
+        try {
+            transition = resolveStatusTransition({
+                currentStatus,
+                requestedStatus,
+                userRole: req.user?.role,
+            });
+        } catch (transitionError) {
+            return res.status(transitionError.statusCode || 400).json({ message: transitionError.message });
+        }
 
-        if (['confirmed', 'rejected'].includes(requestedStatus)) {
+        if (['confirmed', CANCELLED_BY_SALON_STATUS].includes(requestedStatus)) {
             if (currentStatus !== 'pending') {
-                return res.status(400).json({ message: 'Only pending appointments can be approved or rejected.' });
+                return res.status(400).json({ message: 'Only pending appointments can be approved or cancelled by the salon.' });
             }
 
-            appointment.status = requestedStatus;
-            const updatedAppointment = await appointment.save();
+            const updatedAppointment = await Appointment.findOneAndUpdate(
+                {
+                    _id: appointment._id,
+                    status: appointment.status,
+                },
+                { $set: { status: transition.requestedStatus } },
+                {
+                    returnDocument: 'after',
+                    runValidators: true,
+                }
+            )
+                .populate('user', 'name email')
+                .populate('services', 'name');
 
-            // Send email notification to customer when appointment is accepted or rejected
+            if (!updatedAppointment) {
+                return res.status(409).json({
+                    message: 'Appointment status changed before this update could be applied. Please refresh and try again.',
+                });
+            }
+
+            // Send email notification when a pending appointment is confirmed or cancelled by the salon.
             if (settings.customerEmails && appointment.user && appointment.user.email) {
                 const emailStatusKey = Appointment.normalizeStatus(updatedAppointment.status);
                 const emailStatus = updatedAppointment.toJSON().status;
@@ -1690,7 +2278,7 @@ const updateAppointmentStatusByStaff = async (req, res) => {
 
                 const statusColor = emailStatusKey === 'confirmed'
                     ? '#27ae60'
-                    : ['rejected', 'cancelled', 'no-show'].includes(emailStatusKey)
+                    : ['rejected', 'cancelled', CANCELLED_BY_SALON_STATUS, 'no-show'].includes(emailStatusKey)
                         ? '#e74c3c'
                         : '#f39c12';
 
@@ -1730,50 +2318,50 @@ const updateAppointmentStatusByStaff = async (req, res) => {
             });
         }
 
-        const [year, month, day] = appointment.date.split('-').map(Number);
-        const appointmentStartMinutes = timeToMinutes(appointment.startTime);
-        const appointmentEndMinutes = timeToMinutes(appointment.endTime);
-        const startHours = Math.floor(appointmentStartMinutes / 60);
-        const startMinutes = appointmentStartMinutes % 60;
-        const appointmentStart = new Date(year, month - 1, day, startHours, startMinutes, 0, 0);
-        const endHours = Math.floor(appointmentEndMinutes / 60);
-        const endMinutes = appointmentEndMinutes % 60;
-        const appointmentEnd = new Date(year, month - 1, day, endHours, endMinutes, 0, 0);
-        const now = Date.now();
-
         if (currentStatus !== 'confirmed') {
             return res.status(400).json({ message: 'Only approved appointments can be completed or marked no-show.' });
         }
 
-        if (requestedStatus === 'no-show') {
-            const noShowWindowEnds = appointmentStart.getTime() + 30 * 60 * 1000;
-
-            if (now < appointmentStart.getTime() || now > noShowWindowEnds) {
-                return res.status(400).json({ message: 'No-show can only be marked within 30 minutes after the appointment start time.' });
-            }
+        try {
+            assertAppointmentStatusTiming({
+                appointment,
+                requestedStatus,
+                gracePeriodMinutes,
+            });
+        } catch (scheduleError) {
+            return res.status(scheduleError.statusCode || 400).json({
+                message: scheduleError.message || 'Appointment timing could not be validated.',
+            });
         }
 
-        if (requestedStatus === 'completed') {
-            const completeWindowStarts = appointmentEnd.getTime() - 10 * 60 * 1000;
-
-            if (now < completeWindowStarts) {
-                return res.status(400).json({ message: 'Appointments can only be completed from 10 minutes before the end time.' });
+        const updatedAppointment = await Appointment.findOneAndUpdate(
+            {
+                _id: appointment._id,
+                status: appointment.status,
+            },
+            { $set: { status: transition.requestedStatus } },
+            {
+                returnDocument: 'after',
+                runValidators: true,
             }
-        }
+        )
+            .populate('user', 'name email')
+            .populate('services', 'name');
 
-        appointment.status = requestedStatus;
-        const updatedAppointment = await appointment.save();
+        if (!updatedAppointment) {
+            return res.status(409).json({
+                message: 'Appointment status changed before this update could be applied. Please refresh and try again.',
+            });
+        }
 
         res.status(200).json({
             message: 'Status updated successfully!',
             appointment: updatedAppointment
         });
     } catch (error) {
-        console.error('Staff Status Update Error:', error.message);
-        console.error('Full Error Stack:', error);
+        console.error('Staff Status Update Error:', error);
         res.status(500).json({ 
             message: 'Server Error: Could not update appointment status.',
-            error: error.message 
         });
     }
 };
@@ -1782,15 +2370,18 @@ const updateAppointmentStatusByStaff = async (req, res) => {
 // @route   POST /api/appointments/:id/running-late
 // @access  Private
 const markAppointmentRunningLate = async (req, res) => {
-    try {
-        const appointment = await Appointment.findById(req.params.id);
+    let session;
 
-        if (!appointment) {
+    try {
+        const appointmentPreview = await Appointment.findById(req.params.id)
+            .select('user staffId stylist bookingDate date');
+
+        if (!appointmentPreview) {
             return res.status(404).json({ message: 'Appointment not found.' });
         }
 
-        if (appointment.user.toString() !== req.user.id.toString()) {
-            return res.status(401).json({ message: 'You are not authorized to update this appointment.' });
+        if (appointmentPreview.user.toString() !== req.user.id.toString()) {
+            return res.status(403).json({ message: 'You are not authorized to update this appointment.' });
         }
 
         const allowedLateMinutes = [10, 15, 20];
@@ -1805,40 +2396,120 @@ const markAppointmentRunningLate = async (req, res) => {
             return res.status(400).json({ message: 'Late minutes must be one of: 10, 15, 20.' });
         }
 
-        const normalizedStatus = Appointment.normalizeStatus(appointment.status);
-        if (!['pending', 'confirmed'].includes(normalizedStatus)) {
-            return res.status(400).json({ message: 'Only pending or confirmed appointments can be marked as running late.' });
-        }
-
-        if (appointment.isLate) {
-            return res.status(400).json({ message: 'This appointment is already marked as running late.' });
-        }
-
-        const appointmentDateValue = appointment.bookingDate || appointment.date;
+        const appointmentDateValue = appointmentPreview.bookingDate || appointmentPreview.date;
         const appointmentDateKey = appointmentDateValue instanceof Date
             ? appointmentDateValue.toISOString().slice(0, 10)
             : String(appointmentDateValue || '').slice(0, 10);
-        const startMinutes = timeToMinutes(appointment.startTime);
         const [year, month, day] = appointmentDateKey.split('-').map(Number);
+        const stylistId = appointmentPreview.staffId || appointmentPreview.stylist;
 
-        if (!appointmentDateKey || [year, month, day].some(Number.isNaN) || !appointment.startTime) {
-            return res.status(400).json({ message: 'Appointment date and start time are required to report a delay.' });
+        if (!appointmentDateKey || [year, month, day].some(Number.isNaN) || !stylistId) {
+            return res.status(400).json({ message: 'Appointment date and stylist are required to report a delay.' });
         }
 
-        const appointmentStart = new Date(year, month - 1, day, Math.floor(startMinutes / 60), startMinutes % 60);
-        if (appointmentStart.getTime() < Date.now()) {
-            return res.status(400).json({ message: 'Past appointments cannot be marked as running late.' });
-        }
+        const settings = await loadAppointmentSettings();
+        const gracePeriodMinutes = getGracePeriodMinutes(settings);
+        const configuredBufferMinutes = Number.isFinite(Number(settings.defaultBufferTime))
+            ? Math.max(0, Number(settings.defaultBufferTime))
+            : Number(defaultSettings.defaultBufferTime);
+        const bookingDate = new Date(`${appointmentDateKey}T00:00:00.000Z`);
+        const nextDate = new Date(bookingDate);
+        nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+        session = await mongoose.startSession();
+        let updatedAppointment;
 
-        // Shift the stored appointment end time by the delay and keep the original endTime unchanged.
-        const currentEndMinutes = timeToMinutes(appointment.endTime);
-        const adjustedEndTime = minutesToTime(currentEndMinutes + lateMinutes);
+        await session.withTransaction(async () => {
+            // Use the same deterministic staff/day mutex as booking creation so
+            // a delay and a concurrent booking cannot both pass conflict checks.
+            await AppointmentScheduleLock.findOneAndUpdate(
+                { _id: `${stylistId}:${appointmentDateKey}` },
+                { $inc: { revision: 1 } },
+                { upsert: true, returnDocument: 'after', session, setDefaultsOnInsert: true }
+            );
 
-        appointment.isLate = true;
-        appointment.lateMinutes = lateMinutes;
-        appointment.adjustedEndTime = adjustedEndTime;
+            const appointment = await Appointment.findById(req.params.id).session(session);
+            if (!appointment) {
+                throw createAppointmentError('Appointment not found.', 404);
+            }
 
-        const updatedAppointment = await appointment.save();
+            if (appointment.user.toString() !== req.user.id.toString()) {
+                throw createAppointmentError('You are not authorized to update this appointment.', 403);
+            }
+
+            const normalizedStatus = Appointment.normalizeStatus(appointment.status);
+            if (!['pending', 'confirmed'].includes(normalizedStatus)) {
+                throw createAppointmentError('Only pending or confirmed appointments can be marked as running late.');
+            }
+
+            if (appointment.isLate) {
+                throw createAppointmentError('This appointment is already marked as running late.');
+            }
+
+            if (!appointment.startTime || !appointment.endTime) {
+                throw createAppointmentError('Appointment start and end times are required to report a delay.');
+            }
+
+            const appointmentStart = getSalonAppointmentDateTime(
+                appointmentDateKey,
+                appointment.startTime
+            );
+            const lateReportingOpensAt = appointmentStart.minus({ minutes: 30 });
+            const lateReportingDeadline = appointmentStart.plus({ minutes: gracePeriodMinutes });
+            const salonNow = getSalonDateTime();
+            if (salonNow.toMillis() < lateReportingOpensAt.toMillis()) {
+                throw createAppointmentError(
+                    'A delay can only be reported from 30 minutes before the appointment start time.'
+                );
+            }
+
+            if (salonNow.toMillis() > lateReportingDeadline.toMillis()) {
+                throw createAppointmentError(
+                    `The ${gracePeriodMinutes}-minute grace period for reporting this delay has expired.`
+                );
+            }
+
+            const appointmentStartMinutes = timeToMinutes(appointment.startTime);
+            const currentEndMinutes = timeToMinutes(appointment.endTime);
+            const candidateAdjustedEndMinutes = currentEndMinutes + lateMinutes;
+
+            if (candidateAdjustedEndMinutes >= 1440) {
+                throw createAppointmentError('Delay cannot extend an appointment beyond the current day.', 409);
+            }
+
+            const newAdjustedEndTime = minutesToTime(candidateAdjustedEndMinutes);
+            const downstreamAppointments = await Appointment.find({
+                _id: { $ne: appointment._id },
+                $or: [
+                    { date: appointmentDateKey, stylist: stylistId },
+                    { date: appointmentDateKey, staffId: stylistId },
+                    { bookingDate: { $gte: bookingDate, $lt: nextDate }, stylist: stylistId },
+                    { bookingDate: { $gte: bookingDate, $lt: nextDate }, staffId: stylistId },
+                ],
+                status: { $in: ['pending', 'confirmed'] },
+            })
+                .select('startMinutes startTime timeSlot')
+                .session(session)
+                .lean();
+
+            const hasDownstreamConflict = hasDownstreamScheduleConflict({
+                downstreamAppointments,
+                appointmentStartMinutes,
+                candidateAdjustedEndMinutes,
+                bufferMinutes: configuredBufferMinutes,
+            });
+
+            if (hasDownstreamConflict) {
+                throw createAppointmentError(
+                    'Delay cannot be applied as it conflicts with a downstream appointment. Please contact admin.',
+                    409
+                );
+            }
+
+            appointment.isLate = true;
+            appointment.lateMinutes = lateMinutes;
+            appointment.adjustedEndTime = newAdjustedEndTime;
+            updatedAppointment = await appointment.save({ session });
+        });
 
         return res.status(200).json({
             message: 'Appointment late status updated successfully.',
@@ -1846,7 +2517,14 @@ const markAppointmentRunningLate = async (req, res) => {
         });
     } catch (error) {
         console.error('Running Late Appointment Error:', error);
-        return res.status(500).json({ message: 'Server Error: Could not update appointment late status.' });
+        const statusCode = error.statusCode || 500;
+        return res.status(statusCode).json({
+            message: statusCode >= 500
+                ? 'Server Error: Could not update appointment late status.'
+                : error.message,
+        });
+    } finally {
+        if (session) await session.endSession();
     }
 };
 
@@ -1854,6 +2532,8 @@ const markAppointmentRunningLate = async (req, res) => {
 // @route   POST /api/appointments/shift-slots
 // @access  Private/Admin
 const shiftUpcomingAppointments = async (req, res) => {
+    let session;
+
     try {
         const { stylistId, date } = req.body;
         const shiftMinutes = req.body.shiftMinutes === undefined
@@ -1887,7 +2567,8 @@ const shiftUpcomingAppointments = async (req, res) => {
             return res.status(400).json({ message: 'Invalid date. Use YYYY-MM-DD format.' });
         }
 
-        const todayKey = getLocalDateKey();
+        const salonNow = getSalonDateTimeParts();
+        const todayKey = salonNow.dateKey;
         if (dateKey < todayKey) {
             return res.status(200).json({
                 message: 'No future appointment slots found to shift.',
@@ -1896,69 +2577,103 @@ const shiftUpcomingAppointments = async (req, res) => {
             });
         }
 
-        const appointments = await Appointment.find({
-            $or: [
-                { stylist: stylistId },
-                { staffId: stylistId },
-            ],
-            bookingDate,
-            status: { $in: ['pending', 'confirmed'] },
-        });
+        session = await mongoose.startSession();
+        let shiftedAppointments = [];
 
-        const currentMinutes = timeToMinutes(new Date());
-        const remainingAppointments = appointments.filter((appointment) => (
-            dateKey > todayKey || timeToMinutes(appointment.startTime) > currentMinutes
-        ));
+        await session.withTransaction(async () => {
+            // Match booking creation's deterministic lock order. This serializes
+            // salon/staff schedule changes and all bookings for this staff/date.
+            await AppointmentScheduleLock.findOneAndUpdate(
+                { _id: SALON_SCHEDULE_LOCK_ID },
+                { $inc: { revision: 1 } },
+                { upsert: true, returnDocument: 'after', session, setDefaultsOnInsert: true }
+            );
+            await AppointmentScheduleLock.findOneAndUpdate(
+                { _id: getStaffScheduleLockId(stylistId) },
+                { $inc: { revision: 1 } },
+                { upsert: true, returnDocument: 'after', session, setDefaultsOnInsert: true }
+            );
+            await AppointmentScheduleLock.findOneAndUpdate(
+                { _id: `holiday:${dateKey}` },
+                { $inc: { revision: 1 } },
+                { upsert: true, returnDocument: 'after', session, setDefaultsOnInsert: true }
+            );
+            await AppointmentScheduleLock.findOneAndUpdate(
+                { _id: `${stylistId}:${dateKey}` },
+                { $inc: { revision: 1 } },
+                { upsert: true, returnDocument: 'after', session, setDefaultsOnInsert: true }
+            );
 
-        // AM/PM strings do not sort safely in MongoDB, so sort by converted minutes.
-        remainingAppointments.sort((firstAppointment, secondAppointment) => (
-            timeToMinutes(firstAppointment.startTime) - timeToMinutes(secondAppointment.startTime)
-        ));
+            const appointments = await Appointment.find({
+                $or: [
+                    { stylist: stylistId },
+                    { staffId: stylistId },
+                ],
+                bookingDate,
+                status: { $in: ['pending', 'confirmed'] },
+            }).session(session);
 
-        const shiftedPlans = remainingAppointments.map((appointment) => {
-            const shiftedStartMinutes = timeToMinutes(appointment.startTime) + shiftMinutes;
-            const shiftedEndMinutes = timeToMinutes(appointment.endTime) + shiftMinutes;
+            const currentMinutes = salonNow.minutes;
+            const remainingAppointments = appointments.filter((appointment) => (
+                dateKey > todayKey || timeToMinutes(appointment.startTime) > currentMinutes
+            ));
 
-            if (shiftedEndMinutes <= shiftedStartMinutes) {
-                throw createAppointmentError('Invalid time slot format provided');
+            // AM/PM strings do not sort safely in MongoDB, so sort by converted minutes.
+            remainingAppointments.sort((firstAppointment, secondAppointment) => (
+                timeToMinutes(firstAppointment.startTime) - timeToMinutes(secondAppointment.startTime)
+            ));
+
+            const shiftedPlans = remainingAppointments.map((appointment) => {
+                const shiftedStartMinutes = timeToMinutes(appointment.startTime) + shiftMinutes;
+                const shiftedEndMinutes = timeToMinutes(appointment.endTime) + shiftMinutes;
+                const effectiveEndTime = appointment.adjustedEndTime || appointment.endTime;
+                const shiftedEffectiveEndMinutes = timeToMinutes(effectiveEndTime) + shiftMinutes;
+
+                if (shiftedEndMinutes <= shiftedStartMinutes) {
+                    throw createAppointmentError('Invalid time slot format provided');
+                }
+
+                const shiftedStartTime = minutesToTime(shiftedStartMinutes);
+                const shiftedEndTime = minutesToTime(shiftedEndMinutes);
+
+                return {
+                    appointment,
+                    start: shiftedStartMinutes,
+                    end: shiftedEffectiveEndMinutes,
+                    shiftedStartTime,
+                    shiftedEndTime,
+                };
+            });
+
+            // Re-read every scheduling constraint and outside appointment while
+            // holding the locks and within the same transaction snapshot.
+            await validateShiftPlanBoundaries({
+                stylistId,
+                dateKey,
+                bookingDate,
+                shiftedPlans,
+                session,
+            });
+
+            const transactionAppointments = [];
+            for (const plan of shiftedPlans) {
+                const { appointment, shiftedStartTime, shiftedEndTime } = plan;
+
+                appointment.startTime = shiftedStartTime;
+                appointment.endTime = shiftedEndTime;
+                appointment.timeSlot = `${shiftedStartTime} - ${shiftedEndTime}`;
+
+                if (appointment.isLate && appointment.adjustedEndTime) {
+                    appointment.adjustedEndTime = minutesToTime(
+                        timeToMinutes(appointment.adjustedEndTime) + shiftMinutes
+                    );
+                }
+
+                transactionAppointments.push(await appointment.save({ session }));
             }
 
-            const shiftedStartTime = minutesToTime(shiftedStartMinutes);
-            const shiftedEndTime = minutesToTime(shiftedEndMinutes);
-
-            return {
-                appointment,
-                start: shiftedStartMinutes,
-                end: shiftedEndMinutes,
-                shiftedStartTime,
-                shiftedEndTime,
-            };
+            shiftedAppointments = transactionAppointments;
         });
-
-        await validateShiftPlanBoundaries({
-            stylistId,
-            dateKey,
-            bookingDate,
-            shiftedPlans,
-        });
-
-        const shiftedAppointments = [];
-
-        for (const plan of shiftedPlans) {
-            const { appointment, shiftedStartTime, shiftedEndTime } = plan;
-
-            appointment.startTime = shiftedStartTime;
-            appointment.endTime = shiftedEndTime;
-            appointment.timeSlot = `${shiftedStartTime} - ${shiftedEndTime}`;
-
-            if (appointment.isLate && appointment.adjustedEndTime) {
-                appointment.adjustedEndTime = minutesToTime(
-                    timeToMinutes(appointment.adjustedEndTime) + shiftMinutes
-                );
-            }
-
-            shiftedAppointments.push(await appointment.save());
-        }
 
         return res.status(200).json({
             message: 'Appointment slots shifted successfully.',
@@ -1973,6 +2688,8 @@ const shiftUpcomingAppointments = async (req, res) => {
                 ? 'Server Error: Could not shift appointment slots.'
                 : error.message
         });
+    } finally {
+        if (session) await session.endSession();
     }
 };
 
@@ -1988,7 +2705,21 @@ const hideAppointmentByCustomer = async (req, res) => {
         }
 
         if (appointment.user.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
-            return res.status(401).json({ message: 'You are not authorized to update this appointment.' });
+            return res.status(403).json({ message: 'You are not authorized to update this appointment.' });
+        }
+
+        const hideableStatuses = new Set([
+            'completed',
+            'cancelled',
+            CANCELLED_BY_SALON_STATUS,
+            'no-show',
+        ]);
+        const normalizedStatus = Appointment.normalizeStatus(appointment.status);
+
+        if (!hideableStatuses.has(normalizedStatus)) {
+            return res.status(400).json({
+                message: 'Only completed, cancelled, cancelled-by-salon, or no-show appointments can be hidden.',
+            });
         }
 
         appointment.isHiddenByCustomer = true;
@@ -2006,6 +2737,7 @@ const hideAppointmentByCustomer = async (req, res) => {
 };
 
 module.exports = {
+    getAvailabilityMeta,
     getStaffAvailability,
     createAppointment,
     getMyAppointments,
@@ -2024,5 +2756,15 @@ module.exports = {
     updateAppointmentStatusByStaff,
     markAppointmentRunningLate,
     shiftUpcomingAppointments,
-    hideAppointmentByCustomer
+    hideAppointmentByCustomer,
+    _test: {
+        APPOINTMENT_STATUS_TRANSITIONS,
+        hasDownstreamScheduleConflict,
+        isMissingOrAnyStylist,
+        getStaffAssignmentIdsForUser,
+        getStaffEarningsWindow,
+        rangesConflictWithBuffer,
+        resolveAdminOverrides,
+        resolveStatusTransition,
+    },
 };

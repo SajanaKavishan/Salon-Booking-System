@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import axios from "axios";
+import { apiClient as axios } from '../../utils/apiConfig';
 import { toast } from "react-toastify";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 import { Check, ChevronDown } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
+import ScheduleConflictDialog from "./ScheduleConflictDialog";
 import { GlassCard, GoldButton } from "./SystemUI";
 import API_BASE_URL from "../../utils/apiConfig";
+import { useModalFocus } from "../../hooks/useModalFocus";
 
 const currentYear = new Date().getFullYear();
 const leaveYearOptions = Array.from({ length: 5 }, (_, index) => currentYear - 2 + index);
@@ -74,8 +76,7 @@ const offDayOptions = [
 ];
 
 const getAuthHeaders = () => {
-  const token = localStorage.getItem("token");
-  return token ? { headers: { Authorization: `Bearer ${token}` } } : undefined;
+  return {};
 };
 
 function SalonSelect({ id, label, value, onChange, options, placeholder = "Select an option", required = false }) {
@@ -137,7 +138,7 @@ function SalonSelect({ id, label, value, onChange, options, placeholder = "Selec
 
   return (
     <div ref={containerRef} className="relative">
-      <label htmlFor={id} className="mb-1 block text-xs font-medium text-gray-400">{label}</label>
+      <label htmlFor={id} className="mb-1 block text-xs font-medium text-gray-300">{label}</label>
       <button
         id={id}
         type="button"
@@ -210,8 +211,9 @@ function SalonSelect({ id, label, value, onChange, options, placeholder = "Selec
 function StaffManager() {
   const fieldClassName = "w-full bg-black/50 border border-gray-700 rounded-lg p-3 text-white placeholder:text-zinc-600 focus:border-[#d4af37] focus:ring-1 focus:ring-[#d4af37] outline-none transition-all";
   const minimalSelectClassName = "w-full bg-transparent text-white border-b border-zinc-700 rounded-none px-2 py-1.5 text-sm font-medium outline-none transition focus:border-[#c5a880] sm:w-auto sm:py-1";
-  const [searchParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState(searchParams.get("tab") === "leaves" ? "leaves" : "directory");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const queryTab = searchParams.get("tab") === "leaves" ? "leaves" : "directory";
+  const activeTab = queryTab;
   const [staffList, setStaffList] = useState([]);
   const [leaveRequests, setLeaveRequests] = useState([]);
   const [formData, setFormData] = useState(initialStaffFormData);
@@ -235,15 +237,26 @@ function StaffManager() {
   const editFileInputRef = useRef(null);
   const [editingId, setEditingId] = useState(null);
   const [isUpdatingStaff, setIsUpdatingStaff] = useState(false);
+  const [scheduleConflictDetails, setScheduleConflictDetails] = useState(null);
   const hasEditChanges = JSON.stringify(editData) !== JSON.stringify(originalEditData) || Boolean(selectedEditImage);
   const canAddStaff = Boolean(
     formData.name.trim() &&
     formData.email.trim() &&
     formData.phone.trim() &&
-    formData.password &&
+    formData.password.length >= 8 &&
     formData.specialty &&
     formData.workingHours
   );
+
+  const handleTabChange = (nextTab) => {
+    const nextSearchParams = new URLSearchParams(searchParams);
+    if (nextTab === "leaves") {
+      nextSearchParams.set("tab", "leaves");
+    } else {
+      nextSearchParams.delete("tab");
+    }
+    setSearchParams(nextSearchParams);
+  };
 
   useEffect(() => {
     let isActive = true;
@@ -401,9 +414,37 @@ function StaffManager() {
     }
   };
 
+  const closeEditModal = () => {
+    if (isUpdatingStaff) return;
+    setIsEditModalOpen(false);
+    clearSelectedEditImage();
+  };
+  const closeDeleteModal = () => {
+    if (isDeletingStaff) return;
+    setIsDeleteModalOpen(false);
+    setItemToDelete(null);
+  };
+  const editDialogRef = useModalFocus({
+    isOpen: isEditModalOpen && !scheduleConflictDetails,
+    onClose: closeEditModal,
+    canClose: !isUpdatingStaff,
+  });
+  const deleteDialogRef = useModalFocus({
+    isOpen: isDeleteModalOpen,
+    onClose: closeDeleteModal,
+    canClose: !isDeletingStaff,
+  });
+
   const handleAddStaff = async (e) => {
     e.preventDefault();
-    if (isAddingStaff || !canAddStaff) return;
+    if (isAddingStaff) return;
+
+    if (formData.password.length < 8) {
+      toast.error('Password must be at least 8 characters long.');
+      return;
+    }
+
+    if (!canAddStaff) return;
 
     const normalizedPhone = formData.phone.replace(/[\s-]/g, "");
     if (!SRI_LANKAN_MOBILE_REGEX.test(normalizedPhone)) {
@@ -515,8 +556,23 @@ function StaffManager() {
       setIsEditModalOpen(false);
       setOriginalEditData(nextEditData);
       clearSelectedEditImage();
+      setScheduleConflictDetails(null);
       toast.success("Staff updated successfully!");
     } catch (error) {
+      const responseStatus = error.response?.status;
+      const responseData = error.response?.data;
+      if (
+        [400, 409].includes(responseStatus)
+        && Array.isArray(responseData?.conflicts)
+        && responseData.conflicts.length > 0
+      ) {
+        setScheduleConflictDetails({
+          message: responseData.message,
+          conflicts: responseData.conflicts,
+        });
+        return;
+      }
+
       toast.error(error.response?.data?.message || "Failed to update staff");
     } finally {
       setIsUpdatingStaff(false);
@@ -529,7 +585,7 @@ function StaffManager() {
         <div className="scrollbar-none flex gap-4 overflow-x-auto whitespace-nowrap sm:gap-6">
           <button
             type="button"
-            onClick={() => setActiveTab("directory")}
+            onClick={() => handleTabChange("directory")}
             className={`shrink-0 border-b-2 px-1 py-4 text-xs font-bold uppercase tracking-[0.14em] transition sm:text-sm sm:tracking-[0.18em] ${
               activeTab === "directory"
                 ? "border-[#c5a880] text-[#c5a880]"
@@ -540,7 +596,7 @@ function StaffManager() {
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab("leaves")}
+            onClick={() => handleTabChange("leaves")}
             className={`shrink-0 border-b-2 px-1 py-4 text-xs font-bold uppercase tracking-[0.14em] transition sm:text-sm sm:tracking-[0.18em] ${
               activeTab === "leaves"
                 ? "border-[#c5a880] text-[#c5a880]"
@@ -557,15 +613,15 @@ function StaffManager() {
           <section className="rounded-2xl border border-white/10 bg-[#111111]/70 p-6 shadow-xl backdrop-blur-md">
         <form onSubmit={handleAddStaff} className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           <div>
-            <label htmlFor="staff-name" className="mb-1 block text-xs font-medium text-gray-400">Name</label>
-            <input id="staff-name" type="text" name="name" placeholder="Name" value={formData.name} onChange={handleInputChange} required className={fieldClassName} />
+            <label htmlFor="staff-name" className="mb-1 block text-xs font-medium text-gray-300">Name</label>
+            <input id="staff-name" type="text" name="name" placeholder="Name" value={formData.name} onChange={handleInputChange} required className={fieldClassName} autoComplete="name" />
           </div>
           <div>
-            <label htmlFor="staff-email" className="mb-1 block text-xs font-medium text-gray-400">Email Address</label>
-            <input id="staff-email" type="email" name="email" placeholder="Email Address" value={formData.email} onChange={handleInputChange} required className={fieldClassName} autoComplete="email" />
+            <label htmlFor="staff-email" className="mb-1 block text-xs font-medium text-gray-300">Email Address</label>
+            <input id="staff-email" type="email" name="email" placeholder="Email Address" value={formData.email} onChange={handleInputChange} required className={fieldClassName} autoComplete="email" inputMode="email" />
           </div>
           <div>
-            <label htmlFor="staff-phone" className="mb-1 block text-xs font-medium text-gray-400">Mobile Number</label>
+            <label htmlFor="staff-phone" className="mb-1 block text-xs font-medium text-gray-300">Mobile Number</label>
             <input
               id="staff-phone"
               type="tel"
@@ -587,7 +643,7 @@ function StaffManager() {
             )}
           </div>
           <div>
-            <label htmlFor="staff-password" className="mb-1 block text-xs font-medium text-gray-400">Temporary Password</label>
+            <label htmlFor="staff-password" className="mb-1 block text-xs font-medium text-gray-300">Temporary Password</label>
             <div className="relative">
               <input
                 id="staff-password"
@@ -597,6 +653,7 @@ function StaffManager() {
                 value={formData.password}
                 onChange={handleInputChange}
                 required
+                minLength={8}
                 className={`${fieldClassName} pr-12`}
                 autoComplete="new-password"
               />
@@ -609,6 +666,7 @@ function StaffManager() {
                 {showPassword ? <FaEyeSlash size={18} /> : <FaEye size={18} />}
               </button>
             </div>
+            <p className="mt-1.5 text-xs leading-5 text-zinc-500">Use at least 8 characters.</p>
           </div>
           <SalonSelect
             id="staff-specialty"
@@ -639,7 +697,7 @@ function StaffManager() {
           />
 
           <div className="md:col-span-2 xl:col-span-3">
-            <label htmlFor="staff-description" className="mb-1 block text-xs font-medium text-gray-400">Description</label>
+            <label htmlFor="staff-description" className="mb-1 block text-xs font-medium text-gray-300">Description</label>
             <textarea
               id="staff-description"
               name="description"
@@ -712,7 +770,7 @@ function StaffManager() {
           </section>
 
           <section className="rounded-2xl border border-white/10 bg-[#111111]/70 p-4 shadow-xl backdrop-blur-md sm:p-6">
-        <div className="space-y-3 md:hidden">
+        <div className="space-y-3 lg:hidden">
           {staffList.map((staff) => (
             <div key={staff._id} className="rounded-xl border border-zinc-800 bg-black/20 p-4">
               <div className="flex items-start justify-between gap-4">
@@ -721,8 +779,8 @@ function StaffManager() {
                   <p className="mt-1 text-sm text-gray-400">{staff.specialty}</p>
                 </div>
                 {activeMenuId === staff._id ? (
-                  <GoldButton type="button" variant="ghost" onClick={() => setActiveMenuId(null)} className="shrink-0 bg-gray-800 px-2 py-1 text-sm text-gray-400 hover:bg-gray-700 hover:text-white">
-                    x
+                  <GoldButton type="button" variant="ghost" onClick={() => setActiveMenuId(null)} aria-label="Close actions" className="shrink-0 bg-gray-800 px-2 py-1 text-sm text-gray-400 hover:bg-gray-700 hover:text-white">
+                    <span aria-hidden="true">x</span>
                   </GoldButton>
                 ) : (
                   <GoldButton type="button" variant="outline" onClick={() => setActiveMenuId(staff._id)} className="shrink-0 px-4 py-1.5">
@@ -757,7 +815,7 @@ function StaffManager() {
           )}
         </div>
 
-        <div className="salon-scrollbar hidden overflow-x-auto rounded-xl border border-white/10 bg-black/20 md:block">
+        <div className="salon-scrollbar hidden overflow-x-auto rounded-xl border border-white/10 bg-black/20 lg:block">
           <table className="w-full min-w-[720px] table-fixed border-collapse text-left">
             <thead>
               <tr className="border-b border-zinc-800 bg-black/30 text-xs font-bold uppercase tracking-[0.18em] text-[#d4af37]">
@@ -789,8 +847,8 @@ function StaffManager() {
                         >
                           Delete
                         </button>
-                        <GoldButton type="button" variant="ghost" onClick={() => setActiveMenuId(null)} className="bg-gray-800 px-2 py-1 text-sm text-gray-400 hover:bg-gray-700 hover:text-white">
-                          x
+                        <GoldButton type="button" variant="ghost" onClick={() => setActiveMenuId(null)} aria-label="Close actions" className="bg-gray-800 px-2 py-1 text-sm text-gray-400 hover:bg-gray-700 hover:text-white">
+                          <span aria-hidden="true">x</span>
                         </GoldButton>
                       </div>
                     ) : (
@@ -819,9 +877,9 @@ function StaffManager() {
         <section className="space-y-6">
           <div className="flex flex-col gap-4 border-b border-zinc-800/60 pb-5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-6 sm:gap-y-3">
-              <label className="flex w-full flex-col gap-1 text-xs font-bold uppercase tracking-[0.18em] text-zinc-500 sm:w-auto sm:flex-row sm:items-center sm:gap-2">
+              <label htmlFor="leave-stylist-filter" className="flex w-full flex-col gap-1 text-xs font-bold uppercase tracking-[0.18em] text-gray-300 sm:w-auto sm:flex-row sm:items-center sm:gap-2">
                 Stylist
-                <select value={stylistFilter} onChange={(event) => setStylistFilter(event.target.value)} className={minimalSelectClassName}>
+                <select id="leave-stylist-filter" value={stylistFilter} onChange={(event) => setStylistFilter(event.target.value)} className={minimalSelectClassName}>
                   <option value="all" className="bg-[#111111]">All Stylists</option>
                   {staffList.map((staff) => (
                     <option key={staff._id} value={getStaffFilterId(staff)} className="bg-[#111111]">
@@ -831,9 +889,9 @@ function StaffManager() {
                 </select>
               </label>
 
-              <label className="flex w-full flex-col gap-1 text-xs font-bold uppercase tracking-[0.18em] text-zinc-500 sm:w-auto sm:flex-row sm:items-center sm:gap-2">
+              <label htmlFor="leave-year-filter" className="flex w-full flex-col gap-1 text-xs font-bold uppercase tracking-[0.18em] text-gray-300 sm:w-auto sm:flex-row sm:items-center sm:gap-2">
                 Year
-                <select value={yearFilter} onChange={(event) => setYearFilter(event.target.value)} className={minimalSelectClassName}>
+                <select id="leave-year-filter" value={yearFilter} onChange={(event) => setYearFilter(event.target.value)} className={minimalSelectClassName}>
                   {leaveYearOptions.map((year) => (
                     <option key={year} value={String(year)} className="bg-[#111111]">
                       {year}
@@ -848,7 +906,7 @@ function StaffManager() {
             </span>
           </div>
 
-          <div className="space-y-3 md:hidden">
+          <div className="space-y-3 lg:hidden">
             {filteredLeaveRequests.map((leave) => (
               <div key={leave._id} className="border-b border-zinc-800/60 pb-4 last:border-b-0">
                 <div className="flex items-start justify-between gap-4">
@@ -869,11 +927,11 @@ function StaffManager() {
                 </div>
                 <div className="mt-4 grid gap-3 text-sm">
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Type</p>
+                    <p className="text-xs font-bold uppercase tracking-widest text-gray-300">Type</p>
                     <p className="mt-0.5 text-sm text-zinc-200">{leave.leaveType || "Not specified"}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Reason</p>
+                    <p className="text-xs font-bold uppercase tracking-widest text-gray-300">Reason</p>
                     <p className="mt-0.5 text-sm leading-6 text-zinc-200">{leave.reason || "No reason provided"}</p>
                   </div>
                 </div>
@@ -886,7 +944,7 @@ function StaffManager() {
             )}
           </div>
 
-          <div className="salon-scrollbar hidden overflow-x-auto md:block">
+          <div className="salon-scrollbar hidden overflow-x-auto lg:block">
             <table className="w-full min-w-[820px] text-left">
               <thead>
                 <tr className="border-b border-zinc-800/60 text-xs font-bold uppercase tracking-[0.18em] text-[#d4af37]">
@@ -933,29 +991,35 @@ function StaffManager() {
         </section>
       )}
 
+      <ScheduleConflictDialog
+        details={scheduleConflictDetails}
+        onClose={() => setScheduleConflictDetails(null)}
+        contextLabel="Staff Schedule Conflict"
+      />
+
       {isEditModalOpen && createPortal(
-        <div className="fixed inset-0 z-[10000] flex min-h-[100dvh] items-center justify-center overflow-y-auto bg-black/35 px-4 py-6 backdrop-blur-2xl backdrop-saturate-50">
+        <div className="salon-modal-overlay fixed inset-0 z-[10000] flex min-h-[100dvh] items-center justify-center overflow-y-auto bg-black/35 px-3 py-4 backdrop-blur-2xl backdrop-saturate-50 sm:px-4 sm:py-6">
           <GlassCard
+            ref={editDialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="edit-staff-title"
-            className="relative w-full max-w-md border-t-4 border-t-[#d4af37] bg-[#111111] p-8"
+            tabIndex={-1}
+            className="salon-modal-dialog relative w-full max-w-md border-t-4 border-t-[#d4af37] bg-[#111111] p-5 sm:p-8"
           >
             <button
               type="button"
-              onClick={() => {
-                setIsEditModalOpen(false);
-                clearSelectedEditImage();
-              }}
+              onClick={closeEditModal}
+              disabled={isUpdatingStaff}
               aria-label="Close dialog"
-              className="absolute right-4 top-4 text-xl text-gray-400 hover:text-white"
+              className="salon-modal-icon-button absolute right-3 top-3 inline-flex items-center justify-center rounded-full text-xl text-gray-400 hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-50 sm:right-4 sm:top-4"
             >
               x
             </button>
             <h3 id="edit-staff-title" className="salon-heading mb-6 border-b border-white/10 pb-4">Edit Staff Member</h3>
             <form onSubmit={handleUpdateStaff} className="flex flex-col gap-4">
               <div>
-                <label htmlFor="edit-staff-name" className="mb-1 block text-xs font-medium text-gray-400">Name</label>
+                <label htmlFor="edit-staff-name" className="mb-1 block text-xs font-medium text-gray-300">Name</label>
                 <input
                   id="edit-staff-name"
                   type="text"
@@ -963,6 +1027,7 @@ function StaffManager() {
                   onChange={(event) => setEditData((current) => ({ ...current, name: event.target.value }))}
                   required
                   className={fieldClassName}
+                  autoComplete="name"
                 />
               </div>
               <SalonSelect
@@ -991,7 +1056,7 @@ function StaffManager() {
                 options={offDayOptions}
               />
               <div>
-                <label htmlFor="edit-staff-description" className="mb-1 block text-xs font-medium text-gray-400">Description</label>
+                <label htmlFor="edit-staff-description" className="mb-1 block text-xs font-medium text-gray-300">Description</label>
                 <textarea
                   id="edit-staff-description"
                   value={editData.description}
@@ -1046,23 +1111,20 @@ function StaffManager() {
                   </button>
                 )}
               </div>
-              <div className="mt-4 flex justify-end gap-3">
+              <div className="mt-4 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                 <GoldButton
                   type="button"
                   variant="ghost"
-                  onClick={() => {
-                    setIsEditModalOpen(false);
-                    clearSelectedEditImage();
-                  }}
+                  onClick={closeEditModal}
                   disabled={isUpdatingStaff}
-                  className="bg-gray-800 px-4 py-2 text-white hover:bg-gray-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  className="salon-modal-action bg-gray-800 px-4 py-2 text-white hover:bg-gray-700 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Cancel
                 </GoldButton>
                 <GoldButton
                   type="submit"
                   disabled={!hasEditChanges || isUpdatingStaff}
-                  className={`px-4 py-2 ${mutedGoldButtonClassName}`}
+                  className={`salon-modal-action px-4 py-2 ${mutedGoldButtonClassName}`}
                 >
                   {isUpdatingStaff ? "Saving..." : "Save Changes"}
                 </GoldButton>
@@ -1074,25 +1136,24 @@ function StaffManager() {
       )}
 
       {isDeleteModalOpen && createPortal(
-        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/35 px-4 backdrop-blur-2xl backdrop-saturate-50">
+        <div className="salon-modal-overlay fixed inset-0 z-[10000] flex items-center justify-center bg-black/35 px-3 py-4 backdrop-blur-2xl backdrop-saturate-50 sm:px-4 sm:py-6">
           <GlassCard
+            ref={deleteDialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="delete-staff-title"
-            className="mx-4 w-full max-w-sm border-t-4 border-t-red-600 bg-[#111111] p-6"
+            tabIndex={-1}
+            className="salon-modal-dialog w-full max-w-sm border-t-4 border-t-red-600 bg-[#111111] p-5 sm:p-6"
           >
             <h4 id="delete-staff-title" className="mb-3 text-xl font-semibold text-white">Delete Staff Member</h4>
             <p className="mb-6 text-gray-400">Are you sure you want to delete this? This action cannot be undone.</p>
-            <div className="flex items-center justify-end gap-3">
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
               <GoldButton
                 type="button"
                 variant="ghost"
-                onClick={() => {
-                  setIsDeleteModalOpen(false);
-                  setItemToDelete(null);
-                }}
+                onClick={closeDeleteModal}
                 disabled={isDeletingStaff}
-                className="border border-white/20 bg-transparent px-4 py-2 text-white hover:bg-white/10 hover:text-white"
+                className="salon-modal-action border border-white/20 bg-transparent px-4 py-2 text-white hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
               >
                 Cancel
               </GoldButton>
@@ -1100,7 +1161,7 @@ function StaffManager() {
                 type="button"
                 onClick={confirmDelete}
                 disabled={isDeletingStaff}
-                className="inline-flex items-center justify-center rounded-md bg-red-600/90 px-4 py-2 font-semibold text-white shadow-[0_0_15px_rgba(220,38,38,0.4)] transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-70"
+                className="salon-modal-action inline-flex items-center justify-center rounded-md bg-red-600/90 px-4 py-2 font-semibold text-white shadow-[0_0_15px_rgba(220,38,38,0.4)] transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {isDeletingStaff ? "Deleting..." : "Yes, Delete"}
               </button>

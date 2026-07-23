@@ -1,10 +1,11 @@
 import React from 'react';
 
-function Spinner() {
+function Spinner({ label = 'Loading...' }) {
   return (
-    <div className="flex justify-center items-center">
-      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
-    </div>
+    <span className="flex items-center justify-center" role="status" aria-live="polite">
+      <span className="h-6 w-6 animate-spin rounded-full border-b-2 border-white" aria-hidden="true" />
+      <span className="sr-only">{label}</span>
+    </span>
   );
 }
 

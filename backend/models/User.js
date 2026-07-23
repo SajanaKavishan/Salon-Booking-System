@@ -18,6 +18,11 @@ const userSchema = new mongoose.Schema(
 		password: {
 			type: String,
 			required: true,
+			select: false,
+		},
+		passwordChangedAt: {
+			type: Date,
+			default: undefined,
 		},
 		role: {
 			type: String,
@@ -61,6 +66,11 @@ const userSchema = new mongoose.Schema(
 		isFirstLogin: {
 			type: Boolean,
 			default: true,
+		},
+		isActive: {
+			type: Boolean,
+			default: true,
+			index: true,
 		},
 		resetPasswordToken: {
 			type: String,

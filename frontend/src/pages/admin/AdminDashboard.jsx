@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 
-import axios from "axios";
+import { apiClient as axios } from '../../utils/apiConfig';
 
 import { toast } from "react-toastify";
 
@@ -9,6 +9,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { createPortal } from "react-dom";
 
 import { useNavigate } from "react-router-dom";
+import { storage } from '../../utils/storage';
 
 import { AlertCircle, AlertTriangle, CalendarDays, DollarSign, Loader2, RotateCw, Users, X, XCircle } from "lucide-react";
 
@@ -222,7 +223,7 @@ function AdminDashboard() {
 
       try {
 
-        const token = localStorage.getItem("token");
+        const token = storage.get("token");
 
         if (!token) {
 
@@ -231,7 +232,6 @@ function AdminDashboard() {
         }
 
         const authHeaders = {
-          headers: { Authorization: `Bearer ${token}` },
           signal,
         };
         const publicRequestConfig = { signal };
@@ -395,13 +395,13 @@ function AdminDashboard() {
 
     switch(status?.toLowerCase()) {
 
-      case 'approved': return <span className="text-[10px] uppercase tracking-wider font-bold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded border border-emerald-400/20">Approved</span>;
+      case 'approved': return <span className="text-xs uppercase tracking-wider font-bold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded border border-emerald-400/20">Approved</span>;
 
-      case 'pending': return <span className="text-[10px] uppercase tracking-wider font-bold text-[#d4af37] bg-[#d4af37]/10 px-2 py-0.5 rounded border border-[#d4af37]/20">Pending</span>;
+      case 'pending': return <span className="text-xs uppercase tracking-wider font-bold text-[#d4af37] bg-[#d4af37]/10 px-2 py-0.5 rounded border border-[#d4af37]/20">Pending</span>;
 
-      case 'rejected': return <span className="text-[10px] uppercase tracking-wider font-bold text-red-400 bg-red-400/10 px-2 py-0.5 rounded border border-red-400/20">Rejected</span>;
+      case 'rejected': return <span className="text-xs uppercase tracking-wider font-bold text-red-400 bg-red-400/10 px-2 py-0.5 rounded border border-red-400/20">Rejected</span>;
 
-      default: return <span className="text-[10px] uppercase tracking-wider font-bold text-gray-400 bg-gray-400/10 px-2 py-0.5 rounded border border-gray-400/20">Unknown</span>;
+      default: return <span className="text-xs uppercase tracking-wider font-bold text-gray-300 bg-gray-400/10 px-2 py-0.5 rounded border border-gray-400/20">Unknown</span>;
 
     }
 
@@ -505,7 +505,7 @@ function AdminDashboard() {
     setIsShiftLoading(true);
 
     try {
-      const token = localStorage.getItem("token");
+      const token = storage.get("token");
 
       if (!token) {
         throw new Error("Admin authentication token is missing.");
@@ -518,9 +518,7 @@ function AdminDashboard() {
           date: todayDateKey,
           shiftMinutes: 15,
         },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+        {}
       );
 
       toast.success(`Shifted ${response.data?.count || 0} appointment slots by 15 minutes.`);
@@ -546,11 +544,7 @@ function AdminDashboard() {
 
     try {
 
-      const token = localStorage.getItem("token");
-
-      const authHeaders = token ? { headers: { Authorization: `Bearer ${token}` } } : undefined;
-
-      const conflictsRes = await axios.get(`${API_BASE_URL}/api/leaves/${leaveRequest._id}/conflicts`, authHeaders);
+      const conflictsRes = await axios.get(`${API_BASE_URL}/api/leaves/${leaveRequest._id}/conflicts`);
 
       
 
@@ -599,11 +593,7 @@ function AdminDashboard() {
 
       }
 
-      const token = localStorage.getItem("token");
-
-      const authHeaders = token ? { headers: { Authorization: `Bearer ${token}` } } : undefined;
-
-      await axios.post(`${API_BASE_URL}/api/leaves/${leaveRequestId}/approve`, {}, authHeaders);
+      await axios.post(`${API_BASE_URL}/api/leaves/${leaveRequestId}/approve`, {});
 
       toast.success("Leave request approved!");
 
@@ -617,11 +607,7 @@ function AdminDashboard() {
 
       // Refresh leave requests
 
-      const tokenRefresh = localStorage.getItem("token");
-
-      const authHeadersRefresh = tokenRefresh ? { headers: { Authorization: `Bearer ${tokenRefresh}` } } : undefined;
-
-      const leaveRes = await axios.get(`${API_BASE_URL}/api/leaves`, authHeadersRefresh); 
+      const leaveRes = await axios.get(`${API_BASE_URL}/api/leaves`);
 
       setRecentLeaveRequests(getThisWeekLeaveRequests(leaveRes.data));
 
@@ -663,11 +649,7 @@ function AdminDashboard() {
       setIsLeaveActionLoading(true);
       setLeaveActionType("reject");
 
-      const token = localStorage.getItem("token");
-
-      const authHeaders = token ? { headers: { Authorization: `Bearer ${token}` } } : undefined;
-
-      await axios.post(`${API_BASE_URL}/api/leaves/${leaveId}/reject`, {}, authHeaders);
+      await axios.post(`${API_BASE_URL}/api/leaves/${leaveId}/reject`, {});
 
       toast.success("Leave request rejected.");
 
@@ -677,11 +659,7 @@ function AdminDashboard() {
 
       // Refresh leave requests
 
-      const tokenRefresh = localStorage.getItem("token");
-
-      const authHeadersRefresh = tokenRefresh ? { headers: { Authorization: `Bearer ${tokenRefresh}` } } : undefined;
-
-      const leaveRes = await axios.get(`${API_BASE_URL}/api/leaves`, authHeadersRefresh); 
+      const leaveRes = await axios.get(`${API_BASE_URL}/api/leaves`);
 
       setRecentLeaveRequests(getThisWeekLeaveRequests(leaveRes.data));
 
@@ -905,19 +883,19 @@ function AdminDashboard() {
                             <p className="truncate text-sm font-semibold text-white">{clientName}</p>
                             <p className="mt-1 break-words text-xs text-gray-500">{appointment.user?.phone || appointment.user?.email || "No contact details"}</p>
                           </div>
-                          <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getStatusBadgeClass(appointment.status)}`}>
+                          <span className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold ${getStatusBadgeClass(appointment.status)}`}>
                             {appointment.status}
                           </span>
                         </div>
 
                         <div className="mt-4 grid gap-3 text-sm">
                           <div>
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Time</p>
+                            <p className="text-xs font-bold uppercase tracking-widest text-gray-300">Time</p>
                             {isLate ? (
                               <div className="mt-1">
                                 <p className="text-xs font-medium text-zinc-500 line-through">{appointment.startTime || "Time pending"}</p>
                                 <p className="mt-1 text-xs font-semibold text-amber-400">Adjusted end: {appointment.adjustedEndTime || appointment.endTime || "Pending"}</p>
-                                <span className="mt-2 inline-flex rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-400">
+                                <span className="mt-2 inline-flex rounded-md border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-400">
                                   Late {appointment.lateMinutes || 0}m
                                 </span>
                               </div>
@@ -928,7 +906,7 @@ function AdminDashboard() {
                             )}
                           </div>
                           <div>
-                            <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Service</p>
+                            <p className="text-xs font-bold uppercase tracking-widest text-gray-300">Service</p>
                             <p className="mt-1 break-words text-sm leading-6 text-gray-300">{services}</p>
                           </div>
                         </div>
@@ -983,7 +961,7 @@ function AdminDashboard() {
                               <div className="flex flex-wrap items-center gap-y-1">
                                 <span className="font-semibold text-white">{clientName}</span>
                                 {isLate && (
-                                  <span className="inline-flex items-center gap-1 bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] px-1.5 py-0.5 rounded-md ml-2 font-medium">
+                                  <span className="inline-flex items-center gap-1 bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs px-1.5 py-0.5 rounded-md ml-2 font-medium">
                                     Late {appointment.lateMinutes || 0}m
                                   </span>
                                 )}
@@ -1029,7 +1007,7 @@ function AdminDashboard() {
                       <p className="truncate text-sm font-semibold text-white">{appointment.user?.name || "Unknown customer"}</p>
                       <p className="mt-1 truncate text-xs text-gray-500">{appointment.stylist?.name || "Unassigned"}</p>
                     </div>
-                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${getStatusBadgeClass(appointment.status)}`}>
+                    <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${getStatusBadgeClass(appointment.status)}`}>
                       {appointment.status}
                     </span>
                   </div>
@@ -1178,7 +1156,7 @@ function AdminDashboard() {
 
                   <div className="mt-4 flex items-end justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Type</p>
+                      <p className="text-xs font-bold uppercase tracking-widest text-gray-300">Type</p>
                       <p className="mt-1 truncate text-sm text-gray-300">{leave.leaveType}</p>
                     </div>
                     <GoldButton
@@ -1352,7 +1330,7 @@ function AdminDashboard() {
 
                 <div>
 
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-[#d4af37]">
+                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#d4af37]">
                     Leave Request Review
                   </p>
 
@@ -1377,17 +1355,17 @@ function AdminDashboard() {
               <div className="relative mt-7 grid gap-3 sm:grid-cols-2">
 
                 <div className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-zinc-500">Staff Name</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.22em] text-gray-300">Staff Name</p>
                   <p className="mt-2 text-sm font-semibold text-white">{reviewLeaveRequest.staffId?.name || "Former staff member"}</p>
                 </div>
 
                 <div className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-zinc-500">Leave Type</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.22em] text-gray-300">Leave Type</p>
                   <p className="mt-2 text-sm font-semibold text-white">{reviewLeaveRequest.leaveType || "Not specified"}</p>
                 </div>
 
                 <div className="rounded-xl border border-white/10 bg-white/[0.035] p-4 sm:col-span-2">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-zinc-500">Dates</p>
+                  <p className="text-xs font-bold uppercase tracking-[0.22em] text-gray-300">Dates</p>
                   <p className="mt-2 text-sm font-semibold text-white">
                     {formatLeaveDateRange(reviewLeaveRequest.startDate, reviewLeaveRequest.endDate)}
                   </p>
@@ -1396,7 +1374,7 @@ function AdminDashboard() {
               </div>
 
               <div className="relative mt-3 rounded-xl border border-[#d4af37]/20 bg-[#d4af37]/[0.045] p-4 sm:p-5">
-                <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#d4af37]">Description / Reason</p>
+                <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#d4af37]">Description / Reason</p>
                 <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-zinc-200">
                   {reviewLeaveRequest.reason || "No reason was provided for this leave request."}
                 </p>

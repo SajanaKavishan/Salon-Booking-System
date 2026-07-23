@@ -1,6 +1,8 @@
-const cloudinary = require('../config/cloudinary');
 const GalleryImage = require('../models/GalleryImage');
-const { cleanupUploadedCloudinaryFile } = require('../utils/cloudinaryAssets');
+const {
+  cleanupUploadedCloudinaryFile,
+  queueCloudinaryAssetDeletion,
+} = require('../utils/cloudinaryAssets');
 
 // @desc    Get active gallery images
 // @route   GET /api/gallery
@@ -51,13 +53,13 @@ const deleteImage = async (req, res) => {
       return res.status(404).json({ message: 'Gallery image not found' });
     }
 
-    try {
-      await cloudinary.uploader.destroy(image.publicId);
-    } catch (cloudinaryError) {
-      console.error('Cloudinary gallery image deletion failed:', cloudinaryError);
-    }
-
     await GalleryImage.findByIdAndDelete(req.params.id);
+
+    queueCloudinaryAssetDeletion(
+      image.publicId,
+      image.imageUrl,
+      'Deleted gallery image cleanup'
+    );
 
     res.status(200).json({ id: req.params.id, message: 'Gallery image deleted' });
   } catch (error) {

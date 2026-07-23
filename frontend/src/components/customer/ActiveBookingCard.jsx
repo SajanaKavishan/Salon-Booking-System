@@ -1,6 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, Clock, UserRound } from 'lucide-react';
 import ReportDelayModal from './ReportDelayModal';
+import {
+  getSalonAppointmentTimestamp,
+  getSalonDateKey,
+} from '../../utils/salonTime';
 
 const REPORTABLE_STATUSES = ['pending', 'confirmed'];
 
@@ -10,11 +14,7 @@ const getDateKey = (value) => {
 };
 
 const getTodayKey = () => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return getSalonDateKey();
 };
 
 const timeToMinutes = (timeValue) => {
@@ -40,13 +40,10 @@ const buildAppointmentStart = (appointment) => {
 
   if (!dateKey || startMinutes === null) return null;
 
-  const [year, month, day] = dateKey.split('-').map(Number);
-  if ([year, month, day].some(Number.isNaN)) return null;
-
-  return new Date(year, month - 1, day, Math.floor(startMinutes / 60), startMinutes % 60);
+  return getSalonAppointmentTimestamp(dateKey, appointment?.startTime);
 };
 
-const canReportRunningLate = (appointment, currentTime) => {
+const canReportRunningLate = (appointment, currentTime, gracePeriodMinutes) => {
   const appointmentDateKey = getDateKey(appointment?.bookingDate || appointment?.date);
   const normalizedStatus = String(appointment?.status || '').trim().toLowerCase();
   const appointmentStart = buildAppointmentStart(appointment);
@@ -56,8 +53,16 @@ const canReportRunningLate = (appointment, currentTime) => {
   if (appointment?.isLate) return false;
   if (!appointmentStart) return false;
 
-  const minutesUntilStart = (appointmentStart.getTime() - currentTime.getTime()) / 60000;
-  return minutesUntilStart >= 0 && minutesUntilStart <= 30;
+  const configuredGracePeriod = Number(gracePeriodMinutes);
+  const normalizedGracePeriod = Number.isInteger(configuredGracePeriod)
+    && configuredGracePeriod >= 0
+    && configuredGracePeriod <= 120
+    ? configuredGracePeriod
+    : 15;
+  const reportingWindowOpensAt = appointmentStart - (30 * 60 * 1000);
+  const reportingWindowClosesAt = appointmentStart + (normalizedGracePeriod * 60 * 1000);
+
+  return currentTime >= reportingWindowOpensAt && currentTime <= reportingWindowClosesAt;
 };
 
 function ActiveBookingCard({
@@ -67,15 +72,16 @@ function ActiveBookingCard({
   getStylistDisplayName,
   statusClassName,
   canCancelAppointment,
+  gracePeriodMinutes,
   onCancel,
   onAppointmentUpdated
 }) {
-  const [currentTime, setCurrentTime] = useState(() => new Date());
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
   const [isReportDelayOpen, setIsReportDelayOpen] = useState(false);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
-      setCurrentTime(new Date());
+      setCurrentTime(Date.now());
     }, 30000);
 
     return () => window.clearInterval(intervalId);
@@ -83,8 +89,8 @@ function ActiveBookingCard({
 
   const isCancellable = canCancelAppointment(appointment);
   const shouldShowRunningLateButton = useMemo(
-    () => canReportRunningLate(appointment, currentTime),
-    [appointment, currentTime]
+    () => canReportRunningLate(appointment, currentTime, gracePeriodMinutes),
+    [appointment, currentTime, gracePeriodMinutes]
   );
 
   return (
@@ -96,7 +102,7 @@ function ActiveBookingCard({
             <div className="mt-4 grid gap-3 text-sm text-slate-400 sm:grid-cols-2 xl:grid-cols-3">
               <span className="flex min-w-0 items-center gap-2">
                 <UserRound className="h-4 w-4 text-slate-500" />
-                <span className="min-w-0 break-words">{getStylistDisplayName(appointment) || 'Any Available Artist'}</span>
+                <span className="min-w-0 break-words">{getStylistDisplayName(appointment) || 'Stylist not assigned'}</span>
               </span>
               <span className="flex min-w-0 items-center gap-2">
                 <CalendarDays className="h-4 w-4 text-slate-500" />

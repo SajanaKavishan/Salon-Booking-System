@@ -1,6 +1,18 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/userModel');
 
+const wasTokenIssuedBeforePasswordChange = (decodedToken, passwordChangedAt) => {
+    if (!passwordChangedAt) return false;
+
+    const passwordChangedTime = new Date(passwordChangedAt).getTime();
+    if (Number.isNaN(passwordChangedTime)) return false;
+
+    const issuedAtSeconds = Number(decodedToken?.iat);
+    if (!Number.isFinite(issuedAtSeconds)) return true;
+
+    return issuedAtSeconds < Math.floor(passwordChangedTime / 1000);
+};
+
 const protect = async (req, res, next) => {
     // Check if the token is present in the Authorization header and starts with 'Bearer'
     if (!req.headers.authorization || !req.headers.authorization.startsWith('Bearer')) {
@@ -18,12 +30,29 @@ const protect = async (req, res, next) => {
         // Verify the token
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-        // Get the user from the token and attach it to the request object, excluding the password
-        req.user = await User.findById(decoded.id).select('-password');
+        // Use an explicit allowlist. Reset tokens and other internal authentication
+        // metadata must never be attached to downstream request handlers.
+        req.user = await User.findById(decoded.id).select(
+            '_id name email role phone preferredStylist profileImage isFirstLogin isActive passwordChangedAt'
+        );
 
         if (!req.user) {
             return res.status(401).json({ message: 'Unauthorized. User no longer exists.' });
         }
+
+        if (req.user.isActive === false) {
+            return res.status(401).json({ message: 'Unauthorized. Account is inactive.' });
+        }
+
+        if (wasTokenIssuedBeforePasswordChange(decoded, req.user.passwordChangedAt)) {
+            return res.status(401).json({
+                message: 'Session expired because your password was changed. Please sign in again.'
+            });
+        }
+
+        // passwordChangedAt is needed only for token revocation above. Remove it
+        // before exposing req.user to controllers that may serialize the object.
+        req.user.passwordChangedAt = undefined;
 
         return next();
     } catch (error) {
@@ -60,4 +89,7 @@ module.exports = {
     protect,
     admin,
     staffOrAdmin,
+    _test: {
+        wasTokenIssuedBeforePasswordChange,
+    },
 };

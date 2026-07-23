@@ -1,12 +1,13 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const Appointment = require('../models/appointmentModel');
+const AppointmentScheduleLock = require('../models/AppointmentScheduleLock');
 const Staff = require('../models/Staff');
 const User = require('../models/User');
 const { aggregateStaffPerformance } = require('./analyticsController');
 const {
   cleanupUploadedCloudinaryFile,
-  destroyCloudinaryAsset,
+  queueCloudinaryAssetDeletion,
   resolveCloudinaryPublicId,
 } = require('../utils/cloudinaryAssets');
 const {
@@ -17,6 +18,122 @@ const {
 // Constants for default values and allowed staff profile text fields
 const DEFAULT_PHONE_FALLBACK = '0000000000';
 const STAFF_PROFILE_TEXT_FIELDS = ['description', 'bio', 'profileDescription', 'about', 'experience'];
+const ACTIVE_APPOINTMENT_STATUSES = ['pending', 'confirmed', 'Pending', 'Confirmed'];
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const getStaffScheduleLockId = (staffId) => `schedule:staff:${String(staffId)}`;
+
+const parseAppointmentTimeToMinutes = (value) => {
+  if (typeof value !== 'string') return null;
+
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i);
+  if (!match) return null;
+
+  let hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const modifier = match[3]?.toUpperCase();
+
+  if (minutes > 59 || (modifier ? hours < 1 || hours > 12 : hours > 23)) return null;
+  if (modifier) {
+    if (hours === 12) hours = 0;
+    if (modifier === 'PM') hours += 12;
+  }
+
+  return hours * 60 + minutes;
+};
+
+const getAppointmentDateKey = (appointment) => {
+  if (typeof appointment?.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(appointment.date)) {
+    return appointment.date;
+  }
+
+  const bookingDate = new Date(appointment?.bookingDate);
+  return Number.isNaN(bookingDate.getTime()) ? '' : bookingDate.toISOString().slice(0, 10);
+};
+
+const getAppointmentRange = (appointment) => {
+  const timeSlotParts = typeof appointment?.timeSlot === 'string'
+    ? appointment.timeSlot.split(/\s+-\s+/)
+    : [];
+  const start = Number.isInteger(appointment?.startMinutes)
+    ? appointment.startMinutes
+    : parseAppointmentTimeToMinutes(appointment?.startTime || timeSlotParts[0]);
+  const end = parseAppointmentTimeToMinutes(appointment?.adjustedEndTime)
+    ?? (Number.isInteger(appointment?.endMinutes) ? appointment.endMinutes : null)
+    ?? parseAppointmentTimeToMinutes(appointment?.endTime || timeSlotParts[1]);
+
+  return Number.isInteger(start) && Number.isInteger(end) && end > start
+    ? { start, end }
+    : null;
+};
+
+const findStaffScheduleConflicts = async ({
+  staffId,
+  workingHours,
+  newlyAddedOffDays,
+  validateWorkingHours,
+  session = null,
+}) => {
+  if (!validateWorkingHours && newlyAddedOffDays.length === 0) return [];
+
+  let appointmentsQuery = Appointment.find({
+    $or: [{ staffId }, { stylist: staffId }],
+    status: { $in: ACTIVE_APPOINTMENT_STATUSES },
+  })
+    .select('_id user staffId stylist bookingDate date timeSlot startTime endTime adjustedEndTime startMinutes endMinutes status')
+    .populate('user', 'name')
+    .sort({ date: 1, startMinutes: 1, startTime: 1 });
+
+  if (session) appointmentsQuery = appointmentsQuery.session(session);
+  const appointments = await appointmentsQuery.lean();
+  const workingStart = validateWorkingHours
+    ? parseAppointmentTimeToMinutes(workingHours.start)
+    : null;
+  const workingEnd = validateWorkingHours
+    ? parseAppointmentTimeToMinutes(workingHours.end)
+    : null;
+  const newOffDaySet = new Set(newlyAddedOffDays.map((day) => day.toLowerCase()));
+
+  return appointments.reduce((conflicts, appointment) => {
+    const dateKey = getAppointmentDateKey(appointment);
+    const appointmentDate = new Date(`${dateKey}T00:00:00.000Z`);
+    const range = getAppointmentRange(appointment);
+    const dayName = Number.isNaN(appointmentDate.getTime())
+      ? ''
+      : DAY_NAMES[appointmentDate.getUTCDay()];
+    let reason = '';
+
+    if (dayName && newOffDaySet.has(dayName.toLowerCase())) {
+      reason = `The appointment falls on newly selected off-day ${dayName}.`;
+    } else if (
+      validateWorkingHours
+      && (
+        !dateKey
+        || !range
+        || workingStart === null
+        || workingEnd === null
+        || range.start < workingStart
+        || range.end > workingEnd
+      )
+    ) {
+      reason = `The appointment falls outside the proposed ${workingHours.start}-${workingHours.end} staff working hours.`;
+    }
+
+    if (reason) {
+      conflicts.push({
+        appointmentId: appointment._id,
+        customerId: appointment.user?._id || appointment.user || null,
+        customerName: appointment.user?.name || 'Unknown customer',
+        staffId: appointment.staffId || appointment.stylist || staffId,
+        date: dateKey,
+        startTime: appointment.startTime || null,
+        endTime: appointment.adjustedEndTime || appointment.endTime || null,
+        reason,
+      });
+    }
+
+    return conflicts;
+  }, []);
+};
 
 // Function to pick and normalize staff profile text fields from the request body, returning an object with only the allowed fields and their trimmed string values
 const pickStaffProfileTextFields = (body = {}) => (
@@ -66,9 +183,10 @@ const validateLinkedStaffUser = async (userId, currentStaffId = null) => {
   return linkedUser._id;
 };
 
-const sendControllerError = (res, error) => (
-  res.status(error.statusCode || 500).json({ message: error.message })
-);
+const sendControllerError = (res, error) => res.status(error.statusCode || 500).json({
+  message: error.message,
+  ...(Array.isArray(error.conflicts) ? { conflicts: error.conflicts } : {}),
+});
 
 const createStaffRegistrationError = (message, statusCode = 400) => {
   const error = new Error(message);
@@ -80,7 +198,7 @@ const createStaffRegistrationError = (message, statusCode = 400) => {
 // @route   GET /api/staff
 const getStaff = async (req, res) => {
   try {
-    const staff = await Staff.find();
+    const staff = await Staff.find({ isActive: { $ne: false } });
     res.status(200).json(staff);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -92,6 +210,9 @@ const getStaff = async (req, res) => {
 const getPublicStaffList = async (req, res) => {
   try {
     const staff = await Staff.aggregate([
+      {
+        $match: { isActive: { $ne: false } },
+      },
       {
         $lookup: {
           from: Appointment.collection.name,
@@ -196,6 +317,14 @@ const registerStaffProfile = async (req, res) => {
       });
     }
 
+    if (String(password).length < 8) {
+      await cleanupUploadedCloudinaryFile(req.file, 'Staff registration password validation cleanup');
+      return res.status(400).json({
+        success: false,
+        message: 'Password must be at least 8 characters long.',
+      });
+    }
+
     if (!isValidPhoneNumber(normalizedPhone)) {
       await cleanupUploadedCloudinaryFile(req.file, 'Staff registration phone validation cleanup');
       return res.status(400).json({
@@ -268,7 +397,12 @@ const addStaff = async (req, res) => {
       return res.status(400).json({ message: 'Please add all fields' });
     }
 
-    const linkedUserId = userId ? await validateLinkedStaffUser(userId) : undefined;
+    if (!String(userId || '').trim()) {
+      await cleanupUploadedCloudinaryFile(req.file, 'Staff validation cleanup');
+      return res.status(400).json({ message: 'A linked staff user ID is required.' });
+    }
+
+    const linkedUserId = await validateLinkedStaffUser(userId);
     
     const imageUrl = req.file?.path || '';
 
@@ -286,20 +420,28 @@ const addStaff = async (req, res) => {
     res.status(201).json(staff);
   } catch (error) {
     await cleanupUploadedCloudinaryFile(req.file, 'Staff creation cleanup');
-    res.status(500).json({ message: error.message });
+    res.status(error.statusCode || 500).json({ message: error.message });
   }
 };
 
 // @desc    Update a staff member (Admin only)
 // @route   PUT /api/staff/:id
 const updateStaff = async (req, res) => {
+  let databaseUpdateCommitted = false;
+  let linkedUserIdForNameSync = null;
+  let linkedUserBeforeNameSync = null;
+  let scheduleUpdateSession;
+  let usedScheduleTransaction = false;
+
   try {
     if (!mongoose.isValidObjectId(req.params.id)) {
+      await cleanupUploadedCloudinaryFile(req.file, 'Invalid staff update cleanup');
       return res.status(400).json({ message: 'Please provide a valid staff profile ID.' });
     }
 
     const existingStaff = await Staff.findById(req.params.id);
     if (!existingStaff) {
+      await cleanupUploadedCloudinaryFile(req.file, 'Missing staff update cleanup');
       return res.status(404).json({ message: 'Staff member not found' });
     }
 
@@ -309,6 +451,14 @@ const updateStaff = async (req, res) => {
     allowedFields.forEach((field) => {
       if (req.body[field] !== undefined) updates[field] = req.body[field];
     });
+
+    if (updates.name !== undefined) {
+      updates.name = String(updates.name).trim();
+      if (!updates.name) {
+        await cleanupUploadedCloudinaryFile(req.file, 'Invalid staff name update cleanup');
+        return res.status(400).json({ message: 'Staff name is required.' });
+      }
+    }
 
     if (req.body.userId !== undefined) {
       updates.userId = await validateLinkedStaffUser(req.body.userId, req.params.id);
@@ -322,30 +472,163 @@ const updateStaff = async (req, res) => {
       updates.workingHours = normalizeWorkingHours(req.body.workingHours);
     }
 
-    if (req.file?.path) {
-      await destroyCloudinaryAsset(existingStaff.imagePublicId, existingStaff.imageUrl);
-      updates.imageUrl = req.file.path;
-      updates.imagePublicId = req.file.filename || '';
-    } else if (req.body.imageUrl !== undefined) {
-      if (req.body.imageUrl !== existingStaff.imageUrl) {
-        await destroyCloudinaryAsset(existingStaff.imagePublicId, existingStaff.imageUrl);
+    const containsScheduleMutation = req.body.offDays !== undefined
+      || req.body.workingHours !== undefined;
+    let updatedStaff;
+    let oldImagePublicId = '';
+    let oldImageUrl = '';
+    let shouldDeleteOldImage = false;
+
+    const persistStaffUpdate = async (currentStaff, session = null) => {
+      const transactionalUpdates = { ...updates };
+      const existingOffDays = normalizeOffDays(currentStaff.offDays) || [];
+      const proposedOffDays = transactionalUpdates.offDays || existingOffDays;
+      const existingOffDaySet = new Set(existingOffDays.map((day) => day.toLowerCase()));
+      const newlyAddedOffDays = proposedOffDays.filter(
+        (day) => !existingOffDaySet.has(day.toLowerCase())
+      );
+      const proposedWorkingHours = transactionalUpdates.workingHours || currentStaff.workingHours;
+      const workingHoursChanged = req.body.workingHours !== undefined
+        && (
+          proposedWorkingHours.start !== currentStaff.workingHours?.start
+          || proposedWorkingHours.end !== currentStaff.workingHours?.end
+        );
+      const scheduleConflicts = await findStaffScheduleConflicts({
+        staffId: currentStaff._id,
+        workingHours: proposedWorkingHours,
+        newlyAddedOffDays,
+        validateWorkingHours: workingHoursChanged,
+        session,
+      });
+
+      if (scheduleConflicts.length > 0) {
+        const error = new Error(
+          'Active appointments conflict with the proposed staff schedule. Cancel or reschedule them before changing working hours or off-days.'
+        );
+        error.statusCode = 400;
+        error.conflicts = scheduleConflicts;
+        throw error;
       }
 
-      updates.imageUrl = req.body.imageUrl;
-      updates.imagePublicId = resolveCloudinaryPublicId('', req.body.imageUrl);
+      if (req.file?.path) {
+        transactionalUpdates.imageUrl = req.file.path;
+        transactionalUpdates.imagePublicId = req.file.filename || '';
+      } else if (req.body.imageUrl !== undefined) {
+        transactionalUpdates.imageUrl = req.body.imageUrl;
+        transactionalUpdates.imagePublicId = resolveCloudinaryPublicId('', req.body.imageUrl);
+      } else {
+        transactionalUpdates.imageUrl = currentStaff.imageUrl;
+        transactionalUpdates.imagePublicId = currentStaff.imagePublicId
+          || resolveCloudinaryPublicId('', currentStaff.imageUrl);
+      }
+
+      oldImagePublicId = currentStaff.imagePublicId;
+      oldImageUrl = currentStaff.imageUrl;
+      const oldPublicId = resolveCloudinaryPublicId(oldImagePublicId, oldImageUrl);
+      const nextPublicId = resolveCloudinaryPublicId(
+        transactionalUpdates.imagePublicId,
+        transactionalUpdates.imageUrl
+      );
+      shouldDeleteOldImage = Boolean(oldPublicId)
+        && transactionalUpdates.imageUrl !== oldImageUrl
+        && nextPublicId !== oldPublicId;
+
+      linkedUserIdForNameSync = transactionalUpdates.userId
+        || currentStaff.userId
+        || currentStaff.user
+        || null;
+      if (transactionalUpdates.name !== undefined && linkedUserIdForNameSync) {
+        linkedUserBeforeNameSync = await User.findByIdAndUpdate(
+          linkedUserIdForNameSync,
+          { name: transactionalUpdates.name },
+          { returnDocument: 'before', runValidators: true, ...(session ? { session } : {}) }
+        );
+
+        if (!linkedUserBeforeNameSync) {
+          const error = new Error('Linked staff user account not found.');
+          error.statusCode = 409;
+          throw error;
+        }
+      }
+
+      const persistedStaff = await Staff.findByIdAndUpdate(req.params.id, transactionalUpdates, {
+        returnDocument: 'after',
+        runValidators: true,
+        ...(session ? { session } : {}),
+      });
+
+      if (!persistedStaff) {
+        const error = new Error('Staff member not found');
+        error.statusCode = 404;
+        throw error;
+      }
+
+      return persistedStaff;
+    };
+
+    if (containsScheduleMutation) {
+      usedScheduleTransaction = true;
+      scheduleUpdateSession = await mongoose.startSession();
+      await scheduleUpdateSession.withTransaction(async () => {
+        await AppointmentScheduleLock.findOneAndUpdate(
+          { _id: getStaffScheduleLockId(req.params.id) },
+          { $inc: { revision: 1 } },
+          {
+            upsert: true,
+            returnDocument: 'after',
+            session: scheduleUpdateSession,
+            setDefaultsOnInsert: true,
+          }
+        );
+
+        const lockedStaff = await Staff.findById(req.params.id).session(scheduleUpdateSession);
+        if (!lockedStaff) {
+          const error = new Error('Staff member not found');
+          error.statusCode = 404;
+          throw error;
+        }
+
+        updatedStaff = await persistStaffUpdate(lockedStaff, scheduleUpdateSession);
+      });
     } else {
-      updates.imageUrl = existingStaff.imageUrl;
-      updates.imagePublicId = existingStaff.imagePublicId || resolveCloudinaryPublicId('', existingStaff.imageUrl);
+      updatedStaff = await persistStaffUpdate(existingStaff);
     }
 
-    const updatedStaff = await Staff.findByIdAndUpdate(req.params.id, updates, {
-      new: true,
-      runValidators: true,
-    });
+    databaseUpdateCommitted = true;
+
+    if (shouldDeleteOldImage) {
+      queueCloudinaryAssetDeletion(
+        oldImagePublicId,
+        oldImageUrl,
+        'Old staff image cleanup'
+      );
+    }
 
     res.status(200).json(updatedStaff);
   } catch (error) {
+    if (
+      !databaseUpdateCommitted
+      && !usedScheduleTransaction
+      && linkedUserBeforeNameSync
+      && linkedUserIdForNameSync
+    ) {
+      try {
+        await User.findByIdAndUpdate(
+          linkedUserIdForNameSync,
+          { name: linkedUserBeforeNameSync.name },
+          { runValidators: true }
+        );
+      } catch (rollbackError) {
+        console.error('Linked staff user name rollback failed:', rollbackError.message);
+      }
+    }
+
+    if (!databaseUpdateCommitted) {
+      await cleanupUploadedCloudinaryFile(req.file, 'Failed staff update cleanup');
+    }
     sendControllerError(res, error);
+  } finally {
+    if (scheduleUpdateSession) await scheduleUpdateSession.endSession();
   }
 };
 
@@ -364,32 +647,53 @@ const deleteStaff = async (req, res) => {
       return res.status(404).json({ message: 'Staff member not found' });
     }
 
-    const linkedUser = existingStaff.userId
-      ? await User.findById(existingStaff.userId).select('profileImage profileImagePublicId')
-      : null;
-
-    await destroyCloudinaryAsset(existingStaff.imagePublicId, existingStaff.imageUrl);
-    if (linkedUser) {
-      await destroyCloudinaryAsset(linkedUser.profileImagePublicId, linkedUser.profileImage);
+    if (existingStaff.isActive === false) {
+      return res.status(200).json({
+        id: req.params.id,
+        userId: existingStaff.userId || null,
+        message: 'Staff member is already inactive',
+      });
     }
 
-    let deletedUserId = null;
+    const hasActiveAppointments = await Appointment.exists({
+      status: { $in: ['pending', 'confirmed', 'Pending', 'Confirmed', 'approved', 'Approved'] },
+      $or: [
+        { staffId: existingStaff._id },
+        { stylist: existingStaff._id },
+      ],
+    });
+
+    if (hasActiveAppointments) {
+      return res.status(400).json({
+        message: 'This staff member cannot be removed while they have pending or confirmed appointments.',
+      });
+    }
+
+    let linkedStaffAccountDeactivated = false;
 
     await session.withTransaction(async () => {
-      await Staff.findByIdAndDelete(req.params.id, { session });
+      await Staff.findByIdAndUpdate(
+        req.params.id,
+        { $set: { isActive: false } },
+        { session, runValidators: true }
+      );
 
       if (existingStaff.userId) {
-        await User.findByIdAndDelete(existingStaff.userId, { session });
-        deletedUserId = existingStaff.userId;
+        const userUpdateResult = await User.updateOne(
+          { _id: existingStaff.userId, role: 'staff' },
+          { $set: { isActive: false } },
+          { session, runValidators: true }
+        );
+        linkedStaffAccountDeactivated = userUpdateResult.modifiedCount > 0;
       }
     });
 
     res.status(200).json({
       id: req.params.id,
-      userId: deletedUserId,
-      message: deletedUserId
-        ? 'Staff member and linked user account deleted'
-        : 'Staff member deleted',
+      userId: existingStaff.userId || null,
+      message: linkedStaffAccountDeactivated
+        ? 'Staff member and linked user account deactivated'
+        : 'Staff member deactivated',
     });
   } catch (error) {
     res.status(500).json({ message: error.message });

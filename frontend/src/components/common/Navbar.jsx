@@ -3,11 +3,12 @@ import { motion } from 'framer-motion';
 import { Scissors } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { clearAuthStorage } from '../../utils/auth';
+import { storage } from '../../utils/storage';
 
 function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const userRole = localStorage.getItem('userRole');
+  const userRole = storage.get('userRole');
   const sectionScrollTimerRef = useRef(null);
 
   useEffect(() => {
@@ -74,7 +75,7 @@ function Navbar() {
 
   return (
     <nav className="fixed inset-x-0 top-0 z-50 border-b border-white/5 bg-black/60 px-3 py-3 font-sans shadow-lg backdrop-blur-md sm:px-6 sm:py-4 lg:px-12">
-      <div className="flex w-full items-center justify-between gap-3 text-white sm:px-6 lg:px-12">
+      <div className="relative z-20 flex w-full items-center justify-between gap-3 text-white sm:px-6 lg:px-12">
         <motion.button
           type="button"
           onClick={() => scrollToSection('home')}

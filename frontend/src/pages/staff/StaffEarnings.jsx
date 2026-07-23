@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import axios from "axios";
+import { apiClient as axios } from '../../utils/apiConfig';
 import { CalendarCheck, CheckCircle2, ChevronDown, DollarSign, Loader2, TrendingUp } from "lucide-react";
 import { toast } from "react-toastify";
 import {
@@ -12,6 +12,8 @@ import {
   YAxis,
 } from "recharts";
 import BACKEND_BASE_URL from "../../utils/apiConfig";
+import { getSalonDateKey } from "../../utils/salonTime";
+import { storage } from '../../utils/storage';
 
 const RANGE_OPTIONS = [
   { value: "FULL_YEAR", label: "Full year" },
@@ -77,7 +79,7 @@ const useIsNarrowViewport = () => {
 };
 
 function StaffEarnings() {
-  const currentYear = new Date().getFullYear();
+  const currentYear = Number(getSalonDateKey().slice(0, 4));
   const isNarrowViewport = useIsNarrowViewport();
   const [filterYear, setFilterYear] = useState(String(currentYear));
   const [filterRange, setFilterRange] = useState("YTD");
@@ -243,16 +245,13 @@ function StaffEarnings() {
     const fetchEarningsSummary = async () => {
       try {
         setIsLoading(true);
-        const token = localStorage.getItem("token");
+        const token = storage.get("token");
 
         if (!token) {
           throw new Error("Session expired, please sign out and log back in.");
         }
 
         const response = await axios.get(`${BACKEND_BASE_URL}/api/appointments/staff/earnings-summary`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
           params: {
             range: filterRange,
             ...(isRollingRange ? {} : { year: filterYear }),

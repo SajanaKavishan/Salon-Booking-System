@@ -1,14 +1,16 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import axios from 'axios';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { apiClient as axios } from '../../utils/apiConfig';
 import { toast } from 'react-toastify';
 import { X } from 'lucide-react';
 import BACKEND_BASE_URL from '../../utils/apiConfig';
 import { getStoredSession } from '../../utils/auth';
+import { useModalFocus } from '../../hooks/useModalFocus';
+import { storage } from '../../utils/storage';
 
 const DEFAULT_STYLISTS = [];
 const SRI_LANKAN_MOBILE_REGEX = /^(?:\+94|0)7\d{8}$/;
 
-const formLabelClassName = 'text-xs font-bold uppercase leading-5 tracking-[0.12em] text-gray-400';
+const formLabelClassName = 'text-xs font-bold uppercase leading-5 tracking-[0.12em] text-gray-300';
 const formValueClassName = 'mt-2 text-base leading-6 text-white';
 const formInputClassName = 'mt-2 w-full bg-transparent pb-2 text-base font-medium leading-6 text-white outline-none border-b border-[#D4AF37]/40 transition focus:border-[#D4AF37]';
 
@@ -24,6 +26,7 @@ function Profile({ onClose }) {
   const [stylists, setStylists] = useState(DEFAULT_STYLISTS);
   const [profileImage, setProfileImage] = useState(user?.profileImage || '');
   const [profileImageFile, setProfileImageFile] = useState(null);
+  const [emailCurrentPassword, setEmailCurrentPassword] = useState('');
 
   const [formValues, setFormValues] = useState(() => ({
     name: user?.name || '',
@@ -44,20 +47,16 @@ function Profile({ onClose }) {
     newPassword: '',
     confirmPassword: ''
   });
-
-  useEffect(() => {
-    if (!isPasswordModalOpen) return undefined;
-
-    const handleEscapeKey = (event) => {
-      if (event.key === 'Escape' && !isPasswordSaving) {
-        setIsPasswordModalOpen(false);
-        setPasswordValues({ currentPassword: '', newPassword: '', confirmPassword: '' });
-      }
-    };
-
-    window.addEventListener('keydown', handleEscapeKey);
-    return () => window.removeEventListener('keydown', handleEscapeKey);
-  }, [isPasswordModalOpen, isPasswordSaving]);
+  const closePasswordModal = useCallback(() => {
+    if (isPasswordSaving) return;
+    setIsPasswordModalOpen(false);
+    setPasswordValues({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  }, [isPasswordSaving]);
+  const passwordDialogRef = useModalFocus({
+    isOpen: isPasswordModalOpen,
+    onClose: closePasswordModal,
+    canClose: !isPasswordSaving,
+  });
 
   // Get staff list from backend API
   useEffect(() => {
@@ -195,6 +194,8 @@ function Profile({ onClose }) {
       || normalize(profileImage) !== normalize(user?.profileImage)
     );
   }, [formValues, isEditing, profileImage, profileImageFile, user]);
+  const isEmailChange = formValues.email.trim().toLowerCase()
+    !== String(user?.email || '').trim().toLowerCase();
 
   const updateField = (field, value) => {
     setFormValues((current) => ({
@@ -213,6 +214,7 @@ function Profile({ onClose }) {
     });
     setProfileImage(user?.profileImage || '');
     setProfileImageFile(null);
+    setEmailCurrentPassword('');
     setStylistQuery(preferredStylist);
     setIsStylistOpen(false);
     setIsEditing(false);
@@ -227,9 +229,14 @@ function Profile({ onClose }) {
       return;
     }
 
+    if (isEmailChange && !emailCurrentPassword.trim()) {
+      toast.error('Enter your current password to update your email address.');
+      return;
+    }
+
     try {
       setIsSaving(true);
-      const token = localStorage.getItem('token');
+      const token = storage.get('token');
 
       if (!token) {
         console.error("Can't find authentication token in localStorage!");
@@ -242,7 +249,7 @@ function Profile({ onClose }) {
         name: formValues.name.trim() || user?.name || '',
         email: formValues.email.trim() || user?.email || '',
         phone: normalizedPhone,
-        preferredStylist: formValues.preferredStylist.trim() || user?.preferredStylist || '',
+        preferredStylist: formValues.preferredStylist.trim(),
       };
 
       const payload = new FormData();
@@ -250,6 +257,9 @@ function Profile({ onClose }) {
       payload.append('email', updatedUser.email);
       payload.append('phone', updatedUser.phone);
       payload.append('preferredStylist', updatedUser.preferredStylist);
+      if (isEmailChange) {
+        payload.append('currentPassword', emailCurrentPassword);
+      }
       if (profileImageFile) {
         payload.append('profileImage', profileImageFile);
       }
@@ -259,7 +269,6 @@ function Profile({ onClose }) {
         payload,
         {
           headers: {
-            Authorization: `Bearer ${token}`,
             'Content-Type': 'multipart/form-data'
           }
         }
@@ -269,9 +278,10 @@ function Profile({ onClose }) {
         const mergedUser = { ...updatedUser, ...response.data };
 
         setUser(mergedUser);
-        localStorage.setItem('user', JSON.stringify(mergedUser));
+        storage.set('user', JSON.stringify(mergedUser));
         setProfileImage(mergedUser.profileImage || '');
         setProfileImageFile(null);
+        setEmailCurrentPassword('');
         
         setFormValues({
           name: mergedUser.name || '',
@@ -303,6 +313,11 @@ function Profile({ onClose }) {
       return;
     }
 
+    if (passwordValues.newPassword.length < 8) {
+      alert("Password must be at least 8 characters long.");
+      return;
+    }
+
     if (passwordValues.newPassword !== passwordValues.confirmPassword) {
       alert("New passwords do not match!");
       return;
@@ -310,7 +325,7 @@ function Profile({ onClose }) {
 
     try {
       setIsPasswordSaving(true);
-      const token = localStorage.getItem('token');
+      const token = storage.get('token');
       if (!token) {
         alert("Please log in again.");
         return;
@@ -322,10 +337,24 @@ function Profile({ onClose }) {
           currentPassword: passwordValues.currentPassword,
           newPassword: passwordValues.newPassword
         },
-        { headers: { Authorization: `Bearer ${token}` } }
+        {}
       );
 
       if (response.data) {
+        const freshToken = response.data.token;
+        if (!freshToken) {
+          throw new Error('The server did not return a refreshed session token.');
+        }
+
+        storage.set('token', freshToken);
+        window.dispatchEvent(new CustomEvent('authUpdated', { detail: { token: freshToken } }));
+
+        if (response.data.user) {
+          setUser(response.data.user);
+          storage.set('user', JSON.stringify(response.data.user));
+        }
+
+        window.dispatchEvent(new CustomEvent('profileUpdated', { detail: response.data.user }));
         alert("Password updated successfully!");
         setIsPasswordModalOpen(false);
         setPasswordValues({ currentPassword: '', newPassword: '', confirmPassword: '' });
@@ -346,6 +375,7 @@ function Profile({ onClose }) {
       preferredStylist: user?.preferredStylist || ''
     });
     setStylistQuery(displayStylist === 'Not Specified' ? '' : displayStylist);
+    setEmailCurrentPassword('');
     setIsEditing(true);
   };
 
@@ -354,6 +384,23 @@ function Profile({ onClose }) {
     setStylistQuery(stylist.name);
     setIsStylistOpen(false);
     setActiveStylistIndex(0);
+  };
+
+  const handleClearPreferredStylist = () => {
+    updateField('preferredStylist', '');
+    setStylistQuery('');
+    setIsStylistOpen(false);
+    setActiveStylistIndex(0);
+  };
+
+  const handleStylistBlur = () => {
+    const selectedStylist = stylists.find(
+      (stylist) => stylist.userId === formValues.preferredStylist
+        || stylist.name === formValues.preferredStylist
+    );
+
+    setStylistQuery(selectedStylist?.name || '');
+    window.setTimeout(() => setIsStylistOpen(false), 140);
   };
 
   const handleStylistKeyDown = (event) => {
@@ -468,14 +515,11 @@ function Profile({ onClose }) {
                     onChange={(event) => {
                       if (!isEditing) return;
                       setStylistQuery(event.target.value);
-                      updateField('preferredStylist', event.target.value);
                       setIsStylistOpen(true);
                       setActiveStylistIndex(0);
                     }}
                     onKeyDown={handleStylistKeyDown}
-                    onBlur={() => {
-                      window.setTimeout(() => setIsStylistOpen(false), 140);
-                    }}
+                    onBlur={handleStylistBlur}
                     placeholder="Search stylists"
                     autoComplete="off"
                     role="combobox"
@@ -492,6 +536,18 @@ function Profile({ onClose }) {
                   />
                   {isEditing && isStylistOpen && (
                     <div id="customer-profile-stylist-listbox-desktop" role="listbox" className="absolute z-10 mt-2 w-full rounded-2xl border border-[#D4AF37]/30 bg-[#0b0b0b] shadow-[0_0_30px_rgba(212,175,55,0.12)]">
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={!formValues.preferredStylist}
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          handleClearPreferredStylist();
+                        }}
+                        className="w-full border-b border-white/5 px-4 py-2 text-left text-sm text-neutral-300 transition hover:bg-[#D4AF37]/10 hover:text-white"
+                      >
+                        None
+                      </button>
                       {filteredStylists.length > 0 ? (
                         filteredStylists.map((stylist, index) => (
                           <button
@@ -500,7 +556,10 @@ function Profile({ onClose }) {
                             id={`customer-profile-stylist-option-desktop-${stylist.userId}`}
                             role="option"
                             aria-selected={index === activeStylistIndex}
-                            onMouseDown={() => handleStylistSelect(stylist)}
+                            onMouseDown={(event) => {
+                              event.preventDefault();
+                              handleStylistSelect(stylist);
+                            }}
                             className={`w-full px-4 py-2 text-left text-sm transition hover:text-white ${index === activeStylistIndex ? 'bg-[#D4AF37]/10 text-white' : 'text-neutral-200'}`}
                           >
                             {stylist.name}
@@ -560,11 +619,26 @@ function Profile({ onClose }) {
                     onChange={(event) => updateField('email', event.target.value)}
                     className={formInputClassName}
                     autoComplete="email"
+                    inputMode="email"
                   />
                 ) : (
                   <p className={formValueClassName}>{displayEmail}</p>
                 )}
               </div>
+              {isEditing && isEmailChange && (
+                <div>
+                  <label htmlFor="customer-profile-email-password" className={formLabelClassName}>Current Password</label>
+                  <input
+                    id="customer-profile-email-password"
+                    type="password"
+                    value={emailCurrentPassword}
+                    onChange={(event) => setEmailCurrentPassword(event.target.value)}
+                    className={formInputClassName}
+                    autoComplete="current-password"
+                    placeholder="Required to change email"
+                  />
+                </div>
+              )}
               <div>
                 <label htmlFor="customer-profile-phone" className={formLabelClassName}>Phone Number</label>
                 {isEditing ? (
@@ -575,6 +649,7 @@ function Profile({ onClose }) {
                     onChange={(event) => updateField('phone', event.target.value)}
                     className={formInputClassName}
                     autoComplete="tel"
+                    inputMode="tel"
                   />
                 ) : (
                   <p className={formValueClassName}>{displayPhone}</p>
@@ -595,14 +670,11 @@ function Profile({ onClose }) {
                     onChange={(event) => {
                       if (!isEditing) return;
                       setStylistQuery(event.target.value);
-                      updateField('preferredStylist', event.target.value);
                       setIsStylistOpen(true);
                       setActiveStylistIndex(0);
                     }}
                     onKeyDown={handleStylistKeyDown}
-                    onBlur={() => {
-                      window.setTimeout(() => setIsStylistOpen(false), 140);
-                    }}
+                    onBlur={handleStylistBlur}
                     placeholder="Search stylists"
                     autoComplete="off"
                     role="combobox"
@@ -619,6 +691,18 @@ function Profile({ onClose }) {
                   />
                   {isEditing && isStylistOpen && (
                     <div id="customer-profile-stylist-listbox-mobile" role="listbox" className="absolute z-10 mt-2 w-full rounded-2xl border border-[#D4AF37]/30 bg-[#0b0b0b] shadow-[0_0_30px_rgba(212,175,55,0.12)]">
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={!formValues.preferredStylist}
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          handleClearPreferredStylist();
+                        }}
+                        className="w-full border-b border-white/5 px-4 py-2 text-left text-sm text-neutral-300 transition hover:bg-[#D4AF37]/10 hover:text-white"
+                      >
+                        None
+                      </button>
                       {filteredStylists.length > 0 ? (
                         filteredStylists.map((stylist, index) => (
                           <button
@@ -627,7 +711,10 @@ function Profile({ onClose }) {
                             id={`customer-profile-stylist-option-mobile-${stylist.userId}`}
                             role="option"
                             aria-selected={index === activeStylistIndex}
-                            onMouseDown={() => handleStylistSelect(stylist)}
+                            onMouseDown={(event) => {
+                              event.preventDefault();
+                              handleStylistSelect(stylist);
+                            }}
                             className={`w-full px-4 py-2 text-left text-sm transition hover:text-white ${index === activeStylistIndex ? 'bg-[#D4AF37]/10 text-white' : 'text-neutral-200'}`}
                           >
                             {stylist.name}
@@ -681,12 +768,18 @@ function Profile({ onClose }) {
       </div>
 
       {isPasswordModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+          onClick={closePasswordModal}
+        >
           <div
+            ref={passwordDialogRef}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby="password-modal-title"
             className="w-full max-w-md rounded-2xl border border-[#D4AF37]/30 bg-[#0b0b0b] p-6 md:p-8 shadow-[0_0_40px_rgba(212,175,55,0.15)]"
+            onClick={(event) => event.stopPropagation()}
           >
             <h3 id="password-modal-title" className="font-serif text-2xl font-semibold text-white mb-2">Change Password</h3>
             <p className="text-sm text-gray-400 mb-6">Ensure your account is using a secure password.</p>
@@ -697,6 +790,8 @@ function Profile({ onClose }) {
                 <input
                   id="customer-profile-current-password"
                   type="password"
+                  minLength={8}
+                  autoFocus
                   value={passwordValues.currentPassword}
                   onChange={(e) => setPasswordValues({...passwordValues, currentPassword: e.target.value})}
                   className="w-full rounded-xl border border-[#D4AF37]/40 bg-transparent px-4 py-3 text-sm text-white outline-none transition focus:border-[#D4AF37]"
@@ -709,6 +804,7 @@ function Profile({ onClose }) {
                 <input
                   id="customer-profile-new-password"
                   type="password"
+                  minLength={8}
                   value={passwordValues.newPassword}
                   onChange={(e) => setPasswordValues({...passwordValues, newPassword: e.target.value})}
                   className="w-full rounded-xl border border-[#D4AF37]/40 bg-transparent px-4 py-3 text-sm text-white outline-none transition focus:border-[#D4AF37]"
@@ -721,22 +817,21 @@ function Profile({ onClose }) {
                 <input
                   id="customer-profile-confirm-password"
                   type="password"
+                  minLength={8}
                   value={passwordValues.confirmPassword}
                   onChange={(e) => setPasswordValues({...passwordValues, confirmPassword: e.target.value})}
                   className="w-full rounded-xl border border-[#D4AF37]/40 bg-transparent px-4 py-3 text-sm text-white outline-none transition focus:border-[#D4AF37]"
                   placeholder="Confirm new password"
                   autoComplete="new-password"
                 />
+                <p className="mt-1.5 text-xs text-gray-500">Use at least 8 characters.</p>
               </div>
             </div>
 
             <div className="mt-8 flex items-center justify-end gap-4 text-sm font-medium">
               <button
                 type="button"
-                onClick={() => {
-                  setIsPasswordModalOpen(false);
-                  setPasswordValues({ currentPassword: '', newPassword: '', confirmPassword: '' });
-                }}
+                onClick={closePasswordModal}
                 className="text-neutral-400 transition hover:text-white"
               >
                 Cancel

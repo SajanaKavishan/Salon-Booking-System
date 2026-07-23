@@ -1,13 +1,16 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import axios from 'axios';
+import { apiClient as axios } from '../../utils/apiConfig';
 import { toast } from 'react-toastify';
 import { X } from 'lucide-react';
 import BACKEND_BASE_URL from '../../utils/apiConfig';
 import { getStoredSession } from '../../utils/auth';
+import { useModalFocus } from '../../hooks/useModalFocus';
+import { storage } from '../../utils/storage';
 
 const SRI_LANKAN_MOBILE_REGEX = /^(?:\+94|0)7\d{8}$/;
+const SUPPORTED_PROFILE_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
-const formLabelClassName = 'text-xs font-bold uppercase leading-5 tracking-[0.12em] text-gray-400';
+const formLabelClassName = 'text-xs font-bold uppercase leading-5 tracking-[0.12em] text-gray-300';
 const formValueClassName = 'mt-2 text-base leading-6 text-white';
 const formInputClassName = 'mt-2 w-full bg-transparent pb-2 text-base font-medium leading-6 text-white outline-none border-b border-[#D4AF37]/40 transition focus:border-[#D4AF37]';
 
@@ -22,6 +25,7 @@ function AdminProfile({ onClose }) {
   const [isSaving, setIsSaving] = useState(false);
   const [profileImage, setProfileImage] = useState(user?.profileImage || user?.imageUrl || user?.image || '');
   const [profileImageFile, setProfileImageFile] = useState(null);
+  const [emailCurrentPassword, setEmailCurrentPassword] = useState('');
 
   const [formValues, setFormValues] = useState(() => ({
     name: user?.name || '',
@@ -36,6 +40,16 @@ function AdminProfile({ onClose }) {
     currentPassword: '',
     newPassword: '',
     confirmPassword: ''
+  });
+  const closePasswordModal = () => {
+    if (isPasswordSaving) return;
+    setIsPasswordModalOpen(false);
+    setPasswordValues({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  };
+  const passwordDialogRef = useModalFocus({
+    isOpen: isPasswordModalOpen,
+    onClose: closePasswordModal,
+    canClose: !isPasswordSaving,
   });
 
   useEffect(() => {
@@ -86,6 +100,12 @@ function AdminProfile({ onClose }) {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    if (!SUPPORTED_PROFILE_IMAGE_TYPES.has(file.type)) {
+      toast.error('Only JPEG, PNG, and WebP profile images are allowed.');
+      event.target.value = '';
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = () => {
       const imageUrl = typeof reader.result === 'string' ? reader.result : '';
@@ -121,6 +141,8 @@ function AdminProfile({ onClose }) {
       || normalize(profileImage) !== normalize(user?.profileImage || user?.imageUrl || user?.image)
     );
   }, [formValues, isEditing, profileImage, profileImageFile, user]);
+  const isEmailChange = formValues.email.trim().toLowerCase()
+    !== String(user?.email || '').trim().toLowerCase();
 
   const resetForm = () => {
     setFormValues({
@@ -130,6 +152,7 @@ function AdminProfile({ onClose }) {
     });
     setProfileImage(user?.profileImage || user?.imageUrl || user?.image || '');
     setProfileImageFile(null);
+    setEmailCurrentPassword('');
     setIsEditing(false);
   };
 
@@ -142,9 +165,14 @@ function AdminProfile({ onClose }) {
       return;
     }
 
+    if (isEmailChange && !emailCurrentPassword.trim()) {
+      toast.error('Enter your current password to update your email address.');
+      return;
+    }
+
     try {
       setIsSaving(true);
-      const token = localStorage.getItem('token');
+      const token = storage.get('token');
       if (!token) {
         toast.error("Please log in again.");
         return;
@@ -160,6 +188,9 @@ function AdminProfile({ onClose }) {
       payload.append('name', updatedUser.name);
       payload.append('email', updatedUser.email);
       payload.append('phone', updatedUser.phone);
+      if (isEmailChange) {
+        payload.append('currentPassword', emailCurrentPassword);
+      }
       if (profileImageFile) {
         payload.append('profileImage', profileImageFile);
       }
@@ -169,7 +200,6 @@ function AdminProfile({ onClose }) {
         payload,
         {
           headers: {
-            Authorization: `Bearer ${token}`,
             'Content-Type': 'multipart/form-data'
           }
         }
@@ -184,8 +214,9 @@ function AdminProfile({ onClose }) {
           email: mergedUser.email || '',
           phone: mergedUser.phone || ''
         });
-        localStorage.setItem('user', JSON.stringify(mergedUser));
+        storage.set('user', JSON.stringify(mergedUser));
         setProfileImageFile(null);
+        setEmailCurrentPassword('');
         window.dispatchEvent(new CustomEvent('profileUpdated', { detail: mergedUser }));
         setIsEditing(false); 
         toast.success('Admin profile updated successfully!');
@@ -204,6 +235,10 @@ function AdminProfile({ onClose }) {
       toast.warning("Please fill in all password fields.");
       return;
     }
+    if (passwordValues.newPassword.length < 8) {
+      toast.error("Password must be at least 8 characters long.");
+      return;
+    }
     if (passwordValues.newPassword !== passwordValues.confirmPassword) {
       toast.error("New passwords do not match!");
       return;
@@ -211,16 +246,20 @@ function AdminProfile({ onClose }) {
 
     try {
       setIsPasswordSaving(true);
-      const token = localStorage.getItem('token');
       const response = await axios.put(
         `${BACKEND_BASE_URL}/api/users/profile`,
         {
           currentPassword: passwordValues.currentPassword,
           newPassword: passwordValues.newPassword
         },
-        { headers: { Authorization: `Bearer ${token}` } }
+        {}
       );
       if (response.data) {
+        const freshToken = response.data.token;
+        if (!freshToken) throw new Error('The server did not return a refreshed session token.');
+
+        storage.set('token', freshToken);
+        window.dispatchEvent(new CustomEvent('authUpdated', { detail: { token: freshToken } }));
         toast.success("Password updated successfully!");
         setIsPasswordModalOpen(false);
         setPasswordValues({ currentPassword: '', newPassword: '', confirmPassword: '' });
@@ -269,12 +308,12 @@ function AdminProfile({ onClose }) {
                 <span className="md:hidden">Change Photo</span>
                 <span className="hidden md:inline">{profileImage ? 'Change Photo' : 'Add Photo'}</span>
               </button>
-              <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoChange} />
+              <input ref={photoInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handlePhotoChange} />
             </div>
             <div className="max-w-xl md:pl-10">
               <div className="flex flex-wrap items-center gap-3">
                 <h2 className="break-words font-serif text-4xl font-semibold leading-tight tracking-normal text-white md:text-5xl">{displayName}</h2>
-                <span className="rounded-full border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-3 py-1 text-[10px] uppercase tracking-widest text-[#D4AF37]">{roleDescription}</span>
+                <span className="rounded-full border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-3 py-1 text-xs uppercase tracking-widest text-[#D4AF37]">{roleDescription}</span>
               </div>
               <p className="mt-3 text-sm leading-6 text-gray-400">Review your admin account details and security settings.</p>
             </div>
@@ -339,9 +378,24 @@ function AdminProfile({ onClose }) {
                     onChange={(e) => updateField('email', e.target.value)}
                     className={formInputClassName}
                     autoComplete="email"
+                    inputMode="email"
                   />
                 ) : <p className={formValueClassName}>{displayEmail}</p>}
               </div>
+              {isEditing && isEmailChange && (
+                <div>
+                  <label htmlFor="admin-profile-email-password" className={formLabelClassName}>Current Password</label>
+                  <input
+                    id="admin-profile-email-password"
+                    type="password"
+                    value={emailCurrentPassword}
+                    onChange={(event) => setEmailCurrentPassword(event.target.value)}
+                    className={formInputClassName}
+                    autoComplete="current-password"
+                    placeholder="Required to change email"
+                  />
+                </div>
+              )}
               <div>
                 <label htmlFor="admin-profile-phone" className={formLabelClassName}>Phone Number</label>
                 {isEditing ? (
@@ -352,6 +406,7 @@ function AdminProfile({ onClose }) {
                     onChange={(e) => updateField('phone', e.target.value)}
                     className={formInputClassName}
                     autoComplete="tel"
+                    inputMode="tel"
                   />
                 ) : <p className={formValueClassName}>{displayPhone}</p>}
               </div>
@@ -390,16 +445,29 @@ function AdminProfile({ onClose }) {
 
       {/* Password Change Modal */}
       {isPasswordModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-[#D4AF37]/30 bg-[#0b0b0b] p-6 md:p-8 shadow-[0_0_40px_rgba(212,175,55,0.15)]">
-            <h3 className="font-serif text-2xl font-semibold text-white mb-2">Change Password</h3>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+          role="presentation"
+          onClick={closePasswordModal}
+        >
+          <div
+            ref={passwordDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="admin-password-modal-title"
+            tabIndex={-1}
+            className="w-full max-w-md rounded-2xl border border-[#D4AF37]/30 bg-[#0b0b0b] p-6 md:p-8 shadow-[0_0_40px_rgba(212,175,55,0.15)]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 id="admin-password-modal-title" className="font-serif text-2xl font-semibold text-white mb-2">Change Password</h3>
             <p className="text-sm text-gray-400 mb-6">Ensure your admin account is secure.</p>
             <div className="space-y-5">
               <div>
-                <label htmlFor="admin-profile-current-password" className="mb-2 block text-[10px] uppercase tracking-widest text-gray-500">Current Password</label>
+                <label htmlFor="admin-profile-current-password" className="mb-2 block text-xs uppercase tracking-widest text-gray-300">Current Password</label>
                 <input
                   id="admin-profile-current-password"
                   type="password"
+                  minLength={8}
                   value={passwordValues.currentPassword}
                   onChange={(e) => setPasswordValues({...passwordValues, currentPassword: e.target.value})}
                   className="w-full rounded-xl border border-[#D4AF37]/40 bg-transparent px-4 py-3 text-sm text-white outline-none focus:border-[#D4AF37]"
@@ -408,22 +476,25 @@ function AdminProfile({ onClose }) {
                 />
               </div>
               <div>
-                <label htmlFor="admin-profile-new-password" className="mb-2 block text-[10px] uppercase tracking-widest text-gray-500">New Password</label>
+                <label htmlFor="admin-profile-new-password" className="mb-2 block text-xs uppercase tracking-widest text-gray-300">New Password</label>
                 <input
                   id="admin-profile-new-password"
                   type="password"
+                  minLength={8}
                   value={passwordValues.newPassword}
                   onChange={(e) => setPasswordValues({...passwordValues, newPassword: e.target.value})}
                   className="w-full rounded-xl border border-[#D4AF37]/40 bg-transparent px-4 py-3 text-sm text-white outline-none focus:border-[#D4AF37]"
                   placeholder="Enter new password"
                   autoComplete="new-password"
                 />
+                <p className="mt-1.5 text-xs text-gray-500">Use at least 8 characters.</p>
               </div>
               <div>
-                <label htmlFor="admin-profile-confirm-password" className="mb-2 block text-[10px] uppercase tracking-widest text-gray-500">Confirm New Password</label>
+                <label htmlFor="admin-profile-confirm-password" className="mb-2 block text-xs uppercase tracking-widest text-gray-300">Confirm New Password</label>
                 <input
                   id="admin-profile-confirm-password"
                   type="password"
+                  minLength={8}
                   value={passwordValues.confirmPassword}
                   onChange={(e) => setPasswordValues({...passwordValues, confirmPassword: e.target.value})}
                   className="w-full rounded-xl border border-[#D4AF37]/40 bg-transparent px-4 py-3 text-sm text-white outline-none focus:border-[#D4AF37]"
@@ -432,8 +503,8 @@ function AdminProfile({ onClose }) {
                 />
               </div>
             </div>
-            <div className="mt-8 flex flex-col-reverse items-stretch gap-3 text-[10px] uppercase tracking-widest sm:flex-row sm:items-center sm:justify-end">
-              <button type="button" onClick={() => { setIsPasswordModalOpen(false); setPasswordValues({ currentPassword: '', newPassword: '', confirmPassword: '' }); }} className="min-h-11 px-4 text-neutral-400 hover:text-white">Cancel</button>
+            <div className="mt-8 flex flex-col-reverse items-stretch gap-3 text-xs uppercase tracking-widest sm:flex-row sm:items-center sm:justify-end">
+              <button type="button" onClick={closePasswordModal} disabled={isPasswordSaving} className="min-h-11 px-4 text-neutral-400 hover:text-white disabled:cursor-not-allowed disabled:opacity-50">Cancel</button>
               <button
                 type="button"
                 onClick={handlePasswordUpdate}

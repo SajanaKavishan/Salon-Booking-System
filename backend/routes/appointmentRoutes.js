@@ -1,8 +1,10 @@
 const express = require('express');
+const { rateLimit, ipKeyGenerator } = require('express-rate-limit');
 const mongoose = require('mongoose');
 const router = express.Router();
 const {
   createAppointment,
+  getAvailabilityMeta,
   getStaffAvailability,
   getMyAppointments,
   getAllAppointments,
@@ -26,15 +28,46 @@ const { protect, admin, staffOrAdmin } = require('../middleware/authMiddleware')
 const validateObjectId = require('../middleware/validateObjectId');
 const Appointment = require('../models/appointmentModel'); // Import the Appointment model to interact with the appointments collection in the database
 
+const availabilityRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many availability requests. Please try again in a few minutes.',
+  },
+});
+
+const createAppointmentCreationRateLimiter = () => rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (request) => request.user?.role === 'admin',
+  keyGenerator: (request) => (
+    request.user?._id
+      ? `user:${request.user._id.toString()}`
+      : `ip:${ipKeyGenerator(request.ip || request.socket?.remoteAddress || '')}`
+  ),
+  handler: (_request, response) => response.status(429).json({
+    success: false,
+    message: 'Too many booking requests. Please try again within the next hour.',
+  }),
+});
+
+const appointmentCreationRateLimiter = createAppointmentCreationRateLimiter();
+
 // Routes for appointments. Both routes are protected, meaning that only authenticated users can access them. The createAppointment route allows users to create a new appointment, while the getMyAppointments route allows users to retrieve their own appointments.
-router.route('/').post(protect, createAppointment).get(protect, getMyAppointments);
+router.route('/').post(protect, appointmentCreationRateLimiter, createAppointment).get(protect, getMyAppointments);
 router.get('/all', protect, admin, getAllAppointments);
 router.get('/pending/count', protect, staffOrAdmin, getPendingAppointmentsCount);
 router.get('/reviews/pending-count', protect, admin, getPendingReviewsCount);
 router.get('/staff/earnings-summary', protect, staffOrAdmin, getStaffEarningsSummary);
 router.get('/staff', protect, staffOrAdmin, getStaffAppointments);
 router.get('/staff-schedule', protect, staffOrAdmin, getStaffAppointments);
-router.get('/availability', getStaffAvailability);
+router.get('/availability/meta', availabilityRateLimiter, getAvailabilityMeta);
+router.get('/availability', availabilityRateLimiter, getStaffAvailability);
 router.post('/shift-slots', protect, admin, shiftUpcomingAppointments);
 router.get('/reviews/public', getPublicReviews);
 router.get('/reviews/all', protect, admin, getAppointmentsReviews);
@@ -90,7 +123,7 @@ const minsToTime = (mins) => {
 };
 
 // Route to get booked times for a specific date and stylist. This endpoint is public (no auth required) so the frontend can check available times. It accepts query parameters for the date and stylist ID, and returns a list of time slots that are already booked. This allows the frontend to display which time slots are available for booking.
-router.get('/booked-times', async (req, res) => {
+router.get('/booked-times', availabilityRateLimiter, async (req, res) => {
   try {
     const date = req.query.bookingDate || req.query.date;
     const stylistId = req.query.staffId || req.query.stylistId;
@@ -109,7 +142,25 @@ router.get('/booked-times', async (req, res) => {
         { date: String(date).slice(0, 10), stylist: stylistId },
         { bookingDate, staffId: stylistId },
       ],
-      status: { $nin: ['cancelled', 'rejected', 'Rejected', 'Cancelled'] }
+      status: {
+        $nin: [
+          'cancelled',
+          'canceled',
+          'Cancelled',
+          'Canceled',
+          'CANCELLED_BY_SALON',
+          'cancelled_by_salon',
+          'Cancelled by Salon',
+          'rejected',
+          'Rejected',
+          'completed',
+          'Completed',
+          'no-show',
+          'No-Show',
+          'NO_SHOW',
+          'no_show',
+        ],
+      }
     });
 
     let blockedSlots = [];
@@ -147,3 +198,6 @@ router.route('/:id/staff-status').put(validateObjectId(), protect, staffOrAdmin,
 router.route('/:id/hide').put(validateObjectId(), protect, hideAppointmentByCustomer);
 
 module.exports = router;
+module.exports._test = {
+  createAppointmentCreationRateLimiter,
+};

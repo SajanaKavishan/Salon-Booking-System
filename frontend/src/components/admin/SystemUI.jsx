@@ -37,6 +37,14 @@ const statusConfigMap = {
     label: 'Cancelled',
     className: 'salon-status-danger'
   },
+  cancelled_by_salon: {
+    label: 'Cancelled by Salon',
+    className: 'salon-status-danger'
+  },
+  'cancelled by salon': {
+    label: 'Cancelled by Salon',
+    className: 'salon-status-danger'
+  },
   'no-show': {
     label: 'No-Show',
     className: 'salon-status-danger'

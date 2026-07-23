@@ -4,7 +4,7 @@ import { Menu } from 'lucide-react';
 import { Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from '../../components/admin/Sidebar';
 import RoleProfile from '../shared/RoleProfile';
-import API_BASE_URL from '../../utils/apiConfig';
+import API_BASE_URL, { apiClient } from '../../utils/apiConfig';
 import { getStoredSession } from '../../utils/auth';
 
 const formatRelativeTime = (dateValue) => {
@@ -37,6 +37,11 @@ const isEmergencyRescheduleNotification = (notification) => (
   || notification?.meta?.emergencyReschedule === true
 );
 
+const isHolidayClosureNotification = (notification) => (
+  notification?.meta?.holidayClosure === true
+  || notification?.meta?.rescheduleReason === 'SALON_CLOSURE'
+);
+
 const getEmergencyRescheduleMessage = (message) => (
   String(message || 'Your stylist had an emergency leave.')
     .replace(/\s*Please reschedule your booking\.?\s*$/i, '')
@@ -62,14 +67,8 @@ function Layout() {
   // Fetch notifications from the backend API
   const fetchNotifications = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/api/notifications`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setNotifications(data);
-      }
+      const response = await apiClient.get(`${API_BASE_URL}/api/notifications`);
+      setNotifications(response.data);
     } catch (error) {
       console.error("Error fetching notifications:", error);
     }
@@ -80,16 +79,10 @@ function Layout() {
 
     const loadNotifications = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const res = await fetch(`${API_BASE_URL}/api/notifications`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const response = await apiClient.get(`${API_BASE_URL}/api/notifications`);
 
         if (!isMounted) return;
-        if (res.ok) {
-          const data = await res.json();
-          setNotifications(data);
-        }
+        setNotifications(response.data);
       } catch (error) {
         if (isMounted) {
           console.error("Error fetching notifications:", error);
@@ -136,11 +129,7 @@ function Layout() {
   const markNotificationAsRead = async (notification) => {
     if (!notification?._id || notification.isRead) return;
     try {
-      const token = localStorage.getItem('token');
-      await fetch(`${API_BASE_URL}/api/notifications/${notification._id}/read`, {
-        method: 'PUT',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      await apiClient.put(`${API_BASE_URL}/api/notifications/${notification._id}/read`);
       fetchNotifications();
     } catch (error) {
       console.error("Error marking notification as read:", error);
@@ -154,10 +143,12 @@ function Layout() {
     setIsNotificationOpen(false);
 
     const meta = notification.meta || {};
+    const actionUrl = meta.actionUrl === '/book' ? meta.actionUrl : '/book';
 
-    navigate('/book', {
+    navigate(actionUrl, {
       state: {
         emergencyReschedule: true,
+        closureReschedule: isHolidayClosureNotification(notification),
         isReschedule: true,
         originalServices: meta.originalServices || meta.services || [],
         stylistId: meta.stylistId || meta.staffId || meta.stylist || '',
@@ -171,8 +162,6 @@ function Layout() {
     const unreadNotifications = notifications.filter((notification) => !notification.isRead && notification._id);
     if (unreadNotifications.length === 0) return;
 
-    const token = localStorage.getItem('token');
-
     setNotifications((currentNotifications) => currentNotifications.map((notification) => ({
       ...notification,
       isRead: true,
@@ -180,10 +169,7 @@ function Layout() {
 
     await Promise.allSettled(
       unreadNotifications.map((notification) => (
-        fetch(`${API_BASE_URL}/api/notifications/${notification._id}/read`, {
-          method: 'PUT',
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
+        apiClient.put(`${API_BASE_URL}/api/notifications/${notification._id}/read`)
       ))
     );
 
@@ -303,7 +289,7 @@ function Layout() {
       return 'Staff Portal';
     }
 
-    if (path.startsWith('/booking') || path.startsWith('/book')) {
+    if (path === '/customer/book' || path.startsWith('/booking') || path.startsWith('/book')) {
       return 'Booking Wizard';
     }
     if (path.startsWith('/history')) {
@@ -322,11 +308,11 @@ function Layout() {
     <div className="min-h-screen w-full bg-[#07090d]">
       <Sidebar isOpen={isMobileSidebarOpen} onClose={() => setIsMobileSidebarOpen(false)} />
 
-      <div className="flex h-screen min-h-0 w-full flex-col overflow-hidden md:pl-80">
+      <div className="flex h-[100dvh] min-h-screen w-full flex-col overflow-hidden md:pl-80">
         
         <header className="z-30 flex h-[72px] shrink-0 items-center justify-between bg-[#090d14]/95 px-4 backdrop-blur-md md:px-8">
           
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
             <button
               type="button"
               onClick={() => setIsMobileSidebarOpen(true)}
@@ -335,8 +321,8 @@ function Layout() {
             >
               <Menu size={22} />
             </button>
-            <div>
-              <p className="text-lg font-semibold tracking-tight text-white md:text-xl">{pageTitle}</p>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-lg font-semibold tracking-tight text-white md:text-xl">{pageTitle}</div>
             </div>
           </div>
 
@@ -349,6 +335,8 @@ function Layout() {
                 onClick={handleNotificationBellClick}
                 className="relative flex h-10 w-10 items-center justify-center rounded-lg text-white hover:text-[#d4af37] transition duration-200"
                 aria-label="Notifications"
+                aria-expanded={isNotificationOpen}
+                aria-controls="notification-dropdown"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 22 22" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
@@ -375,6 +363,7 @@ function Layout() {
               <AnimatePresence>
                 {isNotificationOpen && (
                   <motion.div
+                    id="notification-dropdown"
                     initial={{ opacity: 0, y: -14, scale: 0.88 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -10, scale: 0.92 }}
@@ -410,11 +399,15 @@ function Layout() {
                           >
                             <span className="min-w-0 flex-1">
                               <span className="block text-sm font-semibold text-zinc-100">
-                                {notif.title || 'SalonDEES Update'}
+                                {notif.title || (isHolidayClosureNotification(notif)
+                                  ? 'Salon Closure - Booking Cancelled'
+                                  : 'SalonDEES Update')}
                               </span>
                               <span className="mt-1 block text-xs leading-relaxed text-zinc-400">
                                 {isEmergencyRescheduleNotification(notif) ? (
-                                  `${getEmergencyRescheduleMessage(notif.message)} Please reschedule your booking.`
+                                  isHolidayClosureNotification(notif)
+                                    ? notif.message
+                                    : `${getEmergencyRescheduleMessage(notif.message)} Please reschedule your booking.`
                                 ) : (
                                   notif.message
                                 )}
@@ -426,11 +419,13 @@ function Layout() {
                                     onClick={(event) => handleRescheduleLinkClick(event, notif)}
                                     className="mt-2 inline-block cursor-pointer text-xs font-semibold uppercase tracking-wider text-[#c5a880] transition-colors hover:text-[#d4af37]"
                                   >
-                                    Reschedule Booking &rarr;
+                                    {isHolidayClosureNotification(notif)
+                                      ? `${notif.meta?.actionLabel || 'Book New Appointment'} \u2192`
+                                      : 'Reschedule Booking \u2192'}
                                   </button>
                                 </span>
                               )}
-                              <span className="mt-2 block text-[11px] font-medium text-zinc-500">
+                              <span className="mt-2 block text-xs font-medium text-gray-300">
                                 {formatRelativeTime(notif.createdAt)}
                               </span>
                             </span>
@@ -492,7 +487,7 @@ function Layout() {
           />
         )}
 
-        <main className={`no-scrollbar min-h-0 w-full flex-1 overflow-y-auto ${isReviewsPage ? 'p-0' : 'p-4 md:p-8 lg:p-10'}`}>
+        <main data-route-scroll-container className={`no-scrollbar min-h-0 w-full flex-1 overflow-y-auto ${isReviewsPage ? 'p-0' : 'p-4 md:p-8 lg:p-10'}`}>
           <Outlet />
         </main>
       </div>

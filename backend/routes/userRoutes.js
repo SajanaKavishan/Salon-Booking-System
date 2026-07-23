@@ -1,7 +1,7 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const router = express.Router();
-const { registerUser, googleLogin, getUsers, getMe, updateUserProfile, completeOnboarding, getDashboardBanner } = require('../controllers/userController');
+const { registerUser, googleLogin, getUsers, getMe, getProfile, updateUserProfile, completeOnboarding, getDashboardBanner } = require('../controllers/userController');
 const { login, forgotPassword, resetPassword } = require('../controllers/authController');
 const { protect, admin } = require('../middleware/authMiddleware'); // Import the protect middleware to secure the /me route   
 const uploadProfileImage = require('../middleware/uploadProfileImage');
@@ -28,7 +28,18 @@ const registerRateLimiter = rateLimit({
   },
 });
 
-const passwordResetRateLimiter = rateLimit({
+const forgotPasswordLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: 'Too many password reset link requests. Please try again later.',
+  },
+});
+
+const resetPasswordLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   limit: 3,
   standardHeaders: true,
@@ -57,14 +68,14 @@ const handleProfileImageUpload = (req, res, next) => {
 // Routes
 router.post('/register', registerRateLimiter, registerUser); // Route for user registration, handled by the registerUser controller function
 router.post('/login', loginRateLimiter, login); // Route for user login, handled by the login controller function
-router.post('/forgot-password', passwordResetRateLimiter, forgotPassword);
-router.put('/reset-password/:token', passwordResetRateLimiter, resetPassword);
+router.post('/forgot-password', forgotPasswordLimiter, forgotPassword);
+router.put('/reset-password/:token', resetPasswordLimiter, resetPassword);
 router.post('/google-login', loginRateLimiter, googleLogin); // New route for handling Google login requests
 
 // This route is protected by the protect middleware, which means that only authenticated users can access it. The getMe function will return the profile information of the logged-in user.
 router.get('/', protect, admin, getUsers);
 router.get('/me', protect, getMe);
-router.get('/profile', protect, getMe); // Alias for legacy frontend calls to GET /api/users/profile
+router.get('/profile', protect, getProfile);
 router.get('/dashboard-banner', protect, getDashboardBanner);
 router.put('/profile', protect, handleProfileImageUpload, updateUserProfile); // New route for updating user profile, also protected by the protect middleware. The updateUserProfile function will handle the logic for updating the user's profile information.
 router.patch('/complete-onboarding', protect, completeOnboarding);

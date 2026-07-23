@@ -3,12 +3,29 @@ const Appointment = require('../models/appointmentModel');
 const User = require('../models/User');
 const Staff = require('../models/Staff');
 const Notification = require('../models/Notification');
+const AppointmentScheduleLock = require('../models/AppointmentScheduleLock');
 const mongoose = require('mongoose');
 const sendEmail = require('../utils/sendEmail');
 const { ensureSettingsDocument, defaultSettings } = require('./settingsController');
+const { getSalonDateTime } = require('../utils/salonTime');
 
 // Utility function to convert a date to 'YYYY-MM-DD' format for comparison
-const toDateKey = (date) => new Date(date).toISOString().split('T')[0];
+const toDateKey = (date) => getSalonDateTime(date).toISODate();
+
+const getLeaveDateKeys = (startDate, endDate) => {
+    const firstDateKey = toDateKey(startDate);
+    const lastDateKey = toDateKey(endDate);
+    const dateKeys = [];
+    const cursor = new Date(`${firstDateKey}T00:00:00.000Z`);
+    const lastDate = new Date(`${lastDateKey}T00:00:00.000Z`);
+
+    while (cursor <= lastDate) {
+        dateKeys.push(cursor.toISOString().slice(0, 10));
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+
+    return dateKeys;
+};
 
 // Utility function to format leave dates for email notifications
 const formatLeaveDate = (startDate, endDate = startDate) => {
@@ -144,8 +161,12 @@ const approveLeave = async (req, res) => {
         let cancelledAppointments = 0;
         let preferredCustomerNotifications = 0;
         let cancellationEmailsSent = 0;
+        let pendingCustomerEmails = [];
 
         await session.withTransaction(async () => {
+            // withTransaction may retry the callback. Rebuild the post-commit outbox
+            // on every attempt so a retry cannot duplicate email delivery.
+            pendingCustomerEmails = [];
             const settings = await ensureSettingsDocument();
             const salonName = settings?.salonName || defaultSettings.salonName;
             const supportEmail = settings?.supportEmail || defaultSettings.supportEmail;
@@ -169,13 +190,24 @@ const approveLeave = async (req, res) => {
                 .select('_id name')
                 .session(session);
 
+            const leaveDateKeys = getLeaveDateKeys(leaveRequest.startDate, leaveRequest.endDate);
+            if (staffProfile) {
+                for (const dateKey of leaveDateKeys) {
+                    await AppointmentScheduleLock.findOneAndUpdate(
+                        { _id: `${staffProfile._id}:${dateKey}` },
+                        { $inc: { revision: 1 } },
+                        { upsert: true, returnDocument: 'after', session, setDefaultsOnInsert: true }
+                    );
+                }
+            }
+
             const conflictingAppointments = staffProfile
                 ? await Appointment.find({
                     stylist: staffProfile._id,
                     status: { $in: ['pending', 'confirmed', 'Pending', 'Confirmed'] },
                     date: {
-                        $gte: toDateKey(leaveRequest.startDate),
-                        $lte: toDateKey(leaveRequest.endDate)
+                        $gte: leaveDateKeys[0],
+                        $lte: leaveDateKeys[leaveDateKeys.length - 1]
                     }
                 })
                     .select('_id user services staffId stylist date startTime endTime')
@@ -215,37 +247,28 @@ const approveLeave = async (req, res) => {
                 );
 
                 if (shouldSendCustomerEmails) {
-                    const emailResults = await Promise.allSettled(
-                        conflictingAppointments
-                            .filter((appointment) => appointment.user?.email)
-                            .map((appointment) => {
-                                const serviceNames = appointment.services
-                                    .map((service) => service?.name)
-                                    .filter(Boolean)
-                                    .join(', ') || 'Not specified';
+                    pendingCustomerEmails = conflictingAppointments
+                        .filter((appointment) => appointment.user?.email)
+                        .map((appointment) => {
+                            const serviceNames = appointment.services
+                                .map((service) => service?.name)
+                                .filter(Boolean)
+                                .join(', ') || 'Not specified';
 
-                                return sendEmail({
-                                    email: appointment.user.email,
-                                    subject: `Appointment Cancelled - ${salonName}`,
-                                    message: buildLeaveCancellationEmail({
-                                        customerName: appointment.user.name,
-                                        salonName,
-                                        supportEmail,
-                                        contactNumber,
-                                        stylistName: staffProfile?.name,
-                                        appointmentDate: appointment.date,
-                                        appointmentTime: `${appointment.startTime || 'N/A'} - ${appointment.endTime || 'N/A'}`,
-                                        serviceNames
-                                    })
-                                });
-                            })
-                    );
-
-                    cancellationEmailsSent = emailResults.filter((result) => result.status === 'fulfilled').length;
-                    emailResults
-                        .filter((result) => result.status === 'rejected')
-                        .forEach((result) => {
-                            console.warn('Leave cancellation email failed:', result.reason?.message || result.reason);
+                            return {
+                                email: appointment.user.email,
+                                subject: `Appointment Cancelled - ${salonName}`,
+                                message: buildLeaveCancellationEmail({
+                                    customerName: appointment.user.name,
+                                    salonName,
+                                    supportEmail,
+                                    contactNumber,
+                                    stylistName: staffProfile?.name,
+                                    appointmentDate: appointment.date,
+                                    appointmentTime: `${appointment.startTime || 'N/A'} - ${appointment.endTime || 'N/A'}`,
+                                    serviceNames
+                                })
+                            };
                         });
                 }
             }
@@ -280,6 +303,19 @@ const approveLeave = async (req, res) => {
             preferredCustomerNotifications = preferredCustomers.length;
         });
 
+        if (pendingCustomerEmails.length > 0) {
+            const emailResults = await Promise.allSettled(
+                pendingCustomerEmails.map((emailPayload) => sendEmail(emailPayload))
+            );
+
+            cancellationEmailsSent = emailResults.filter((result) => result.status === 'fulfilled').length;
+            emailResults
+                .filter((result) => result.status === 'rejected')
+                .forEach((result) => {
+                    console.warn('Leave cancellation email failed after commit:', result.reason?.message || result.reason);
+                });
+        }
+
         res.status(200).json({
             message: 'Leave request approved and conflicts handled.',
             leaveRequest: approvedLeave,
@@ -304,7 +340,7 @@ const rejectLeave = async (req, res) => {
         const leaveRequest = await LeaveRequest.findOneAndUpdate(
             { _id: id, status: { $in: ['Pending', 'pending'] } },
             { status: 'Rejected' },
-            { new: true, runValidators: true }
+            { returnDocument: 'after', runValidators: true }
         );
 
         if (!leaveRequest) {

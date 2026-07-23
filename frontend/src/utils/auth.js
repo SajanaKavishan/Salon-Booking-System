@@ -1,13 +1,37 @@
-import axios from 'axios';
+import { apiClient } from './apiConfig';
+import { safeGetStorageItem, safeRemoveStorageItem } from './storage';
 
 let isHandlingUnauthorized = false;
 let isInterceptorInstalled = false;
 
+export const AUTH_SESSION_CHANGED_EVENT = 'auth:session-changed';
+
+export function getStoredAuthenticatedUserId() {
+  const token = safeGetStorageItem('token');
+  const storedUser = safeGetStorageItem('user');
+
+  if (!token || !storedUser) return null;
+
+  try {
+    const user = JSON.parse(storedUser);
+    const userId = user?._id || user?.id;
+    return userId ? String(userId) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function notifyAuthSessionChanged() {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new Event(AUTH_SESSION_CHANGED_EVENT));
+}
+
 export function clearAuthStorage() {
-  localStorage.removeItem('token');
-  localStorage.removeItem('user');
-  localStorage.removeItem('userRole');
-  localStorage.removeItem('userName');
+  safeRemoveStorageItem('token');
+  safeRemoveStorageItem('user');
+  safeRemoveStorageItem('userRole');
+  safeRemoveStorageItem('userName');
+  notifyAuthSessionChanged();
 }
 
 function decodeJwtPayload(token) {
@@ -36,9 +60,9 @@ export function isTokenExpired(token) {
 }
 
 export function getStoredSession() {
-  const token = localStorage.getItem('token');
-  const userRole = localStorage.getItem('userRole');
-  const storedUser = localStorage.getItem('user');
+  const token = safeGetStorageItem('token');
+  const userRole = safeGetStorageItem('userRole');
+  const storedUser = safeGetStorageItem('user');
 
   if (!token || !userRole || !storedUser || isTokenExpired(token)) {
     clearAuthStorage();
@@ -87,9 +111,11 @@ export function installUnauthorizedInterceptor() {
   if (isInterceptorInstalled) return;
   isInterceptorInstalled = true;
 
-  axios.interceptors.response.use(
+  apiClient.interceptors.response.use(
     (response) => response,
     (error) => {
+      // A 403 is an authorization failure for the current action, not an
+      // invalid session. Let it reach the calling UI without evicting the user.
       if (error.response?.status === 401) {
         redirectToLogin();
       }

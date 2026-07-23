@@ -1,15 +1,26 @@
-import { useEffect, useState } from 'react';
-import axios from 'axios';
+import { useEffect, useMemo, useState } from 'react';
+import { apiClient as axios } from '../../utils/apiConfig';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
-import { useGoogleLogin } from '@react-oauth/google';
+import { GoogleLogin } from '@react-oauth/google';
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
+import { FcGoogle } from 'react-icons/fc';
 import { motion } from 'framer-motion';
 import { Check, Scissors } from 'lucide-react';
 import Spinner from '../../components/common/Spinner';
 import { AuthShell } from '../../components/admin/SystemUI';
 import { apiUrl } from '../../utils/apiConfig';
-import { getStoredSession } from '../../utils/auth';
+import { getStoredSession, notifyAuthSessionChanged } from '../../utils/auth';
+import { storage } from '../../utils/storage';
+import {
+  buildAuthIntentPath,
+  sanitizeInternalPath,
+  sanitizeServiceId,
+} from '../../utils/authIntent';
+
+const isGoogleOAuthConfigured = Boolean(
+  String(import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim()
+);
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -42,8 +53,17 @@ function Login() {
   const [isLoading, setIsLoading] = useState(false);
 
   const { email, password } = formData;
-  const next = searchParams.get('next');
-  const safeNextPath = next?.startsWith('/') && !next.startsWith('//') ? next : null;
+  const safeNextPath = sanitizeInternalPath(searchParams.get('next'));
+  const requestedServiceId = sanitizeServiceId(searchParams.get('serviceId'));
+  const registerPath = buildAuthIntentPath('/register', {
+    nextPath: safeNextPath,
+    serviceId: requestedServiceId,
+  });
+
+  const onboardingState = useMemo(() => ({
+    returnTo: safeNextPath || (requestedServiceId ? '/customer/book' : '/dashboard'),
+    ...(requestedServiceId ? { preSelectedServiceId: requestedServiceId } : {}),
+  }), [requestedServiceId, safeNextPath]);
 
   useEffect(() => {
     const session = getStoredSession();
@@ -52,16 +72,26 @@ function Login() {
     const isFirstLogin = session.user?.isFirstLogin === true;
 
     if (session.userRole === 'customer' && isFirstLogin) {
-      navigate('/onboarding', { replace: true });
+      navigate('/onboarding', { replace: true, state: onboardingState });
       return;
     }
 
-    navigate(safeNextPath || getRoleRedirectPath(session.userRole, isFirstLogin), { replace: true });
-  }, [navigate, safeNextPath]);
+    const redirectPath = safeNextPath
+      || (session.userRole === 'customer' && requestedServiceId
+        ? '/customer/book'
+        : getRoleRedirectPath(session.userRole, isFirstLogin));
+    navigate(redirectPath, {
+      replace: true,
+      ...(session.userRole === 'customer' && requestedServiceId
+        ? { state: { preSelectedServiceId: requestedServiceId } }
+        : {}),
+    });
+  }, [navigate, onboardingState, requestedServiceId, safeNextPath]);
 
   const getRedirectPath = (role, isFirstLogin = false) => {
     if (role === 'customer' && isFirstLogin) return '/onboarding';
     if (safeNextPath) return safeNextPath;
+    if (role === 'customer' && requestedServiceId) return '/customer/book';
 
     if (role === 'admin') return '/admin';
     if (role === 'staff') return '/staff/dashboard';
@@ -70,13 +100,17 @@ function Login() {
   };
 
   const redirectAfterLogin = (role, isFirstLogin = false) => {
-    const redirectPath = getRedirectPath(role, isFirstLogin);
-    const serviceId = searchParams.get('serviceId');
+    if (role === 'customer' && isFirstLogin) {
+      navigate('/onboarding', { state: onboardingState });
+      return;
+    }
+
+    const redirectPath = getRedirectPath(role, false);
 
     navigate(
       redirectPath,
-      role === 'customer' && serviceId
-        ? { state: { preSelectedServiceId: serviceId } }
+      role === 'customer' && requestedServiceId
+        ? { state: { preSelectedServiceId: requestedServiceId } }
         : undefined
     );
   };
@@ -102,10 +136,10 @@ function Login() {
       });
       const { token, role = 'customer', name, email: responseEmail, _id: id, phone = '', preferredStylist = '', profileImage = '', isFirstLogin = false } = response.data;
 
-      localStorage.setItem('token', token);
-      localStorage.setItem('userRole', role);
-      localStorage.setItem('userName', name || '');
-      localStorage.setItem(
+      storage.set('token', token);
+      storage.set('userRole', role);
+      storage.set('userName', name || '');
+      storage.set(
         'user',
         JSON.stringify({
           id,
@@ -119,6 +153,7 @@ function Login() {
         })
       );
 
+      notifyAuthSessionChanged();
       redirectAfterLogin(role, isFirstLogin);
     } catch (error) {
       toast.error(error.response?.data?.message || 'Login failed. Check your email and password.');
@@ -127,42 +162,42 @@ function Login() {
     }
   };
 
-  const handleGoogleLogin = useGoogleLogin({
-    onSuccess: async (tokenResponse) => {
-      try {
-        setIsLoading(true);
-        const response = await axios.post(apiUrl('/api/users/google-login'), {
-          token: tokenResponse.access_token
-        });
-
-        localStorage.setItem('token', response.data.token);
-        localStorage.setItem('userRole', response.data.role);
-        localStorage.setItem('userName', response.data.name || '');
-        localStorage.setItem(
-          'user',
-          JSON.stringify({
-            id: response.data._id,
-            name: response.data.name,
-            email: response.data.email,
-            phone: response.data.phone || '',
-            preferredStylist: response.data.preferredStylist || '',
-            profileImage: response.data.profileImage || '',
-            isFirstLogin: response.data.isFirstLogin || false,
-            role: response.data.role,
-          })
-        );
-
-        redirectAfterLogin(response.data.role, response.data.isFirstLogin || false);
-      } catch {
-        toast.error('Google login failed on our server. Please try again.');
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    onError: () => {
-      toast.error('Google authentication failed!');
+  const handleGoogleLogin = async (credentialResponse) => {
+    const idToken = credentialResponse?.credential;
+    if (!idToken) {
+      toast.error('Google did not return a valid identity credential.');
+      return;
     }
-  });
+
+    try {
+      setIsLoading(true);
+      const response = await axios.post(apiUrl('/api/users/google-login'), { idToken });
+
+      storage.set('token', response.data.token);
+      storage.set('userRole', response.data.role);
+      storage.set('userName', response.data.name || '');
+      storage.set(
+        'user',
+        JSON.stringify({
+          id: response.data._id,
+          name: response.data.name,
+          email: response.data.email,
+          phone: response.data.phone || '',
+          preferredStylist: response.data.preferredStylist || '',
+          profileImage: response.data.profileImage || '',
+          isFirstLogin: response.data.isFirstLogin || false,
+          role: response.data.role,
+        })
+      );
+
+      notifyAuthSessionChanged();
+      redirectAfterLogin(response.data.role, response.data.isFirstLogin || false);
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Google login failed on our server. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <AuthShell
@@ -193,11 +228,11 @@ function Login() {
                   Salon<span className="text-[#d4af37]">DEES</span>
                 </span>
               </button>
-              <span className="text-[11px] uppercase tracking-[0.35em] text-gray-400">Luxury Salon Experience</span>
+              <span className="text-xs uppercase tracking-[0.35em] text-gray-300">Luxury Salon Experience</span>
             </motion.div>
 
             <div className="space-y-4">
-              <motion.p className="text-[11px] uppercase tracking-[0.4em] text-[#d4af37]" variants={itemVariants}>
+              <motion.p className="text-xs uppercase tracking-[0.4em] text-[#d4af37]" variants={itemVariants}>
                 Member Sign In
               </motion.p>
               <motion.div variants={itemVariants}>
@@ -247,7 +282,7 @@ function Login() {
                     Salon<span className="text-[#d4af37]">DEES</span>
                   </span>
                 </div>
-                <span className="mt-3 text-[11px] uppercase tracking-[0.35em] text-gray-400">
+                <span className="mt-3 text-xs uppercase tracking-[0.35em] text-gray-300">
                   Luxury Salon Experience
                 </span>
               </div>
@@ -269,6 +304,7 @@ function Login() {
                     placeholder="you@email.com"
                     required
                     autoComplete="email"
+                    inputMode="email"
                     className="w-full rounded-md bg-[#edf2ff] px-4 py-3 text-sm text-gray-900 placeholder:text-gray-500 shadow-inner transition-all duration-300 focus:border-[#D4AF37] focus:outline-none focus:ring-2 focus:ring-[#D4AF37]/40"
                   />
                 </div>
@@ -309,10 +345,11 @@ function Login() {
                 <motion.button
                   type="submit"
                   disabled={isLoading}
+                  aria-busy={isLoading}
                   whileTap={{ scale: 0.99 }}
                   className="flex w-full items-center justify-center rounded-md bg-[#d4af37] px-4 py-3 text-sm font-semibold text-black shadow-[0_12px_30px_rgba(212,175,55,0.25)] transition-all duration-200 hover:bg-[#b8952e] hover:scale-[1.01] active:scale-[0.99]"
                 >
-                  {isLoading ? <Spinner /> : 'Sign In'}
+                  {isLoading ? <Spinner label="Signing in..." /> : 'Sign In'}
                 </motion.button>
               </form>
 
@@ -322,24 +359,45 @@ function Login() {
                 <span className="h-px flex-1 bg-white/10" />
               </div>
 
-              <button
-                type="button"
-                disabled={isLoading}
-                onClick={handleGoogleLogin}
-                className="flex w-full items-center justify-center gap-3 rounded-md border border-white/10 bg-black/90 px-4 py-3 text-sm text-gray-200 transition duration-300 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                  <path d="M19.64 10.2045C19.64 9.51136 19.5777 8.84659 19.4614 8.20455H10V12.0057H15.4023C15.1693 13.2614 14.4568 14.3239 13.3943 15.0341V17.5H16.6477C18.5489 15.75 19.64 13.2159 19.64 10.2045Z" fill="#4285F4" />
-                  <path d="M10 20C12.7 20 14.9625 19.1023 16.6477 17.5L13.3943 15.0341C12.4943 15.6364 11.3386 16 10 16C7.38977 16 5.17614 14.2386 4.38636 11.875H1.05V14.4602C2.69318 17.7216 6.07955 20 10 20Z" fill="#34A853" />
-                  <path d="M4.38636 11.875C4.1875 11.2784 4.07386 10.6477 4.07386 10C4.07386 9.35227 4.1875 8.72159 4.38636 8.125V5.53977H1.05C0.377273 6.875 0 8.39773 0 10C0 11.6023 0.377273 13.125 1.05 14.4602L4.38636 11.875Z" fill="#FBBC05" />
-                  <path d="M10 4C11.4716 4 12.7955 4.50568 13.8352 5.51136L16.7159 2.63068C14.9568 0.994318 12.6943 0 10 0C6.07955 0 2.69318 2.27841 1.05 5.53977L4.38636 8.125C5.17614 5.76136 7.38977 4 10 4Z" fill="#EA4335" />
-                </svg>
-                Sign in with Google
-              </button>
+              <div className={`group relative mx-auto h-10 w-full max-w-[300px] overflow-hidden rounded-lg border border-white/10 bg-black shadow-sm transition-all duration-200 ease-out hover:border-white/20 hover:bg-[#0a0a0a] hover:shadow-md focus-within:ring-2 focus-within:ring-[#d4af37]/50 ${
+                isLoading || !isGoogleOAuthConfigured ? 'pointer-events-none opacity-60' : ''
+              }`}>
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2.5"
+                >
+                  <FcGoogle className="h-5 w-5 shrink-0" />
+                  <span className="text-sm font-medium text-white">Sign in with Google</span>
+                </div>
+                {isGoogleOAuthConfigured ? (
+                  <GoogleLogin
+                    onSuccess={handleGoogleLogin}
+                    onError={() => toast.error('Google authentication failed!')}
+                    theme="filled_black"
+                    size="large"
+                    shape="rectangular"
+                    text="signin_with"
+                    logo_alignment="left"
+                    width="300"
+                    useOneTap={false}
+                    containerProps={{
+                      className: 'absolute inset-0 z-10 w-full cursor-pointer opacity-0',
+                    }}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    disabled
+                    aria-label="Google sign-in is unavailable"
+                    title="Google sign-in is unavailable"
+                    className="absolute inset-0 z-10 w-full cursor-not-allowed opacity-0"
+                  />
+                )}
+              </div>
 
               <p className="mt-8 text-center text-sm text-gray-400">
                 Don&apos;t have an account?{' '}
-                <Link to="/register" className="font-medium text-[#d4af37] transition hover:text-yellow-400 hover:underline">
+                <Link to={registerPath} className="font-medium text-[#d4af37] transition hover:text-yellow-400 hover:underline">
                   Register now
                 </Link>
               </p>

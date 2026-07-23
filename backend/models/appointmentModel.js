@@ -7,9 +7,13 @@ const STATUS_ALIASES = {
     approved: 'confirmed',
     cancelled: 'cancelled',
     canceled: 'cancelled',
+    cancelled_by_salon: 'CANCELLED_BY_SALON',
+    canceled_by_salon: 'CANCELLED_BY_SALON',
+    'cancelled by salon': 'CANCELLED_BY_SALON',
     rejected: 'rejected',
     completed: 'completed',
     'no-show': 'no-show',
+    no_show: 'no-show',
     noshow: 'no-show',
 };
 
@@ -18,6 +22,7 @@ const STATUS_DISPLAY_NAMES = {
     pending: 'Pending',
     confirmed: 'Approved',
     cancelled: 'Cancelled',
+    CANCELLED_BY_SALON: 'Cancelled by Salon',
     rejected: 'Rejected',
     completed: 'Completed',
     'no-show': 'No-Show',
@@ -28,6 +33,33 @@ const normalizeBookingStatus = (status) => {
     if (typeof status !== 'string') return status;
     return STATUS_ALIASES[status.trim().toLowerCase()] || status.trim().toLowerCase();
 };
+
+const serviceSnapshotSchema = new mongoose.Schema(
+    {
+        name: { type: String, trim: true, required: true },
+        price: { type: Number, min: 0, required: true },
+        duration: { type: Number, min: 0, required: true },
+    },
+    { _id: false }
+);
+
+const stylistSnapshotSchema = new mongoose.Schema(
+    {
+        name: { type: String, trim: true, required: true },
+    },
+    { _id: false }
+);
+
+const adminOverrideSchema = new mongoose.Schema(
+    {
+        ignoreLeadTimeBuffer: { type: Boolean, default: false },
+        ignoreStaffLeave: { type: Boolean, default: false },
+        ignoreWorkingHours: { type: Boolean, default: false },
+        reason: { type: String, trim: true, maxlength: 300, default: '' },
+        authorizedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    },
+    { _id: false }
+);
 
 // Helper function to convert a Date object to a legacy date string format (YYYY-MM-DD)
 const toLegacyDateString = (bookingDate) => {
@@ -47,10 +79,18 @@ const appointmentSchema = new mongoose.Schema({
         ref: 'Service',
         required: true,
     }],
+    serviceSnapshot: {
+        type: [serviceSnapshotSchema],
+        default: [],
+    },
     staffId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Staff',
         required: true,
+    },
+    stylistSnapshot: {
+        type: stylistSnapshotSchema,
+        default: undefined,
     },
     bookingDate: {
         type: Date,
@@ -63,7 +103,7 @@ const appointmentSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['pending', 'confirmed', 'cancelled', 'rejected', 'completed', 'no-show'],
+        enum: ['pending', 'confirmed', 'cancelled', 'CANCELLED_BY_SALON', 'rejected', 'completed', 'no-show'],
         default: 'pending',
         set: normalizeBookingStatus,
     },
@@ -119,6 +159,7 @@ const appointmentSchema = new mongoose.Schema({
         type: Boolean,
         default: false,
     },
+    adminOverride: { type: adminOverrideSchema, default: undefined },
     rating: {
         type: Number,
         min: 1,

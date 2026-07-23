@@ -56,9 +56,23 @@ const cleanupUploadedCloudinaryFile = async (file, context = 'Cloudinary uploade
   }
 };
 
+// Starts old-asset cleanup only after the caller has committed its database
+// update. Failures are logged without rolling back the successful write.
+const queueCloudinaryAssetDeletion = (storedPublicId, imageUrl, context = 'Old Cloudinary asset cleanup') => {
+  const publicId = resolveCloudinaryPublicId(storedPublicId, imageUrl);
+  if (!publicId) return;
+
+  Promise.resolve()
+    .then(() => cloudinary.uploader.destroy(publicId))
+    .catch((error) => {
+      console.error(`${context} failed:`, error);
+    });
+};
+
 module.exports = {
   cleanupUploadedCloudinaryFile,
   destroyCloudinaryAsset,
   extractCloudinaryPublicId,
+  queueCloudinaryAssetDeletion,
   resolveCloudinaryPublicId,
 };

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import axios from 'axios';
+import { apiClient as axios } from '../../utils/apiConfig';
 import { Clock, Loader2, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 import API_BASE_URL from '../../utils/apiConfig';
@@ -83,15 +83,10 @@ function ReportDelayModal({ appointment, onClose, onSuccess }) {
     setIsSubmitting(true);
 
     try {
-      const token = localStorage.getItem('token');
       const response = await axios.post(
         `${API_BASE_URL}/api/appointments/${appointmentId}/running-late`,
         { minutes: selectedValue },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
+        {}
       );
 
       toast.success('Delay reported successfully!');

@@ -1,9 +1,13 @@
 import React, { useMemo } from 'react';
 import { Star } from 'lucide-react';
 
-const getClientName = (review) => review?.user?.name || 'Valued Client';
+const getClientName = (review) => (
+  review?.customerDisplayName || review?.user?.name || 'Valued Client'
+);
 
 const getStylistName = (review) => {
+  if (review?.stylistName) return review.stylistName;
+
   const stylist = review?.stylist || review?.staffId;
 
   if (typeof stylist === 'object' && stylist?.name) return stylist.name;
@@ -13,6 +17,10 @@ const getStylistName = (review) => {
 };
 
 const getServiceName = (review) => {
+  if (Array.isArray(review?.serviceNames) && review.serviceNames[0]) {
+    return review.serviceNames[0];
+  }
+
   const services = Array.isArray(review?.services) ? review.services : [];
   const firstService = services[0] || review?.service;
 

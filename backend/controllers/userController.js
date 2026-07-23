@@ -7,15 +7,30 @@ const generateAvailableSlots = require('../utils/slotGenerator');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const axios = require('axios'); 
-const { destroyCloudinaryAsset, resolveCloudinaryPublicId } = require('../utils/cloudinaryAssets');
+const crypto = require('crypto');
+const { OAuth2Client } = require('google-auth-library');
+const {
+  cleanupUploadedCloudinaryFile,
+  queueCloudinaryAssetDeletion,
+  resolveCloudinaryPublicId,
+} = require('../utils/cloudinaryAssets');
+const { getSalonDateTimeParts } = require('../utils/salonTime');
 const {
   normalizeOffDays,
   normalizeWorkingHours,
 } = require('../utils/staffSchedule');
 
-const generateToken = (id) => { // Generate a JWT token with the user's ID as payload
-    return jwt.sign({ id }, process.env.JWT_SECRET, { // Token expires in 30 days
+const generateToken = (user) => { // Generate a JWT token with the user's ID as payload
+    const id = user?._id || user;
+    const payload = {
+      id,
+      ...(user?.role ? { role: user.role } : {}),
+      ...(user?.passwordChangedAt ? {
+        passwordChangedAt: new Date(user.passwordChangedAt).toISOString(),
+      } : {}),
+    };
+
+    return jwt.sign(payload, process.env.JWT_SECRET, { // Token expires in 30 days
         expiresIn: '30d', 
     });
 };
@@ -53,18 +68,7 @@ const DAY_NAMES = [
   'Saturday',
 ];
 
-const toDateString = (date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-
-  return `${year}-${month}-${day}`;
-};
-
-const getTodayDateString = () => {
-  const today = new Date();
-  return toDateString(today);
-};
+const getTodayDateString = () => getSalonDateTimeParts().dateKey;
 
 const getDateWindow = (dateString) => {
   const startDate = new Date(`${dateString}T00:00:00.000Z`);
@@ -115,6 +119,7 @@ const getPreferredStaff = async (preferredStylist) => {
   if (!preferredStylist || !mongoose.isValidObjectId(preferredStylist)) return null;
 
   return Staff.findOne({
+    isActive: { $ne: false },
     $or: [
       { userId: preferredStylist },
       { _id: preferredStylist },
@@ -145,26 +150,42 @@ const timeToMinutes = (value) => {
   return hours * 60 + minutes;
 };
 
-const getCurrentMinutes = () => {
-  const now = new Date();
-  return now.getHours() * 60 + now.getMinutes();
-};
+const getCurrentMinutes = () => getSalonDateTimeParts().minutes;
 
 const getFirstName = (name) => String(name || 'Your stylist').trim().split(/\s+/)[0];
 
 const resolvePreferredStylistId = async (preferredStylist) => {
-  if (preferredStylist === null || preferredStylist === '') return null;
   if (preferredStylist === undefined) return undefined;
+  const preferredStylistValue = typeof preferredStylist === 'string'
+    ? preferredStylist.trim()
+    : preferredStylist;
+  if (preferredStylistValue === null || preferredStylistValue === '') return null;
 
-  if (mongoose.isValidObjectId(preferredStylist)) {
-    const user = await User.findOne({ _id: preferredStylist, role: 'staff' }).select('_id');
-    if (user) return user._id;
+  if (mongoose.isValidObjectId(preferredStylistValue)) {
+    const user = await User.findOne({
+      _id: preferredStylistValue,
+      role: 'staff',
+      isActive: { $ne: false },
+    }).select('_id');
+    if (user) {
+      const activeStaffProfile = await Staff.exists({
+        userId: user._id,
+        isActive: { $ne: false },
+      });
+      if (activeStaffProfile) return user._id;
+    }
 
-    const staff = await Staff.findById(preferredStylist).select('userId');
+    const staff = await Staff.findOne({
+      _id: preferredStylistValue,
+      isActive: { $ne: false },
+    }).select('userId');
     if (staff?.userId) return staff.userId;
   }
 
-  const staff = await Staff.findOne({ name: preferredStylist }).select('userId');
+  const staff = await Staff.findOne({
+    name: preferredStylistValue,
+    isActive: { $ne: false },
+  }).select('userId');
   if (staff?.userId) return staff.userId;
 
   const error = new Error('Please select a valid stylist.');
@@ -178,6 +199,7 @@ const isValidPhoneNumber = (phoneValue) => {
 };
 
 const OAUTH_PHONE_FALLBACK = '';
+const GOOGLE_TOKEN_ISSUERS = new Set(['accounts.google.com', 'https://accounts.google.com']);
 
 const isValidEmail = (emailValue) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(emailValue || '').trim());
 
@@ -194,8 +216,25 @@ const registerUser = async (req, res) => { // Register a new user
         const normalizedEmail = String(email).trim().toLowerCase();
         const normalizedPhone = String(phone).trim().replace(/[\s-]/g, '');
 
-        if (String(password).length < 6) {
-            return res.status(400).json({ message: 'Password must be at least 6 characters long.' });
+        if (normalizedName.length < 1 || normalizedName.length > 100) {
+            return res.status(400).json({
+                success: false,
+                message: 'Name must be between 1 and 100 characters long.',
+            });
+        }
+
+        if (!isValidEmail(normalizedEmail)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please enter a valid email address.',
+            });
+        }
+
+        if (String(password).length < 8) {
+            return res.status(400).json({
+                success: false,
+                message: 'Password must be at least 8 characters long.',
+            });
         }
 
         if (!isValidPhoneNumber(normalizedPhone)) {
@@ -245,7 +284,7 @@ const registerUser = async (req, res) => { // Register a new user
 const loginUser = async (req, res) => { // Authenticate a user and return their details along with a token if successful
     try {
         const { email, password } = req.body;
-        const user = await User.findOne({ email });
+        const user = await User.findOne({ email }).select('+password');
         if (user && (await bcrypt.compare(password, user.password))) { // If the user exists and the provided password matches the hashed password in the database, return the user's details and a token
             return res.json({
                 _id: user.id,
@@ -269,19 +308,78 @@ const loginUser = async (req, res) => { // Authenticate a user and return their 
 // @desc    Google Login
 // @route   POST /api/users/google-login
 // @access  Public
-const googleLogin = async (req, res) => {
-    const { token } = req.body;
-    try {
-      const googleRes = await axios.get(
-        'https://www.googleapis.com/oauth2/v3/userinfo',
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+const verifyGoogleIdToken = async (idToken) => {
+    const clientId = String(process.env.GOOGLE_CLIENT_ID || '').trim();
+    if (!clientId) {
+      const error = new Error('Google OAuth is not configured on the server.');
+      error.statusCode = 500;
+      throw error;
+    }
 
-      const { email, name } = googleRes.data;
+    const client = new OAuth2Client(clientId);
+    const ticket = await client.verifyIdToken({
+      idToken,
+      audience: clientId,
+    });
+    const payload = ticket.getPayload();
+
+    if (!payload || !GOOGLE_TOKEN_ISSUERS.has(payload.iss)) {
+      const error = new Error('Google ID token has an invalid issuer.');
+      error.statusCode = 401;
+      throw error;
+    }
+
+    return payload;
+};
+
+const createGoogleLoginHandler = ({ verifyToken = verifyGoogleIdToken } = {}) => async (req, res) => {
+    const idToken = typeof req.body?.idToken === 'string'
+      ? req.body.idToken.trim()
+      : typeof req.body?.token === 'string'
+        ? req.body.token.trim()
+        : '';
+
+    if (!idToken) {
+      return res.status(401).json({ message: 'A valid Google ID token is required.' });
+    }
+
+    let googlePayload;
+    try {
+      googlePayload = await verifyToken(idToken);
+    } catch (error) {
+      if (error?.statusCode >= 500) {
+        console.error('Google OAuth configuration error:', error.message);
+        return res.status(500).json({ message: 'Google authentication is unavailable.' });
+      }
+
+      console.warn('Google ID token verification failed:', error.message);
+      return res.status(401).json({ message: 'Google authentication failed.' });
+    }
+
+    if (googlePayload.email_verified !== true) {
+      return res.status(401).json({ message: 'Google account email is not verified.' });
+    }
+
+    const email = String(googlePayload.email || '').trim().toLowerCase();
+    if (!isValidEmail(email)) {
+      return res.status(401).json({ message: 'Google account did not provide a valid email.' });
+    }
+
+    const name = String(
+      googlePayload.name
+      || googlePayload.given_name
+      || email.split('@')[0]
+    ).trim();
+
+    try {
       let user = await User.findOne({ email });
       if (user) {
+        if (user.isActive === false) {
+          return res.status(403).json({
+            message: 'This account is inactive. Please contact the salon administrator.',
+          });
+        }
+
         return res.json({
           _id: user.id,
           name: user.name,
@@ -295,18 +393,21 @@ const googleLogin = async (req, res) => {
         });
       }
 
-      const randomPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8);
+      const randomPassword = crypto.randomBytes(32).toString('hex');
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(randomPassword, salt);
       const resolvedPreferredStylist = await resolvePreferredStylistId(req.body.preferredStylist);
       const normalizedPhone = String(req.body.phone || '').trim();
+      const verifiedProfileImage = typeof googlePayload.picture === 'string'
+        ? googlePayload.picture.trim()
+        : '';
       user = await User.create({
         name,
         email,
         phone: isValidPhoneNumber(normalizedPhone) ? normalizedPhone : OAUTH_PHONE_FALLBACK,
         preferredStylist: resolvedPreferredStylist || null,
-        profileImage: req.body.profileImage || '',
-        profileImagePublicId: resolveCloudinaryPublicId('', req.body.profileImage),
+        profileImage: verifiedProfileImage,
+        profileImagePublicId: resolveCloudinaryPublicId('', verifiedProfileImage),
         password: hashedPassword,
         role: 'customer'
       });
@@ -325,36 +426,83 @@ const googleLogin = async (req, res) => {
         });
       }
 
-      res.status(400).json({ message: 'Invalid user data' });
+      return res.status(400).json({ message: 'Invalid user data' });
     } catch (error) {
       console.error('Google login error:', error);
-      res.status(401).json({ message: 'Google authentication failed' });
+      return res.status(500).json({ message: 'Could not complete Google login.' });
     }
 };
-// Get user profile function
+
+const googleLogin = createGoogleLoginHandler();
+
+const buildSafeUserDto = (userValue) => {
+  const user = userValue?.toObject ? userValue.toObject() : (userValue || {});
+  const isProfileComplete = typeof user.isProfileComplete === 'boolean'
+    ? user.isProfileComplete
+    : user.isFirstLogin === false;
+
+  return {
+    _id: user._id,
+    name: user.name || '',
+    email: user.email || '',
+    role: user.role || 'customer',
+    mobile: user.mobile || user.phone || '',
+    avatar: user.avatar || user.profileImage || '',
+    preferredStylist: user.preferredStylist || '',
+    isProfileComplete,
+  };
+};
+
+// Get the minimal authenticated user identity payload.
 const getMe = async (req, res) => {
   try {
-    const user = req.user.toObject ? req.user.toObject() : req.user;
+    return res.status(200).json(buildSafeUserDto(req.user));
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+// Legacy profile payload used by profile and staff scheduling screens. It is
+// explicitly allowlisted and never spreads the authentication document.
+const getProfile = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id)
+      .select('_id name email role phone preferredStylist profileImage isFirstLogin')
+      .lean();
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const safeUser = buildSafeUserDto(user);
+    const legacySafeProfile = {
+      ...safeUser,
+      phone: safeUser.mobile,
+      profileImage: safeUser.avatar,
+      isFirstLogin: !safeUser.isProfileComplete,
+      preferredStylist: user.preferredStylist || '',
+    };
 
     if (user.role === 'staff') {
       const staffDetails = await Staff.findOne({ userId: user._id }).lean();
-      const profileImage = user.profileImage || staffDetails?.imageUrl || '';
+      const profileImage = safeUser.avatar || staffDetails?.imageUrl || '';
       const offDays = normalizeOffDays(staffDetails?.offDays) || [];
 
       return res.status(200).json({
-        ...user,
+        ...legacySafeProfile,
         staffDetails,
         profileImage,
-        imageUrl: staffDetails?.imageUrl || user.profileImage || '',
+        avatar: profileImage,
+        imageUrl: staffDetails?.imageUrl || safeUser.avatar || '',
         specialty: staffDetails?.specialty || '',
         workingHours: normalizeWorkingHours(staffDetails?.workingHours),
         offDays,
       });
     }
 
-    return res.status(200).json(user);
+    return res.status(200).json(legacySafeProfile);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };
 
@@ -385,6 +533,14 @@ const getUsers = async (req, res) => {
 
 // Update user profile function
 const updateUserProfile = async (req, res) => {
+  let databaseUpdateCommitted = false;
+  let profileUpdateSession = null;
+
+  const rejectProfileUpdate = async (statusCode, message) => {
+    await cleanupUploadedCloudinaryFile(req.file, 'Rejected profile image update cleanup');
+    return res.status(statusCode).json({ success: false, message });
+  };
+
   try {
     const {
       name,
@@ -394,15 +550,12 @@ const updateUserProfile = async (req, res) => {
       profileImage: requestedProfileImage,
       password,
       newPassword,
-      currentPassword,
-      specialty,
-      workingHours,
-      offDays
+      currentPassword
     } = req.body;
     const user = await User.findById(req.user._id).select('+password');
 
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      return rejectProfileUpdate(404, 'User not found');
     }
 
     if (requestedProfileImage !== undefined && !req.file) {
@@ -410,7 +563,7 @@ const updateUserProfile = async (req, res) => {
         ? 'Base64 profile images are no longer accepted. Please upload an image file.'
         : 'Please upload profileImage as an image file.';
 
-      return res.status(400).json({ message });
+      return rejectProfileUpdate(400, message);
     }
 
     const normalizedName = name !== undefined ? String(name).trim() : undefined;
@@ -419,14 +572,28 @@ const updateUserProfile = async (req, res) => {
     const nextPassword = newPassword || password;
     const uploadedProfileImage = req.file?.path;
     const uploadedProfileImagePublicId = req.file?.filename || '';
+    const isEmailChange = normalizedEmail !== undefined
+      && normalizedEmail !== String(user.email || '').trim().toLowerCase();
+    let isCurrentPasswordVerified = false;
 
     if (normalizedName !== undefined && !normalizedName) {
-      return res.status(400).json({ message: 'Name is required.' });
+      return rejectProfileUpdate(400, 'Name is required.');
     }
 
     if (normalizedEmail !== undefined) {
       if (!isValidEmail(normalizedEmail)) {
-        return res.status(400).json({ message: 'Please enter a valid email address.' });
+        return rejectProfileUpdate(400, 'Please enter a valid email address.');
+      }
+
+      if (isEmailChange) {
+        if (!currentPassword) {
+          return rejectProfileUpdate(400, 'Current password is required to update your email address.');
+        }
+
+        isCurrentPasswordVerified = await bcrypt.compare(currentPassword, user.password);
+        if (!isCurrentPasswordVerified) {
+          return rejectProfileUpdate(401, 'Current password is incorrect.');
+        }
       }
 
       const emailOwner = await User.findOne({
@@ -435,26 +602,28 @@ const updateUserProfile = async (req, res) => {
       }).select('_id');
 
       if (emailOwner) {
-        return res.status(409).json({ message: 'An account with this email already exists.' });
+        return rejectProfileUpdate(409, 'An account with this email already exists.');
       }
     }
 
     if (normalizedPhone !== undefined && normalizedPhone && !isValidPhoneNumber(normalizedPhone)) {
-      return res.status(400).json({ message: 'Enter a valid Sri Lankan mobile number starting with +94 or 07.' });
+      return rejectProfileUpdate(400, 'Enter a valid Sri Lankan mobile number starting with +94 or 07.');
     }
 
     if (nextPassword) {
       if (!currentPassword) {
-        return res.status(401).json({ message: 'Current password is required to update your password.' });
+        return rejectProfileUpdate(401, 'Current password is required to update your password.');
       }
 
-      const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password);
-      if (!isCurrentPasswordValid) {
-        return res.status(401).json({ message: 'Current password is incorrect.' });
+      if (!isCurrentPasswordVerified) {
+        isCurrentPasswordVerified = await bcrypt.compare(currentPassword, user.password);
+        if (!isCurrentPasswordVerified) {
+          return rejectProfileUpdate(401, 'Current password is incorrect.');
+        }
       }
 
-      if (String(nextPassword).length < 6) {
-        return res.status(400).json({ message: 'Password must be at least 6 characters long.' });
+      if (String(nextPassword).length < 8) {
+        return rejectProfileUpdate(400, 'Password must be at least 8 characters long.');
       }
     }
 
@@ -468,8 +637,14 @@ const updateUserProfile = async (req, res) => {
       ? resolvedPreferredStylist
       : user.preferredStylist;
 
+    const replacedProfileAssets = [];
+
     if (uploadedProfileImage) {
-      await destroyCloudinaryAsset(user.profileImagePublicId, user.profileImage);
+      replacedProfileAssets.push({
+        publicId: user.profileImagePublicId,
+        imageUrl: user.profileImage,
+        context: 'Old user profile image cleanup',
+      });
       user.profileImage = uploadedProfileImage;
       user.profileImagePublicId = uploadedProfileImagePublicId;
     } else {
@@ -479,9 +654,60 @@ const updateUserProfile = async (req, res) => {
     if (nextPassword) {
       const salt = await bcrypt.genSalt(10);
       user.password = await bcrypt.hash(nextPassword, salt);
+      user.passwordChangedAt = new Date();
     }
 
-    const updatedUser = await user.save();
+    let staffDetails = null;
+    if (user.role === 'staff') {
+      staffDetails = await Staff.findOne({ userId: user._id });
+
+      if (staffDetails) {
+        if (uploadedProfileImage) {
+          replacedProfileAssets.push({
+            publicId: staffDetails.imagePublicId,
+            imageUrl: staffDetails.imageUrl,
+            context: 'Old staff profile image cleanup',
+          });
+        }
+
+        staffDetails.name = user.name || staffDetails.name;
+        staffDetails.imageUrl = uploadedProfileImage || staffDetails.imageUrl;
+        staffDetails.imagePublicId = uploadedProfileImage
+          ? uploadedProfileImagePublicId
+          : staffDetails.imagePublicId || resolveCloudinaryPublicId('', staffDetails.imageUrl);
+      }
+    }
+
+    const persistProfileDocuments = async (activeSession) => {
+      const saveOptions = activeSession ? { session: activeSession } : undefined;
+      await user.save(saveOptions);
+      if (staffDetails) await staffDetails.save(saveOptions);
+    };
+
+    if (staffDetails) {
+      profileUpdateSession = await mongoose.startSession();
+      await profileUpdateSession.withTransaction(async () => {
+        await persistProfileDocuments(profileUpdateSession);
+      });
+    } else {
+      await persistProfileDocuments();
+    }
+
+    databaseUpdateCommitted = true;
+    const updatedUser = user;
+    const queuedPublicIds = new Set();
+
+    replacedProfileAssets.forEach(({ publicId, imageUrl, context }) => {
+      const resolvedPublicId = resolveCloudinaryPublicId(publicId, imageUrl);
+      if (
+        !resolvedPublicId
+        || resolvedPublicId === uploadedProfileImagePublicId
+        || queuedPublicIds.has(resolvedPublicId)
+      ) return;
+
+      queuedPublicIds.add(resolvedPublicId);
+      queueCloudinaryAssetDeletion(publicId, imageUrl, context);
+    });
 
     const preferredStylistChanged = resolvedPreferredStylist !== undefined
       && previousPreferredStylist !== (updatedUser.preferredStylist?.toString() || null);
@@ -505,44 +731,8 @@ const updateUserProfile = async (req, res) => {
       }
     }
 
-    let staffDetails = null;
-    if (updatedUser.role === 'staff') {
-      const normalizedOffDays = normalizeOffDays(offDays);
-      staffDetails = await Staff.findOne({ userId: updatedUser._id });
-
-      if (!staffDetails) {
-        staffDetails = await Staff.create({
-          userId: updatedUser._id,
-          name: updatedUser.name,
-          imageUrl: uploadedProfileImage || '',
-          imagePublicId: uploadedProfileImagePublicId,
-          specialty: specialty || 'General Stylist',
-          workingHours: normalizeWorkingHours(workingHours),
-          offDays: normalizedOffDays || [],
-        });
-      } else {
-        if (uploadedProfileImage) {
-          await destroyCloudinaryAsset(staffDetails.imagePublicId, staffDetails.imageUrl);
-        }
-
-        staffDetails.name = updatedUser.name || staffDetails.name;
-        staffDetails.imageUrl = uploadedProfileImage || staffDetails.imageUrl;
-        staffDetails.imagePublicId = uploadedProfileImage
-          ? uploadedProfileImagePublicId
-          : staffDetails.imagePublicId || resolveCloudinaryPublicId('', staffDetails.imageUrl);
-        staffDetails.specialty = specialty !== undefined ? specialty : staffDetails.specialty;
-        if (workingHours !== undefined) {
-          staffDetails.workingHours = normalizeWorkingHours(workingHours);
-        }
-        if (offDays !== undefined) {
-          staffDetails.offDays = normalizedOffDays;
-        }
-        await staffDetails.save();
-      }
-    }
-
     const mergedProfileImage = updatedUser.profileImage || staffDetails?.imageUrl || '';
-    const mergedResponse = {
+    const profileUser = {
       _id: updatedUser._id,
       id: updatedUser._id,
       name: updatedUser.name,
@@ -551,7 +741,14 @@ const updateUserProfile = async (req, res) => {
       preferredStylist: updatedUser.preferredStylist || '',
       profileImage: mergedProfileImage,
       role: updatedUser.role,
-      token: req.headers.authorization ? req.headers.authorization.split(' ')[1] : '',
+    };
+    const mergedResponse = {
+      ...profileUser,
+      token: nextPassword
+        ? generateToken(updatedUser)
+        : req.headers.authorization ? req.headers.authorization.split(' ')[1] : '',
+      message: nextPassword ? 'Password updated successfully' : 'Profile updated successfully',
+      ...(nextPassword ? { user: profileUser } : {}),
       staffDetails,
       specialty: staffDetails?.specialty || '',
       workingHours: normalizeWorkingHours(staffDetails?.workingHours),
@@ -561,6 +758,10 @@ const updateUserProfile = async (req, res) => {
 
     res.json(mergedResponse);
   } catch (error) {
+    if (!databaseUpdateCommitted) {
+      await cleanupUploadedCloudinaryFile(req.file, 'Failed profile image update cleanup');
+    }
+
     if (error?.code === 11000 && error?.keyPattern?.email) {
       return res.status(409).json({ message: 'An account with this email already exists.' });
     }
@@ -571,6 +772,10 @@ const updateUserProfile = async (req, res) => {
     }
 
     res.status(error.statusCode || 500).json({ message: error.message });
+  } finally {
+    if (profileUpdateSession) {
+      await profileUpdateSession.endSession();
+    }
   }
 };
 
@@ -587,7 +792,7 @@ const completeOnboarding = async (req, res) => {
     const user = await User.findByIdAndUpdate(
       req.user._id,
       updates,
-      { new: true }
+      { returnDocument: 'after' }
     ).select('-password');
 
     if (!user) {
@@ -647,7 +852,7 @@ const getDashboardBanner = async (req, res) => {
       });
     }
 
-    const shortestService = await Service.findOne({})
+    const shortestService = await Service.findOne({ isActive: { $ne: false } })
       .sort({ duration: 1 })
       .select('duration')
       .lean();
@@ -710,7 +915,12 @@ module.exports = { // Export all the controller functions to be used in the rout
     googleLogin, 
     getUsers,
     getMe,
+    getProfile,
     updateUserProfile,
     completeOnboarding,
-    getDashboardBanner
+    getDashboardBanner,
+    _test: {
+      createGoogleLoginHandler,
+      verifyGoogleIdToken,
+    },
 };

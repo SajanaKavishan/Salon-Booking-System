@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import axios from "axios";
+import { apiClient as axios } from '../../utils/apiConfig';
 import { toast } from "react-toastify";
+import { storage } from '../../utils/storage';
 import {
   CalendarCheck,
   ChevronDown,
@@ -34,16 +35,18 @@ const STATUS_COLORS = {
   Completed: "#22c55e",
   Cancelled: "#525252",
   Rejected: "#ef4444",
+  "No-Show": "#d4af37",
 };
 
 const DEFAULT_STATUS_COLOR = "#737373";
-const DISPLAYED_STATUS_NAMES = ["Completed", "Rejected", "Cancelled"];
+const DISPLAYED_STATUS_NAMES = ["Completed", "Rejected", "Cancelled", "No-Show"];
 const FILTER_RANGE_OPTIONS = [
   { value: "FULL_YEAR", label: "Full year" },
   { value: "YTD", label: "Year to date" },
   { value: "LAST_30_DAYS", label: "Last 30 days" },
   { value: "LAST_7_DAYS", label: "Last 7 days" },
 ];
+const ROLLING_RANGE_VALUES = new Set(["LAST_7_DAYS", "LAST_30_DAYS"]);
 
 const tooltipStyle = {
   backgroundColor: "#111",
@@ -116,6 +119,7 @@ const normalizeAppointmentStatusData = (statuses) => {
     if (name === "cancelled" || name === "canceled") {
       statusTotals.Cancelled += value;
     }
+    if (name === "no-show" || name === "no show") statusTotals["No-Show"] += value;
   });
 
   return DISPLAYED_STATUS_NAMES.map((name) => ({
@@ -194,7 +198,7 @@ function StylistLeaderboard({ staffPerformanceData, isLoading }) {
       ) : (
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
           <article className="relative flex flex-col items-center rounded-2xl border border-amber-500/30 bg-gradient-to-b from-amber-500/10 to-transparent p-6 text-center">
-            <span className="absolute right-4 top-4 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-amber-300">
+            <span className="absolute right-4 top-4 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-amber-300">
               1st Rank
             </span>
 
@@ -284,6 +288,12 @@ function Analytics() {
   const yearListRef = useRef(null);
   const selectedYear = filterYear;
   const rangeLabel = getRangeLabel(filterRange);
+  const isRollingRange = ROLLING_RANGE_VALUES.has(filterRange);
+  const periodLabel = isRollingRange
+    ? `${rangeLabel} ending today`
+    : filterRange === "YTD"
+    ? `${selectedYear} year to date`
+    : `${rangeLabel} ${selectedYear}`;
   const shouldShowSummaryLoader = isAnalyticsLoading;
 
   const calculateYAxisWidth = useCallback((data, formatter) => {
@@ -310,8 +320,8 @@ function Analytics() {
   const summaryMetrics = [
     {
       label:
-        filterRange === "LAST_7_DAYS" || filterRange === "LAST_30_DAYS"
-          ? `Total Revenue (${rangeLabel})`
+        isRollingRange
+          ? `Total Revenue (${periodLabel})`
           : selectedYear === currentYear && filterRange === "YTD"
           ? "Total Revenue (YTD)"
           : `Total Revenue (${selectedYear})`,
@@ -376,6 +386,10 @@ function Analytics() {
     if (!option) return;
 
     setFilterRange(option.value);
+    if (ROLLING_RANGE_VALUES.has(option.value)) {
+      setFilterYear(currentYear);
+      setIsYearOpen(false);
+    }
     setIsRevenueRangeOpen(false);
   };
 
@@ -475,14 +489,13 @@ function Analytics() {
     const fetchAnalytics = async () => {
       try {
         setIsAnalyticsLoading(true);
-        const token = localStorage.getItem("token");
+        const token = storage.get("token");
 
         if (!token) {
           throw new Error("Admin authentication token is missing.");
         }
 
         const config = {
-          headers: { Authorization: `Bearer ${token}` },
           params: { year: filterYear, range: filterRange },
         };
 
@@ -628,6 +641,7 @@ function Analytics() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {!isRollingRange && (
           <div ref={yearRef} className="relative w-fit">
             <button
               type="button"
@@ -694,6 +708,7 @@ function Analytics() {
               </div>
             )}
           </div>
+          )}
 
           <div ref={revenueRangeRef} className="relative w-fit">
             <button
@@ -741,6 +756,10 @@ function Analytics() {
                       type="button"
                       onClick={() => {
                         setFilterRange(option.value);
+                        if (ROLLING_RANGE_VALUES.has(option.value)) {
+                          setFilterYear(currentYear);
+                          setIsYearOpen(false);
+                        }
                         setIsRevenueRangeOpen(false);
                       }}
                       onMouseEnter={() => setActiveRangeIndex(index)}
@@ -761,6 +780,11 @@ function Analytics() {
               </div>
             )}
           </div>
+          <span className="w-full text-right text-xs text-neutral-500" aria-live="polite">
+            {isRollingRange
+              ? `Rolling period: ${periodLabel.toLowerCase()}.`
+              : `Calendar period: ${periodLabel.toLowerCase()}.`}
+          </span>
         </div>
       </header>
 
@@ -795,8 +819,8 @@ function Analytics() {
           <div>
             <h2 className="text-xl font-semibold text-white">Revenue Trends</h2>
             <p className="mt-1 text-sm text-neutral-500">
-              {filterRange === "LAST_7_DAYS" || filterRange === "LAST_30_DAYS"
-                ? `Daily completed appointment revenue over the ${rangeLabel.toLowerCase()}`
+              {isRollingRange
+                ? `Daily completed appointment revenue for the ${periodLabel.toLowerCase()}`
                 : selectedYear === currentYear && filterRange === "YTD"
                 ? "Monthly revenue from January through the current month"
                 : `Monthly revenue across ${selectedYear}`}
@@ -897,7 +921,7 @@ function Analytics() {
                 Top 5 Booked Services
               </h2>
               <p className="text-xs text-neutral-500">
-                Most requested salon services for {rangeLabel.toLowerCase()}
+                Most requested salon services for {periodLabel.toLowerCase()}
               </p>
             </div>
           </div>
@@ -979,7 +1003,7 @@ function Analytics() {
                 Appointment Status
               </h2>
               <p className="text-xs text-neutral-500">
-                Final appointment outcomes for {rangeLabel.toLowerCase()}
+                Final appointment outcomes for {periodLabel.toLowerCase()}
               </p>
             </div>
           </div>
@@ -1030,7 +1054,7 @@ function Analytics() {
                 <p className="text-2xl font-bold text-white">
                   {totalStatusAppointments}
                 </p>
-                <p className="text-[11px] uppercase tracking-wider text-neutral-500">
+                <p className="text-xs uppercase tracking-wider text-gray-300">
                   Total
                 </p>
               </div>
@@ -1040,7 +1064,7 @@ function Analytics() {
 
           <table className="sr-only">
             <caption>
-              Appointment status distribution for {rangeLabel.toLowerCase()}.
+              Appointment status distribution for {periodLabel.toLowerCase()}.
             </caption>
             <thead>
               <tr>

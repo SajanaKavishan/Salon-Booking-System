@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import axios from 'axios';
+import { apiClient as axios } from '../../utils/apiConfig';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import { motion } from 'framer-motion';
@@ -79,7 +79,7 @@ function ForgotPassword() {
                 Salon<span className="text-[#d4af37]">DEES</span>
               </span>
             </button>
-            <span className="text-[11px] uppercase tracking-[0.35em] text-[#d4af37]">Account Recovery</span>
+            <span className="text-xs uppercase tracking-[0.35em] text-[#d4af37]">Account Recovery</span>
             <p className="pt-2 text-sm leading-6 text-gray-400">
               Enter your account email and we will send you a secure reset link.
             </p>
@@ -93,6 +93,7 @@ function ForgotPassword() {
                   id="forgot-password-email"
                   type="email"
                   autoComplete="email"
+                  inputMode="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   placeholder="you@email.com"
@@ -104,7 +105,11 @@ function ForgotPassword() {
             </div>
 
             {message && (
-              <div className="rounded-md border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm leading-6 text-emerald-200">
+              <div
+                role="status"
+                aria-live="polite"
+                className="rounded-md border border-emerald-400/20 bg-emerald-500/10 px-4 py-3 text-sm leading-6 text-emerald-200"
+              >
                 {message}
               </div>
             )}
@@ -112,10 +117,11 @@ function ForgotPassword() {
             <motion.button
               type="submit"
               disabled={isLoading}
+              aria-busy={isLoading}
               whileTap={{ scale: 0.99 }}
               className="flex w-full items-center justify-center rounded-md bg-[#d4af37] px-4 py-3 text-sm font-semibold text-black shadow-[0_12px_30px_rgba(212,175,55,0.25)] transition-all duration-200 hover:bg-[#b8952e] hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {isLoading ? <Spinner /> : 'Send Reset Link'}
+              {isLoading ? <Spinner label="Sending reset link..." /> : 'Send Reset Link'}
             </motion.button>
           </form>
 

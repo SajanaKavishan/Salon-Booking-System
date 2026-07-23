@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import { apiClient as axios } from '../../utils/apiConfig';
 import { motion } from 'framer-motion';
 import { ArrowRight, ChevronLeft, ChevronRight, Clock, MapPin, Star } from 'lucide-react';
 import { WEEKLY_OPENING_HOURS, defaultOpeningHours, useSalonSettings } from '../../hooks/useSalonSettings';
@@ -8,6 +8,7 @@ import ServicesCarousel from '../../components/home/ServicesCarousel';
 import ReviewMarquee from '../../components/home/ReviewMarquee';
 import ChatWidget from '../../components/public/ChatWidget';
 import { apiUrl } from '../../utils/apiConfig';
+import { storage } from '../../utils/storage';
 
 const formatTime = (timeValue) => {
   if (!timeValue) return '';
@@ -71,7 +72,7 @@ function Home() {
   const [galleryLoading, setGalleryLoading] = useState(true);
   const [galleryFade, setGalleryFade] = useState({ left: false, right: false });
   const [loading, setLoading] = useState(true);
-  const userRole = localStorage.getItem('userRole');
+  const userRole = storage.get('userRole');
   const { settings } = useSalonSettings();
   const openingHoursText = useMemo(
     () => formatOpeningHours(settings.openingHours),
@@ -239,7 +240,7 @@ function Home() {
   };
 
   const handleBookingRedirect = (serviceId) => {
-    const token = localStorage.getItem('token');
+    const token = storage.get('token');
 
     if (token) {
       navigate('/customer/book', {
@@ -587,6 +588,10 @@ function Home() {
             <img
               src={settings.salonInteriorImage || '/salonInterior.jpg'}
               alt="Salon Interior"
+              loading="lazy"
+              decoding="async"
+              width="1200"
+              height="800"
               className="h-[260px] w-full object-cover brightness-110 transition duration-500 hover:scale-105 sm:h-[380px]"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
@@ -667,6 +672,10 @@ function Home() {
             <img
               src={settings.ownerImage || '/Owner.jpg'}
               alt="Dileep Malshan"
+              loading="lazy"
+              decoding="async"
+              width="800"
+              height="1000"
               className="aspect-[4/5] w-full max-w-sm rounded-lg border border-white/10 object-cover shadow-2xl brightness-105 transition-all duration-700 sm:max-w-md"
             />
           </motion.div>
@@ -755,6 +764,10 @@ function Home() {
                     <img
                       src={image.imageUrl}
                       alt={image.altText || image.title || `Gallery ${index + 1}`}
+                      loading="lazy"
+                      decoding="async"
+                      width="800"
+                      height="600"
                       className="h-36 w-full object-cover transition duration-500 group-hover:scale-105 sm:h-48"
                     />
                   </motion.div>
@@ -829,6 +842,8 @@ function Home() {
 
               {submitStatus && (
                 <div
+                  role="status"
+                  aria-live="polite"
                   className={`mt-5 rounded-lg border p-3 text-sm ${
                     submitStatus.includes('Success')
                       ? 'bg-green-500/20 text-green-400 border-green-500/50'
@@ -869,6 +884,7 @@ function Home() {
                     required
                     maxLength={254}
                     autoComplete="email"
+                    inputMode="email"
                     placeholder="Email Address"
                     className="w-full bg-[#111111] border border-white/10 p-3 rounded text-white focus:outline-none focus:border-[#d4af37] transition"
                   />

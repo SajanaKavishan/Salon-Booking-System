@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
+import { apiClient as axios } from '../../utils/apiConfig';
 import { AlertTriangle, Mail, Search, Trash2, X } from 'lucide-react';
 import API_BASE_URL from '../../utils/apiConfig';
+import { useModalFocus } from '../../hooks/useModalFocus';
 
 const systemStartYear = 2026;
 const currentYear = new Date().getFullYear();
@@ -55,11 +56,7 @@ function AdminMessages() {
   const [deleteError, setDeleteError] = useState('');
   const messagesPerPage = 6;
 
-  const getAuthConfig = useCallback(() => ({
-    headers: {
-      Authorization: `Bearer ${localStorage.getItem('token')}`
-    }
-  }), []);
+  const getAuthConfig = useCallback(() => ({}), []);
 
   const fetchMessages = useCallback(async (pageToLoad = 1, signal) => {
     try {
@@ -178,6 +175,11 @@ function AdminMessages() {
     setDeleteTarget(null);
     setDeleteError('');
   }, [deleteLoading]);
+  const deleteDialogRef = useModalFocus({
+    isOpen: Boolean(deleteTarget),
+    onClose: closeDeleteDialog,
+    canClose: !deleteLoading,
+  });
 
   const confirmDelete = async () => {
     if (!deleteTarget?._id || deleteLoading) return;
@@ -202,19 +204,6 @@ function AdminMessages() {
       setDeleteLoading(false);
     }
   };
-
-  useEffect(() => {
-    if (!deleteTarget) return undefined;
-
-    const handleEscape = (event) => {
-      if (event.key === 'Escape') {
-        closeDeleteDialog();
-      }
-    };
-
-    window.addEventListener('keydown', handleEscape);
-    return () => window.removeEventListener('keydown', handleEscape);
-  }, [closeDeleteDialog, deleteTarget]);
 
   if (loading) {
     return (
@@ -417,6 +406,8 @@ function AdminMessages() {
           }}
         >
           <div
+            ref={deleteDialogRef}
+            tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby="delete-message-title"

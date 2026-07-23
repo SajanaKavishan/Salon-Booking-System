@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import axios from 'axios';
+import { apiClient as axios } from '../../utils/apiConfig';
 import { Check, Loader2, Sparkles, Star, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 import API_BASE_URL from '../../utils/apiConfig';
+import { useModalFocus } from '../../hooks/useModalFocus';
+import { storage } from '../../utils/storage';
 
 const getAppointmentId = (appointment) => appointment?._id || appointment?.id;
 
@@ -18,7 +20,7 @@ const getStylistName = (appointment) => {
 
 const getStoredUser = () => {
   try {
-    return JSON.parse(localStorage.getItem('user')) || null;
+    return JSON.parse(storage.get('user')) || null;
   } catch {
     return null;
   }
@@ -51,17 +53,11 @@ function AppointmentReviewModal({ appointment, user, onClose, onReviewSubmitted,
     setIsClosed(true);
     onClose?.();
   }, [isSubmitting, onClose]);
-
-  useEffect(() => {
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        handleClose();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleClose]);
+  const dialogRef = useModalFocus({
+    isOpen: !isClosed,
+    onClose: handleClose,
+    canClose: !isSubmitting,
+  });
 
   useEffect(() => {
     return () => {
@@ -83,8 +79,6 @@ function AppointmentReviewModal({ appointment, user, onClose, onReviewSubmitted,
     setIsSubmitting(true);
 
     try {
-      const token = localStorage.getItem('token');
-
       const response = await axios.post(
         `${API_BASE_URL}/api/appointments/${appointmentId}/review`,
         {
@@ -92,12 +86,23 @@ function AppointmentReviewModal({ appointment, user, onClose, onReviewSubmitted,
           feedback,
           makePreferred: showPreferredPrompt && makePreferred,
         },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
+        {}
       );
+
+      const hasUpdatedPreferredStylist = Object.prototype.hasOwnProperty.call(
+        response.data || {},
+        'preferredStylist'
+      );
+      let updatedUser = null;
+
+      if (hasUpdatedPreferredStylist) {
+        updatedUser = {
+          ...(getStoredUser() || resolvedUser || {}),
+          preferredStylist: response.data.preferredStylist || '',
+        };
+        storage.set('user', JSON.stringify(updatedUser));
+        window.dispatchEvent(new CustomEvent('profileUpdated', { detail: updatedUser }));
+      }
 
       toast.success('Thank you for your feedback!');
       if (successTimerRef.current) {
@@ -107,7 +112,7 @@ function AppointmentReviewModal({ appointment, user, onClose, onReviewSubmitted,
       successTimerRef.current = window.setTimeout(() => {
         resetFormState();
         setIsSubmitting(false);
-        onReviewSubmitted?.(response.data?.appointment);
+        onReviewSubmitted?.(response.data?.appointment, updatedUser);
         setIsClosed(true);
       }, 500);
     } catch (error) {
@@ -121,24 +126,26 @@ function AppointmentReviewModal({ appointment, user, onClose, onReviewSubmitted,
 
   return (
     <div
-      className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      className="salon-modal-overlay fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-3 py-4 backdrop-blur-sm sm:p-4"
       role="presentation"
       onClick={() => {
         handleClose();
       }}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="appointment-review-title"
-        className="relative bg-zinc-950 border border-zinc-800 rounded-xl p-6 shadow-2xl max-w-md w-full animate-scaleIn"
+        tabIndex={-1}
+        className="salon-modal-dialog relative w-full max-w-md animate-scaleIn rounded-xl border border-zinc-800 bg-zinc-950 p-5 shadow-2xl sm:p-6"
         onClick={(event) => event.stopPropagation()}
       >
         <button
           type="button"
           onClick={handleClose}
           disabled={isSubmitting}
-          className="absolute right-4 top-4 rounded-lg p-2 text-zinc-500 transition hover:bg-white/5 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50"
+          className="salon-modal-icon-button absolute right-3 top-3 inline-flex items-center justify-center rounded-lg p-2 text-zinc-500 transition hover:bg-white/5 hover:text-zinc-200 disabled:cursor-not-allowed disabled:opacity-50 sm:right-4 sm:top-4"
           aria-label="Close review modal"
         >
           <X className="h-4 w-4" />
@@ -195,6 +202,7 @@ function AppointmentReviewModal({ appointment, user, onClose, onReviewSubmitted,
           onChange={(event) => setFeedback(event.target.value)}
           disabled={isSubmitting}
           rows={4}
+          maxLength={500}
           placeholder="Share anything that made your visit memorable..."
           className="mt-2 w-full resize-none bg-zinc-900 border border-zinc-800 text-zinc-100 placeholder-zinc-500 rounded-lg p-2.5 text-sm focus:border-amber-500/50 outline-none disabled:cursor-not-allowed disabled:opacity-60"
         />
@@ -204,7 +212,7 @@ function AppointmentReviewModal({ appointment, user, onClose, onReviewSubmitted,
             showPreferredPrompt ? 'mt-4 max-h-52 opacity-100' : 'max-h-0 opacity-0'
           }`}
         >
-          <label className="block cursor-pointer rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-4 shadow-[0_14px_30px_rgba(245,158,11,0.08)]">
+          <label htmlFor="appointment-review-preferred-stylist" className="block cursor-pointer rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-4 shadow-[0_14px_30px_rgba(245,158,11,0.08)]">
             <div className="flex items-start gap-3">
               <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-300">
                 <Sparkles className="h-4 w-4" />
@@ -228,6 +236,7 @@ function AppointmentReviewModal({ appointment, user, onClose, onReviewSubmitted,
               </span>
             </div>
             <input
+              id="appointment-review-preferred-stylist"
               type="checkbox"
               checked={makePreferred}
               onChange={(event) => setMakePreferred(event.target.checked)}

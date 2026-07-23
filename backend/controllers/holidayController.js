@@ -1,10 +1,14 @@
-const Appointment = require('../models/appointmentModel');
+const mongoose = require('mongoose');
 const Holiday = require('../models/Holiday');
-const Notification = require('../models/Notification');
 const { syncSriLankanPublicHolidays } = require('../services/holidaySyncService');
+const {
+  acquireHolidayScheduleLocks,
+  cancelAppointmentsForHolidayClosure,
+  findConflictingAppointmentDates,
+  findConflictingAppointmentsForPayload,
+} = require('../services/holidayClosureService');
 
 // Constants for active appointment statuses, salon timezone, and valid year range for public holiday synchronization
-const ACTIVE_STATUSES = ['pending', 'confirmed'];
 const SALON_TIMEZONE = 'Asia/Colombo';
 const MIN_PUBLIC_HOLIDAY_SYNC_YEAR = 2000;
 const MAX_PUBLIC_HOLIDAY_SYNC_YEAR = 2100;
@@ -104,133 +108,6 @@ const validateBulkHolidayPayload = (payload) => {
   return '';
 };
 
-// Utility function to get the start and end of a given date in UTC, used for querying appointments within that date range
-const getAppointmentDateRange = (date) => {
-  const start = new Date(`${date}T00:00:00.000Z`);
-  const end = new Date(start);
-  end.setUTCDate(end.getUTCDate() + 1);
-  return { start, end };
-};
-
-// Function to build a MongoDB query for finding active appointments on a specific date, considering the provided statuses and date range
-const buildAppointmentsOnDateQuery = (date, statuses = ACTIVE_STATUSES) => {
-  const { start, end } = getAppointmentDateRange(date);
-
-  return {
-    status: { $in: statuses },
-    $or: [
-      { date },
-      { bookingDate: { $gte: start, $lt: end } },
-    ],
-  };
-};
-
-// Function to find all active appointments on a specific date, populating related user, services, and staff information for each appointment
-const findActiveAppointmentsOnDate = (date) => (
-  Appointment.find(buildAppointmentsOnDateQuery(date))
-    .populate('user', 'name email')
-    .populate('services', 'name')
-    .populate('staffId', 'name')
-);
-
-// Utility function to convert a time string in "HH:MM" format to the total number of minutes since midnight, returning null for invalid formats
-const timeToMinutes = (value) => {
-  if (typeof value !== 'string') return null;
-
-  const match = value.trim().match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/i);
-  if (!match) return null;
-
-  let hours = Number(match[1]);
-  const minutes = Number(match[2]);
-  const period = match[3]?.toUpperCase();
-
-  if (Number.isNaN(hours) || Number.isNaN(minutes) || minutes > 59) return null;
-  if (period && (hours < 1 || hours > 12)) return null;
-  if (!period && hours > 23) return null;
-
-  if (period) {
-    if (hours === 12) hours = 0;
-    if (period === 'PM') hours += 12;
-  }
-
-  return hours * 60 + minutes;
-};
-
-// Function to check if an appointment overlaps with specified holiday hours, returning true if there is an overlap and false otherwise
-const appointmentOverlapsHolidayHours = (appointment, hours) => {
-  const closureStart = timeToMinutes(hours.start);
-  const closureEnd = timeToMinutes(hours.end);
-  const appointmentStart = timeToMinutes(appointment.startTime);
-  const appointmentEnd = timeToMinutes(appointment.endTime);
-
-  if (
-    closureStart === null
-    || closureEnd === null
-    || appointmentStart === null
-    || appointmentEnd === null
-  ) {
-    return true;
-  }
-
-  return appointmentStart < closureEnd && appointmentEnd > closureStart;
-};
-
-// Function to find appointments that conflict with a given holiday payload, considering whether the holiday is a full-day closure or has specific hours
-const findConflictingAppointmentsForPayload = async (payload) => {
-  const appointments = await findActiveAppointmentsOnDate(payload.date);
-  if (payload.isFullDay) return appointments;
-
-  return appointments.filter((appointment) => (
-    appointmentOverlapsHolidayHours(appointment, payload.hours)
-  ));
-};
-
-const findConflictingAppointmentDates = async (dates = []) => {
-  const conflictResults = await Promise.all(
-    dates.map(async (date) => {
-      const appointments = await findActiveAppointmentsOnDate(date);
-
-      return {
-        date,
-        appointmentCount: appointments.length,
-      };
-    })
-  );
-
-  return conflictResults.filter((result) => result.appointmentCount > 0);
-};
-
-// Function to cancel appointments due to a holiday closure, updating their status and sending notifications to affected users
-const cancelAppointmentsForHolidayClosure = async (appointments = [], payload) => {
-  if (appointments.length === 0) return;
-
-  const appointmentIds = appointments.map((appointment) => appointment._id);
-
-  await Appointment.updateMany(
-    { _id: { $in: appointmentIds } },
-    { $set: { status: 'cancelled' } }
-  );
-
-  await Notification.insertMany(
-    appointments.map((appointment) => ({
-      user: appointment.user?._id || appointment.user,
-      type: 'HOLIDAY_CLOSURE',
-      message: `We're sorry, but your appointment on ${payload.date} has been cancelled because the salon is closed for ${payload.name}. Please choose another date that works for you.`,
-      meta: {
-        actionUrl: '/book',
-        holidayDate: payload.date,
-        holidayName: payload.name,
-        appointmentId: appointment._id?.toString(),
-        originalServices: (appointment.services || [])
-          .map((service) => service?._id?.toString() || service?.toString())
-          .filter(Boolean),
-        staffId: appointment.staffId?._id?.toString() || appointment.staffId?.toString(),
-        stylistId: appointment.staffId?._id?.toString() || appointment.staffId?.toString(),
-      },
-    }))
-  );
-};
-
 // Function to determine if an existing holiday would conflict with a new payload, based on date, full-day status, and specific hours
 const shouldCheckHolidayUpdateConflicts = (existingHoliday, payload) => {
   if (!existingHoliday) return false;
@@ -246,21 +123,6 @@ const shouldCheckHolidayUpdateConflicts = (existingHoliday, payload) => {
 
   return false;
 };
-
-const upsertHoliday = ({ date, name, type }) => (
-  Holiday.findOneAndUpdate(
-    { date },
-    {
-      $set: {
-        date,
-        name,
-        type,
-        isActive: true,
-      },
-    },
-    { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true }
-  )
-);
 
 const getHolidays = async (_req, res) => {
   try {
@@ -281,6 +143,8 @@ const getHolidays = async (_req, res) => {
 
 // Function to cancel appointments due to a holiday closure, updating their status and sending notifications to affected users
 const createHoliday = async (req, res) => {
+  let session;
+
   try {
     if (Array.isArray(req.body?.dates)) {
       const payload = toBulkHolidayPayload(req.body);
@@ -293,7 +157,42 @@ const createHoliday = async (req, res) => {
         });
       }
 
-      const conflictingDates = await findConflictingAppointmentDates(payload.dates);
+      session = await mongoose.startSession();
+      let conflictingDates = [];
+      let result;
+      let holidays = [];
+
+      await session.withTransaction(async () => {
+        for (const date of [...payload.dates].sort()) {
+          await acquireHolidayScheduleLocks(date, session);
+        }
+        conflictingDates = await findConflictingAppointmentDates(payload.dates, session);
+        if (conflictingDates.length > 0) return;
+
+        const bulkOperations = payload.dates.map((date) => ({
+          updateOne: {
+            filter: { date },
+            update: {
+              $set: {
+                date,
+                name: payload.name,
+                type: 'custom',
+                isSystemGenerated: false,
+                isActive: true,
+                isFullDay: true,
+                hours: { start: '', end: '' },
+              },
+            },
+            upsert: true,
+          },
+        }));
+
+        result = await Holiday.bulkWrite(bulkOperations, { ordered: false, session });
+        holidays = await Holiday.find({ date: { $in: payload.dates } })
+          .sort({ date: 1 })
+          .session(session)
+          .lean();
+      });
 
       if (conflictingDates.length > 0) {
         return res.status(400).json({
@@ -303,29 +202,6 @@ const createHoliday = async (req, res) => {
           conflictingDates,
         });
       }
-
-      const bulkOperations = payload.dates.map((date) => ({
-        updateOne: {
-          filter: { date },
-          update: {
-            $set: {
-              date,
-              name: payload.name,
-              type: 'custom',
-              isSystemGenerated: false,
-              isActive: true,
-              isFullDay: true,
-              hours: { start: '', end: '' },
-            },
-          },
-          upsert: true,
-        },
-      }));
-
-      const result = await Holiday.bulkWrite(bulkOperations, { ordered: false });
-      const holidays = await Holiday.find({ date: { $in: payload.dates } })
-        .sort({ date: 1 })
-        .lean();
 
       return res.status(201).json({
         success: true,
@@ -347,8 +223,29 @@ const createHoliday = async (req, res) => {
       });
     }
 
-    const conflictingAppointments = await findConflictingAppointmentsForPayload(payload);
-    const appointmentCount = conflictingAppointments.length;
+    session = await mongoose.startSession();
+    let appointmentCount = 0;
+    let holiday;
+
+    await session.withTransaction(async () => {
+      await acquireHolidayScheduleLocks(payload.date, session);
+      const conflictingAppointments = await findConflictingAppointmentsForPayload(payload, session);
+      appointmentCount = conflictingAppointments.length;
+      if (appointmentCount > 0) return;
+
+      holiday = await Holiday.findOneAndUpdate(
+        { date: payload.date },
+        {
+          $set: {
+            ...payload,
+            type: 'custom',
+            isSystemGenerated: false,
+            isActive: true,
+          },
+        },
+        { returnDocument: 'after', upsert: true, runValidators: true, setDefaultsOnInsert: true, session }
+      );
+    });
 
     if (appointmentCount > 0) {
       return res.status(409).json({
@@ -358,19 +255,6 @@ const createHoliday = async (req, res) => {
       });
     }
 
-    const holiday = await Holiday.findOneAndUpdate(
-      { date: payload.date },
-      {
-        $set: {
-          ...payload,
-          type: 'custom',
-          isSystemGenerated: false,
-          isActive: true,
-        },
-      },
-      { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true }
-    );
-
     return res.status(201).json({
       success: true,
       holiday,
@@ -378,11 +262,15 @@ const createHoliday = async (req, res) => {
   } catch (error) {
     console.error('Create Holiday Error:', error);
     return res.status(500).json({ success: false, message: 'Could not save holiday.' });
+  } finally {
+    if (session) await session.endSession();
   }
 };
 
 // Function to forcefully create a holiday, cancelling any conflicting appointments and sending notifications to affected users
 const forceCreateHoliday = async (req, res) => {
+  let session;
+
   try {
     const payload = toHolidayPayload(req.body);
     const validationMessage = validateHolidayPayload(payload);
@@ -394,38 +282,50 @@ const forceCreateHoliday = async (req, res) => {
       });
     }
 
-    const conflictingAppointments = await findConflictingAppointmentsForPayload(payload);
-    const holiday = await Holiday.findOneAndUpdate(
-      { date: payload.date },
-      {
-        $set: {
-          ...payload,
-          type: 'custom',
-          isSystemGenerated: false,
-          isActive: true,
-        },
-      },
-      { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true }
-    );
+    session = await mongoose.startSession();
+    let holiday;
+    let cancellationResult = { cancelledAppointments: 0, notificationsSent: 0 };
 
-    if (conflictingAppointments.length > 0) {
-      await cancelAppointmentsForHolidayClosure(conflictingAppointments, payload);
-    }
+    await session.withTransaction(async () => {
+      await acquireHolidayScheduleLocks(payload.date, session);
+      const conflictingAppointments = await findConflictingAppointmentsForPayload(payload, session);
+      holiday = await Holiday.findOneAndUpdate(
+        { date: payload.date },
+        {
+          $set: {
+            ...payload,
+            type: 'custom',
+            isSystemGenerated: false,
+            isActive: true,
+          },
+        },
+        { returnDocument: 'after', upsert: true, runValidators: true, setDefaultsOnInsert: true, session }
+      );
+
+      cancellationResult = await cancelAppointmentsForHolidayClosure(
+        conflictingAppointments,
+        payload,
+        session
+      );
+    });
 
     return res.status(201).json({
       success: true,
       holiday,
-      cancelledAppointments: conflictingAppointments.length,
-      notificationsSent: conflictingAppointments.length,
+      ...cancellationResult,
     });
   } catch (error) {
     console.error('Force Create Holiday Error:', error);
     return res.status(500).json({ success: false, message: 'Could not force close this date.' });
+  } finally {
+    if (session) await session.endSession();
   }
 };
 
 // Function to update an existing holiday, checking for conflicts with active appointments and optionally cancelling them if forced
 const updateHoliday = async (req, res) => {
+  let session;
+
   try {
     const payload = toHolidayPayload(req.body);
     const validationMessage = validateHolidayPayload(payload);
@@ -437,48 +337,60 @@ const updateHoliday = async (req, res) => {
       });
     }
 
-    const existingHoliday = await Holiday.findById(req.params.id).lean();
+    session = await mongoose.startSession();
+    let holiday;
+    let holidayMissing = false;
+    let conflictingAppointments = [];
+    let cancellationResult = { cancelledAppointments: 0, notificationsSent: 0 };
 
-    if (!existingHoliday) {
+    await session.withTransaction(async () => {
+      await acquireHolidayScheduleLocks(payload.date, session);
+      const existingHoliday = await Holiday.findById(req.params.id).session(session).lean();
+      if (!existingHoliday) {
+        holidayMissing = true;
+        return;
+      }
+
+      const shouldCheckConflicts = shouldCheckHolidayUpdateConflicts(existingHoliday, payload);
+      conflictingAppointments = shouldCheckConflicts
+        ? await findConflictingAppointmentsForPayload(payload, session)
+        : [];
+
+      if (conflictingAppointments.length > 0 && req.body?.force !== true) return;
+
+      holiday = await Holiday.findByIdAndUpdate(
+        req.params.id,
+        { $set: { ...payload, isActive: true } },
+        { returnDocument: 'after', runValidators: true, session }
+      );
+
+      cancellationResult = await cancelAppointmentsForHolidayClosure(
+        conflictingAppointments,
+        payload,
+        session
+      );
+    });
+
+    if (holidayMissing) {
       return res.status(404).json({ success: false, message: 'Holiday not found.' });
     }
 
-    const shouldCheckConflicts = shouldCheckHolidayUpdateConflicts(existingHoliday, payload);
-    const conflictingAppointments = shouldCheckConflicts
-      ? await findConflictingAppointmentsForPayload(payload)
-      : [];
-
-    if (conflictingAppointments.length > 0) {
-      if (req.body?.force !== true) {
-        return res.status(400).json({
-          success: false,
-          conflict: true,
-          message: 'Cannot update this closure because active appointments would be affected.',
-          conflictingDates: [
-            {
-              date: payload.date,
-              appointmentCount: conflictingAppointments.length,
-            },
-          ],
-        });
-      }
-    }
-
-    const holiday = await Holiday.findByIdAndUpdate(
-      req.params.id,
-      { $set: { ...payload, isActive: true } },
-      { new: true, runValidators: true }
-    );
-
-    if (conflictingAppointments.length > 0) {
-      await cancelAppointmentsForHolidayClosure(conflictingAppointments, payload);
+    if (conflictingAppointments.length > 0 && req.body?.force !== true) {
+      return res.status(400).json({
+        success: false,
+        conflict: true,
+        message: 'Cannot update this closure because active appointments would be affected.',
+        conflictingDates: [{
+          date: payload.date,
+          appointmentCount: conflictingAppointments.length,
+        }],
+      });
     }
 
     return res.status(200).json({
       success: true,
       holiday,
-      cancelledAppointments: conflictingAppointments.length,
-      notificationsSent: conflictingAppointments.length,
+      ...cancellationResult,
     });
   } catch (error) {
     if (error?.code === 11000) {
@@ -490,6 +402,8 @@ const updateHoliday = async (req, res) => {
 
     console.error('Update Holiday Error:', error);
     return res.status(500).json({ success: false, message: 'Could not update this closure.' });
+  } finally {
+    if (session) await session.endSession();
   }
 };
 
@@ -499,7 +413,7 @@ const deleteHoliday = async (req, res) => {
     const holiday = await Holiday.findByIdAndUpdate(
       req.params.id,
       { $set: { isActive: false } },
-      { new: true }
+      { returnDocument: 'after' }
     );
 
     if (!holiday) {

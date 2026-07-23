@@ -1,11 +1,12 @@
-import React, { Suspense, lazy } from "react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import React, { Suspense, lazy, useEffect, useLayoutEffect } from "react";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 import ProtectedRoute from "./routes/ProtectedRoute";
 import CustomerRoute from "./routes/CustomerRoute";
 import Navbar from "./components/common/Navbar";
 import { ToastContainer, Zoom } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { AppointmentsProvider } from "./context/AppointmentsContext";
+import { getDocumentTitle } from "./utils/routeMeta";
 
 const Home = lazy(() => import("./pages/auth/Home"));
 const Login = lazy(() => import("./pages/auth/Login"));
@@ -31,6 +32,7 @@ const StaffDashboard = lazy(() => import("./pages/staff/StaffDashboard"));
 const RosterShifts = lazy(() => import("./pages/staff/RosterShifts"));
 const StaffEarnings = lazy(() => import("./pages/staff/StaffEarnings"));
 const StaffProfile = lazy(() => import("./pages/staff/StaffProfile"));
+const NotFound = lazy(() => import("./pages/public/NotFound"));
 
 function RouteLoadingFallback() {
   return (
@@ -42,6 +44,49 @@ function RouteLoadingFallback() {
       </div>
     </div>
   );
+}
+
+function ScrollToTop() {
+  const location = useLocation();
+
+  useLayoutEffect(() => {
+    if (location.hash) return;
+
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    document.querySelectorAll("[data-route-scroll-container]").forEach((container) => {
+      container.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    });
+  }, [location.hash, location.key]);
+
+  useEffect(() => {
+    document.title = getDocumentTitle(location.pathname);
+
+    if (!location.hash) return undefined;
+
+    let attempt = 0;
+    let retryTimer;
+    const targetId = decodeURIComponent(location.hash.slice(1));
+    const scrollToHashTarget = () => {
+      const target = document.getElementById(targetId);
+
+      if (target) {
+        const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+        target.scrollIntoView({
+          behavior: reduceMotion ? "auto" : "smooth",
+          block: "start",
+        });
+        return;
+      }
+
+      attempt += 1;
+      if (attempt < 100) retryTimer = window.setTimeout(scrollToHashTarget, 50);
+    };
+
+    retryTimer = window.setTimeout(scrollToHashTarget, 0);
+    return () => window.clearTimeout(retryTimer);
+  }, [location.hash, location.pathname]);
+
+  return null;
 }
 
 function LuxuryToastIcon({ type, isLoading }) {
@@ -111,7 +156,7 @@ function AppToastContainer() {
       autoClose={3500}
       toastClassName={getLuxuryToastClassName}
       icon={LuxuryToastIcon}
-      closeButton={false}
+      closeButton
       pauseOnHover
       pauseOnFocusLoss={false}
       draggable={false}
@@ -128,6 +173,7 @@ function App() {
     <>
       <AppointmentsProvider>
         <BrowserRouter>
+          <ScrollToTop />
           <AppToastContainer />
           <Navbar />
 
@@ -209,7 +255,7 @@ function App() {
                 <Route path="earnings" element={<StaffEarnings />} />
                 <Route path="profile" element={<StaffProfile />} />
               </Route>
-              <Route path="*" element={<Navigate to="/" replace />} />
+              <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>
 

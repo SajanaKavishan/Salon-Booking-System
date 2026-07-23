@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import axios from "axios";
+import { apiClient as axios } from '../../utils/apiConfig';
 import { toast } from "react-toastify";
 import { Calendar, Briefcase, PlusCircle, NotebookText, Loader2, Palmtree, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { GlassCard, GoldButton } from "../../components/admin/SystemUI";
-import { format, addDays, startOfWeek, isSameDay, isWithinInterval, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameMonth } from "date-fns";
+import { format, addDays, startOfWeek, isWithinInterval, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameMonth } from "date-fns";
 import API_BASE_URL from "../../utils/apiConfig";
+import { getSalonDateKey } from "../../utils/salonTime";
+import { storage } from '../../utils/storage';
 
 const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const calendarDaysOfWeek = ["M", "T", "W", "T", "F", "S", "S"];
@@ -20,6 +22,9 @@ const getLeaveYear = (leave) => {
 };
 
 export default function RosterShifts() {
+  const [salonTodayDateKey, setSalonTodayDateKey] = useState(() => getSalonDateKey());
+  const salonTodayCalendarDate = new Date(`${salonTodayDateKey}T00:00:00`);
+  const salonTodayYear = salonTodayDateKey.slice(0, 4);
   const mobileWeekScrollerRef = useRef(null);
   const todayRosterCardRef = useRef(null);
   const [metrics, setMetrics] = useState({
@@ -28,19 +33,37 @@ export default function RosterShifts() {
   const [shifts, setShifts] = useState([]);
   const [holidays, setHolidays] = useState([]);
   const [leaveHistory, setLeaveHistory] = useState([]);
-  const [currentWeek, setCurrentWeek] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
-  const [calendarMonth, setCalendarMonth] = useState(startOfMonth(new Date()));
+  const [currentWeek, setCurrentWeek] = useState(() => startOfWeek(salonTodayCalendarDate, { weekStartsOn: 1 }));
+  const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(salonTodayCalendarDate));
   const [selectedDates, setSelectedDates] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmittingLeave, setIsSubmittingLeave] = useState(false);
   const [currentStaffData, setCurrentStaffData] = useState(null);
-  const [selectedLeaveYear, setSelectedLeaveYear] = useState(String(new Date().getFullYear()));
+  const [selectedLeaveYear, setSelectedLeaveYear] = useState(salonTodayYear);
+
+  useEffect(() => {
+    const updateSalonToday = () => {
+      setSalonTodayDateKey((currentDateKey) => {
+        const nextDateKey = getSalonDateKey();
+        return nextDateKey === currentDateKey ? currentDateKey : nextDateKey;
+      });
+    };
+    const timerId = window.setInterval(updateSalonToday, 60000);
+
+    return () => window.clearInterval(timerId);
+  }, []);
+
+  useEffect(() => {
+    setSelectedDates((currentDates) => (
+      currentDates.filter((dateKey) => dateKey >= salonTodayDateKey)
+    ));
+  }, [salonTodayDateKey]);
 
   useEffect(() => {
     const fetchStaffData = async () => {
       setIsLoading(true);
       try {
-        const token = localStorage.getItem("token");
+        const token = storage.get("token");
 
         if (!token) {
           toast.error("Session expired, please sign out and log back in.");
@@ -48,11 +71,7 @@ export default function RosterShifts() {
           return;
         }
 
-        const config = {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        };
+        const config = {};
 
         const shiftsPromise = axios.get(`${API_BASE_URL}/api/roster/shifts`, config).catch(error => {
           console.error("Error fetching shifts:", error);
@@ -81,7 +100,7 @@ export default function RosterShifts() {
           }
           return { data: [] }; // Return empty array on error
         });
-        const staffProfilePromise = axios.get(`${API_BASE_URL}/api/users/me`, config).catch(error => {
+        const staffProfilePromise = axios.get(`${API_BASE_URL}/api/users/profile`, config).catch(error => {
           console.error("Error fetching staff profile:", error);
           if (error.response?.status === 401) {
             toast.error("Session expired, please sign out and log back in.");
@@ -208,7 +227,7 @@ export default function RosterShifts() {
 
    const getStatusTextClass = (status, date) => {
      if (status === "SALON CLOSED") return "text-red-300";
-     if (isSameDay(date, new Date())) return "text-white";
+     if (getSelectedDateKey(date) === salonTodayDateKey) return "text-white";
      if (status === "ON LEAVE") return "text-rose-300";
      if (status === "OFF DAY") return "text-amber-300";
      return "text-emerald-300";
@@ -217,7 +236,7 @@ export default function RosterShifts() {
    const getWeekDayCardClass = (status, date) => (
      status === "SALON CLOSED"
        ? getDayStatusClass(status)
-       : isSameDay(date, new Date())
+       : getSelectedDateKey(date) === salonTodayDateKey
          ? "border-[#d4af37] bg-[#d4af37]/10"
          : getDayStatusClass(status)
    );
@@ -263,9 +282,9 @@ export default function RosterShifts() {
       .map(getLeaveYear)
       .filter(Boolean);
 
-    return [...new Set([String(new Date().getFullYear()), ...years])]
+    return [...new Set([salonTodayYear, ...years])]
       .sort((first, second) => Number(second) - Number(first));
-  }, [fullLeaveHistory]);
+  }, [fullLeaveHistory, salonTodayYear]);
 
   const filteredLeaveHistory = useMemo(() => (
     [...fullLeaveHistory]
@@ -291,6 +310,12 @@ export default function RosterShifts() {
   }, [currentWeek, isLoading]);
 
   const toggleSelectedDate = (date) => {
+    const dateKey = getSelectedDateKey(date);
+    if (dateKey < salonTodayDateKey) {
+      toast.error("Past dates cannot be selected for leave.");
+      return;
+    }
+
     if (isStaffOffDay(date)) {
       toast.error("You cannot apply leave on a scheduled off day.");
       return;
@@ -302,13 +327,14 @@ export default function RosterShifts() {
       return;
     }
 
-    const dateKey = getSelectedDateKey(date);
     setSelectedDates((prev) => (
       prev.includes(dateKey)
         ? prev.filter((selectedDate) => selectedDate !== dateKey)
         : [...prev, dateKey].filter((selectedDate) => {
           const selectedDateValue = new Date(`${selectedDate}T00:00:00`);
-          return !isStaffOffDay(selectedDateValue) && !getHolidayForDate(selectedDateValue);
+          return selectedDate >= salonTodayDateKey
+            && !isStaffOffDay(selectedDateValue)
+            && !getHolidayForDate(selectedDateValue);
         })
     ));
   };
@@ -352,32 +378,28 @@ export default function RosterShifts() {
 
       const validSelectedDates = selectedDates.filter((dateKey) => {
         const selectedDateValue = new Date(`${dateKey}T00:00:00`);
-        return !isStaffOffDay(selectedDateValue) && !getHolidayForDate(selectedDateValue);
+        return dateKey >= salonTodayDateKey
+          && !isStaffOffDay(selectedDateValue)
+          && !getHolidayForDate(selectedDateValue);
       });
       if (validSelectedDates.length !== selectedDates.length) {
         setSelectedDates(validSelectedDates);
-        toast.error("Scheduled off days or salon holidays were removed from your leave selection.");
+        toast.error("Past dates, scheduled off days, or salon holidays were removed from your leave selection.");
         return;
       }
 
       setIsSubmittingLeave(true);
-      const token = localStorage.getItem("token");
       const leaveDateRanges = groupConsecutiveDates(validSelectedDates);
-      const leaveRequests = await Promise.all(
-        leaveDateRanges.map((range) => axios.post(
-          `${API_BASE_URL}/api/roster/leaves`,
-          {
-            ...leaveForm,
-            startDate: range.startDate,
-            endDate: range.endDate,
-          },
-          { headers: { Authorization: `Bearer ${token}` } }
-        ))
+      const response = await axios.post(
+        `${API_BASE_URL}/api/roster/leaves/bulk`,
+        {
+          ...leaveForm,
+          ranges: leaveDateRanges,
+        },
+        {}
       );
 
-      const newLeaves = leaveRequests
-        .map((response) => response.data.leave)
-        .filter(Boolean)
+      const newLeaves = (Array.isArray(response.data?.leaves) ? response.data.leaves : [])
         .map((newLeave) => ({
           id: newLeave._id,
           type: newLeave.leaveType,
@@ -385,6 +407,7 @@ export default function RosterShifts() {
           endDate: newLeave.endDate ? new Date(newLeave.endDate) : new Date(newLeave.startDate),
           status: newLeave.status,
           reason: newLeave.reason,
+          workingDays: newLeave.workingDays,
           createdAt: newLeave.createdAt ? new Date(newLeave.createdAt) : new Date(),
           datesDisplay: `${format(new Date(newLeave.startDate), 'MMM dd')}${newLeave.endDate ? ` - ${format(new Date(newLeave.endDate), 'MMM dd')}` : ''}`
         }));
@@ -407,10 +430,10 @@ export default function RosterShifts() {
 
   const getLeaveStatusBadge = (status) => {
     switch (status?.toLowerCase()) {
-      case 'approved': return <span className="text-[10px] uppercase tracking-wider font-bold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded border border-emerald-400/20">Approved</span>;
-      case 'pending': return <span className="text-[10px] uppercase tracking-wider font-bold text-[#d4af37] bg-[#d4af37]/10 px-2 py-0.5 rounded border border-[#d4af37]/20">Pending</span>;
-      case 'rejected': return <span className="text-[10px] uppercase tracking-wider font-bold text-red-400 bg-red-400/10 px-2 py-0.5 rounded border border-red-400/20">Rejected</span>;
-      default: return <span className="text-[10px] uppercase tracking-wider font-bold text-gray-400 bg-gray-400/10 px-2 py-0.5 rounded border border-gray-400/20">Unknown</span>;
+      case 'approved': return <span className="text-xs uppercase tracking-wider font-bold text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded border border-emerald-400/20">Approved</span>;
+      case 'pending': return <span className="text-xs uppercase tracking-wider font-bold text-[#d4af37] bg-[#d4af37]/10 px-2 py-0.5 rounded border border-[#d4af37]/20">Pending</span>;
+      case 'rejected': return <span className="text-xs uppercase tracking-wider font-bold text-red-400 bg-red-400/10 px-2 py-0.5 rounded border border-red-400/20">Rejected</span>;
+      default: return <span className="text-xs uppercase tracking-wider font-bold text-gray-300 bg-gray-400/10 px-2 py-0.5 rounded border border-gray-400/20">Unknown</span>;
     }
   };
 
@@ -463,7 +486,7 @@ export default function RosterShifts() {
                 const dayStatus = getDayStatus(date);
                 const dayClass = getWeekDayCardClass(dayStatus, date);
                 const statusTextClass = getStatusTextClass(dayStatus, date);
-                const isToday = isSameDay(date, new Date());
+                const isToday = getSelectedDateKey(date) === salonTodayDateKey;
 
                 return (
                   <div
@@ -473,14 +496,14 @@ export default function RosterShifts() {
                   >
                     <div className="flex min-w-0 items-center gap-3">
                       <div className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-lg border border-white/10 bg-black/20">
-                        <span className="text-[10px] font-semibold uppercase text-gray-400">{format(date, 'MMM')}</span>
+                        <span className="text-xs font-semibold uppercase text-gray-300">{format(date, 'MMM')}</span>
                         <span className="text-base font-bold leading-none text-white">{format(date, 'dd')}</span>
                       </div>
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold text-white">{format(date, 'EEEE')}</p>
                       </div>
                     </div>
-                    <span className={`shrink-0 text-right text-[10px] font-bold uppercase tracking-tight ${statusTextClass}`}>
+                    <span className={`shrink-0 text-right text-xs font-bold uppercase tracking-tight ${statusTextClass}`}>
                       {dayStatus}
                     </span>
                   </div>
@@ -502,7 +525,7 @@ export default function RosterShifts() {
                     <div key={index} className={`flex flex-col items-center justify-center rounded-lg border p-3 ${dayClass}`}>
                       <span className="text-xs text-gray-400">{format(date, 'MMM')}</span>
                       <span className="text-lg font-bold text-white">{format(date, 'dd')}</span>
-                      <span className={`mt-1 text-[9px] font-bold uppercase tracking-tight ${statusTextClass}`}>
+                      <span className={`mt-1 text-xs font-bold uppercase tracking-tight ${statusTextClass}`}>
                         {dayStatus}
                       </span>
                     </div>
@@ -602,7 +625,7 @@ export default function RosterShifts() {
                       <ChevronRight className="h-4 w-4" />
                     </button>
                   </div>
-                  <div className="grid grid-cols-7 gap-0.5 text-center text-[9px] font-bold uppercase tracking-normal text-slate-500 min-[360px]:gap-1 min-[360px]:text-[10px] min-[360px]:tracking-wider">
+                  <div className="grid grid-cols-7 gap-0.5 text-center text-xs font-bold uppercase tracking-normal text-gray-300 min-[360px]:gap-1 min-[360px]:tracking-wider">
                     {calendarDaysOfWeek.map((day, index) => (
                       <span key={`${day}-${index}`}>{day}</span>
                     ))}
@@ -616,10 +639,16 @@ export default function RosterShifts() {
                       const dateKey = getSelectedDateKey(calendarDay.date);
                       const dateString = format(calendarDay.date, "MMMM d, yyyy");
                       const isSelected = selectedDates.includes(dateKey);
-                      const isToday = isSameDay(calendarDay.date, new Date());
+                      const isToday = dateKey === salonTodayDateKey;
+                      const isPastDate = dateKey < salonTodayDateKey;
                       const isOffDay = isStaffOffDay(calendarDay.date);
                       const isHoliday = Boolean(getHolidayForDate(calendarDay.date));
-                      const isUnavailable = isOffDay || isHoliday;
+                      const isUnavailable = isPastDate || isOffDay || isHoliday;
+                      const unavailableReason = isPastDate
+                        ? "past date"
+                        : isHoliday
+                          ? "salon holiday"
+                          : "scheduled staff off-day";
 
                       return (
                         <button
@@ -627,10 +656,15 @@ export default function RosterShifts() {
                           key={calendarDay.id}
                           onClick={() => toggleSelectedDate(calendarDay.date)}
                           disabled={isUnavailable}
-                          aria-label={`Select leave date ${dateString}`}
-                          className={`aspect-square min-h-9 rounded-md text-[11px] font-semibold transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#d4af37]/60 min-[360px]:rounded-lg min-[360px]:text-xs ${
+                          aria-disabled={isUnavailable}
+                          aria-label={isUnavailable
+                            ? `${dateString}, unavailable: ${unavailableReason}`
+                            : `Select leave date ${dateString}`}
+                          className={`aspect-square min-h-9 rounded-md text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#d4af37]/60 min-[360px]:rounded-lg ${
                             isUnavailable
-                              ? isHoliday
+                              ? isPastDate
+                                ? "cursor-not-allowed bg-black/35 text-slate-700 opacity-40 line-through"
+                                : isHoliday
                                 ? "opacity-50 cursor-not-allowed pointer-events-none text-red-300 bg-red-500/10"
                                 : "opacity-40 cursor-not-allowed pointer-events-none text-slate-600 bg-slate-900/40"
                               : isSelected

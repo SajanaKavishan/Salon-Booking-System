@@ -29,6 +29,16 @@ const leaveRequestSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    workingDays: {
+        type: Number,
+        min: 1,
+        default: 1
+    },
+    workingDaysByYear: {
+        type: Map,
+        of: Number,
+        default: () => ({})
+    },
     status: {
         type: String,
         enum: ['Pending', 'Approved', 'Rejected'],

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
+import { apiClient as axios } from '../../utils/apiConfig';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
@@ -11,6 +11,7 @@ import {
   Star,
 } from 'lucide-react';
 import BACKEND_BASE_URL, { apiUrl } from '../../utils/apiConfig';
+import { storage } from '../../utils/storage';
 
 const steps = {
   1: {
@@ -98,7 +99,7 @@ const itemVariants = {
 
 function getStoredUser() {
   try {
-    return JSON.parse(localStorage.getItem('user') || 'null');
+    return JSON.parse(storage.get('user', 'null'));
   } catch {
     return null;
   }
@@ -132,6 +133,7 @@ function StepProgress({ currentStep }) {
       {[1, 2, 3, 4].map((step) => (
         <motion.span
           key={step}
+          aria-current={step === currentStep ? 'step' : undefined}
           className={`h-2 rounded-full ${step === currentStep ? 'bg-[#D4AF37]' : 'bg-white/15'}`}
           animate={{
             width: step === currentStep ? 40 : 19,
@@ -304,13 +306,21 @@ function Onboarding() {
     : null;
   const { redirectAfterOnboarding, redirectState } = useMemo(() => {
     const redirectFrom = location.state?.from;
+    const requestedReturnTo = location.state?.returnTo;
+    const safeReturnTo = typeof requestedReturnTo === 'string'
+      && requestedReturnTo.startsWith('/')
+      && !requestedReturnTo.startsWith('//')
+      ? requestedReturnTo
+      : null;
     const nextState = { ...(redirectFrom?.state || {}), ...(location.state || {}) };
     delete nextState.from;
+    delete nextState.returnTo;
 
     return {
-      redirectAfterOnboarding: redirectFrom?.pathname
-        ? `${redirectFrom.pathname}${redirectFrom.search || ''}`
-        : '/dashboard',
+      redirectAfterOnboarding: safeReturnTo
+        || (redirectFrom?.pathname
+          ? `${redirectFrom.pathname}${redirectFrom.search || ''}${redirectFrom.hash || ''}`
+          : '/dashboard'),
       redirectState: nextState,
     };
   }, [location.state]);
@@ -351,7 +361,7 @@ function Onboarding() {
   };
 
   const completeOnboarding = async () => {
-    const token = localStorage.getItem('token');
+    const token = storage.get('token');
 
     if (!token) {
       navigate('/login', { replace: true });
@@ -364,7 +374,7 @@ function Onboarding() {
       const response = await axios.patch(
         apiUrl('/api/users/complete-onboarding'),
         selectedRealStylistId ? { preferredStylist: selectedRealStylistId } : {},
-        { headers: { Authorization: `Bearer ${token}` } }
+        {}
       );
       const nextUser = {
         ...(getStoredUser() || {}),
@@ -372,7 +382,7 @@ function Onboarding() {
         isFirstLogin: false,
       };
 
-      localStorage.setItem('user', JSON.stringify(nextUser));
+      storage.set('user', JSON.stringify(nextUser));
       window.dispatchEvent(new CustomEvent('profileUpdated', { detail: nextUser }));
       toast.success('Your SalonDEES suite is ready.');
       navigate(redirectAfterOnboarding, { replace: true, state: redirectState });

@@ -1,52 +1,25 @@
 const Appointment = require('../models/appointmentModel');
 const LeaveRequest = require('../models/LeaveRequest');
-const Service = require('../models/Service');
 const Staff = require('../models/Staff');
-const User = require('../models/User');
+const {
+  getAppointmentStatusData,
+  getLegacyAnalyticsSummaryData,
+  getTopServicesData,
+} = require('../utils/analyticsHelper');
+const { getSalonDateTime } = require('../utils/salonTime');
 
 const WEEK_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const MONTH_NAMES = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-];
-const ANALYTICS_STATUSES = ['completed', 'rejected', 'cancelled'];
-const STATUS_LABELS = {
-  completed: 'Completed',
-  rejected: 'Rejected',
-  cancelled: 'Cancelled',
-};
-
-// Utility function to format a Date object into a string in the format 'YYYY-MM-DD'. It extracts the year, month, and day from the Date object, ensuring that the month and day are zero-padded to two digits. The formatted string is then returned for use in queries or responses.
-const formatDate = (date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-
-  return `${year}-${month}-${day}`;
-};
 
 // @desc    Get summary metrics for the admin dashboard
 // @route   GET /api/dashboard/summary
 // @access  Private/Admin
 const getDashboardSummary = async (req, res) => {
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const tomorrow = new Date(today);
-    tomorrow.setDate(today.getDate() + 1);
-
-    const todayKey = formatDate(today);
+    const salonToday = getSalonDateTime().startOf('day');
+    const salonTomorrow = salonToday.plus({ days: 1 });
+    const today = salonToday.toUTC().toJSDate();
+    const tomorrow = salonTomorrow.toUTC().toJSDate();
+    const todayKey = salonToday.toISODate();
     const todayAppointmentQuery = {
       $or: [
         { date: todayKey },
@@ -79,7 +52,10 @@ const getDashboardSummary = async (req, res) => {
           },
         },
       ]),
-      Staff.countDocuments(),
+      Staff.countDocuments({
+        isActive: { $ne: false },
+        isDeleted: { $ne: true },
+      }),
       LeaveRequest.find({
         status: { $in: ['Approved', 'approved'] },
         startDate: { $lt: tomorrow },
@@ -88,7 +64,11 @@ const getDashboardSummary = async (req, res) => {
     ]);
 
     const staffOnLeave = approvedLeaveUserIds.length > 0
-      ? await Staff.countDocuments({ userId: { $in: approvedLeaveUserIds } })
+      ? await Staff.countDocuments({
+          userId: { $in: approvedLeaveUserIds },
+          isActive: { $ne: false },
+          isDeleted: { $ne: true },
+        })
       : 0;
     const pendingApprovals = pendingBookings + pendingLeaveRequests;
     const todaysRevenue = todaysRevenueResult[0]?.todaysRevenue ?? 0;
@@ -118,18 +98,11 @@ const getDashboardSummary = async (req, res) => {
 // @access  Private/Admin
 const getWeeklyAnalytics = async (req, res) => {
   try {
-    const now = new Date();
-    const monday = new Date(now);
-    const daysSinceMonday = (now.getDay() + 6) % 7;
-
-    monday.setHours(0, 0, 0, 0);
-    monday.setDate(monday.getDate() - daysSinceMonday);
-
-    const sunday = new Date(monday);
-    sunday.setDate(monday.getDate() + 6);
-
-    const startDate = formatDate(monday);
-    const endDate = formatDate(sunday);
+    const salonNow = getSalonDateTime();
+    const monday = salonNow.startOf('week').startOf('day');
+    const sunday = monday.plus({ days: 6 }).endOf('day');
+    const startDate = monday.toISODate();
+    const endDate = sunday.toISODate();
 
     const revenueByDay = await Appointment.aggregate([
       {
@@ -160,11 +133,9 @@ const getWeeklyAnalytics = async (req, res) => {
       },
       { $sort: { isoDay: 1 } },
     ]);
-
     const revenueMap = new Map(
       revenueByDay.map(({ isoDay, revenue }) => [isoDay, revenue])
     );
-
     const weeklyAnalytics = WEEK_DAYS.map((day, index) => ({
       day,
       revenue: revenueMap.get(index + 1) ?? 0,
@@ -181,18 +152,18 @@ const getWeeklyAnalytics = async (req, res) => {
   }
 };
 
-// @desc    Get year-to-date analytics summary and monthly revenue trends
-// @route   GET /api/dashboard/analytics-summary
-// @access  Private/Admin
+// Legacy exports retained for direct consumers. Dashboard routes use the richer
+// range-aware handlers from analyticsController, while both implementations now
+// share the same aggregation helper module.
 const getAnalyticsSummary = async (req, res) => {
   try {
-    const currentYear = new Date().getFullYear();
+    const currentYear = getSalonDateTime().year;
     const requestedYear = Number(req.query.year ?? currentYear);
 
     if (
-      !Number.isInteger(requestedYear) ||
-      requestedYear < 2000 ||
-      requestedYear > currentYear
+      !Number.isInteger(requestedYear)
+      || requestedYear < 2000
+      || requestedYear > currentYear
     ) {
       return res.status(400).json({
         success: false,
@@ -200,91 +171,8 @@ const getAnalyticsSummary = async (req, res) => {
       });
     }
 
-    const yearStart = `${requestedYear}-01-01`;
-    const yearEnd = `${requestedYear}-12-31`;
-
-    const [
-      totalAppointments,
-      newClients,
-      revenueByMonth,
-      completedYears,
-    ] = await Promise.all([
-      Appointment.countDocuments(),
-      User.countDocuments({ role: { $in: ['customer', 'user'] } }),
-      Appointment.aggregate([
-        {
-          $match: {
-            status: { $in: ['completed', 'Completed'] },
-            date: { $gte: yearStart, $lte: yearEnd },
-          },
-        },
-        {
-          $group: {
-            _id: {
-              $month: {
-                $dateFromString: {
-                  dateString: '$date',
-                  format: '%Y-%m-%d',
-                },
-              },
-            },
-            revenue: { $sum: '$totalAmount' },
-          },
-        },
-        {
-          $project: {
-            _id: 0,
-            monthNumber: '$_id',
-            revenue: 1,
-          },
-        },
-        { $sort: { monthNumber: 1 } },
-      ]),
-      Appointment.aggregate([
-        {
-          $match: {
-            status: { $in: ['completed', 'Completed'] },
-            date: { $type: 'string' },
-          },
-        },
-        {
-          $project: {
-            year: {
-              $toInt: { $substrBytes: ['$date', 0, 4] },
-            },
-          },
-        },
-        { $group: { _id: '$year' } },
-        { $sort: { _id: -1 } },
-      ]),
-    ]);
-
-    const revenueMap = new Map(
-      revenueByMonth.map(({ monthNumber, revenue }) => [monthNumber, revenue])
-    );
-
-    const revenueTrends = MONTH_NAMES.map((month, index) => ({
-      month,
-      revenue: revenueMap.get(index + 1) ?? 0,
-    }));
-
-    const totalRevenueYTD = revenueTrends.reduce(
-      (total, item) => total + item.revenue,
-      0
-    );
-
-    const availableYears = Array.from(
-      new Set([currentYear, ...completedYears.map(({ _id }) => _id)])
-    ).sort((a, b) => b - a);
-
-    return res.status(200).json({
-      selectedYear: requestedYear,
-      availableYears,
-      totalRevenueYTD,
-      totalAppointments,
-      newClients,
-      revenueTrends,
-    });
+    const summary = await getLegacyAnalyticsSummaryData({ requestedYear, currentYear });
+    return res.status(200).json(summary);
   } catch (error) {
     console.error('Analytics Summary Error:', error);
 
@@ -295,39 +183,9 @@ const getAnalyticsSummary = async (req, res) => {
   }
 };
 
-// @desc    Get the five most booked salon services
-// @route   GET /api/dashboard/top-services
-// @access  Private/Admin
-const getTopServices = async (req, res) => {
+const getTopServices = async (_req, res) => {
   try {
-    const topServices = await Appointment.aggregate([
-      { $unwind: '$services' },
-      {
-        $group: {
-          _id: '$services',
-          bookings: { $sum: 1 },
-        },
-      },
-      {
-        $lookup: {
-          from: Service.collection.name,
-          localField: '_id',
-          foreignField: '_id',
-          as: 'service',
-        },
-      },
-      { $unwind: '$service' },
-      { $sort: { bookings: -1, _id: 1 } },
-      { $limit: 5 },
-      {
-        $project: {
-          _id: 0,
-          name: '$service.name',
-          bookings: 1,
-        },
-      },
-    ]);
-
+    const topServices = await getTopServicesData({ applyDateWindow: false });
     return res.status(200).json(topServices);
   } catch (error) {
     console.error('Top Services Analytics Error:', error);
@@ -339,51 +197,9 @@ const getTopServices = async (req, res) => {
   }
 };
 
-// @desc    Get appointment totals grouped by status
-// @route   GET /api/dashboard/appointment-status
-// @access  Private/Admin
-const getAppointmentStatus = async (req, res) => {
+const getAppointmentStatus = async (_req, res) => {
   try {
-    const statusCounts = await Appointment.aggregate([
-      {
-        $match: {
-          status: {
-            $in: [
-              ...ANALYTICS_STATUSES,
-              'Completed',
-              'Rejected',
-              'Cancelled',
-              'Canceled',
-            ],
-          },
-        },
-      },
-      {
-        $group: {
-          _id: '$status',
-          value: { $sum: 1 },
-        },
-      },
-      {
-        $project: {
-          _id: 0,
-          name: '$_id',
-          value: 1,
-        },
-      },
-    ]);
-
-    const countByStatus = new Map();
-    statusCounts.forEach(({ name, value }) => {
-      const canonicalName = Appointment.normalizeStatus(name);
-      countByStatus.set(canonicalName, (countByStatus.get(canonicalName) ?? 0) + value);
-    });
-
-    const appointmentStatus = ANALYTICS_STATUSES.map((name) => ({
-      name: STATUS_LABELS[name],
-      value: countByStatus.get(name) ?? 0,
-    }));
-
+    const appointmentStatus = await getAppointmentStatusData({ applyDateWindow: false });
     return res.status(200).json(appointmentStatus);
   } catch (error) {
     console.error('Appointment Status Analytics Error:', error);

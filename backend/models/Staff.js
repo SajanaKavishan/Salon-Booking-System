@@ -5,7 +5,7 @@ const staffSchema = new mongoose.Schema(
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: false,
+      required: [true, 'A linked staff user account is required'],
     },
     name: {
       type: String,
@@ -59,9 +59,28 @@ const staffSchema = new mongoose.Schema(
       type: [String],
       default: [],
     },
+    isActive: {
+      type: Boolean,
+      default: true,
+      index: true,
+    },
+    leaveSubmissionVersion: {
+      type: Number,
+      default: 0,
+      select: false,
+    },
   },
   {
     timestamps: true,
+  }
+);
+
+staffSchema.index(
+  { userId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { userId: { $type: 'objectId' } },
+    name: 'unique_staff_user_id',
   }
 );
 

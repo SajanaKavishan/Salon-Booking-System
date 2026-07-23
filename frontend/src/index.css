@@ -60,6 +60,15 @@
 }
 
 @layer components {
+    .salon-modal-action {
+        min-height: 2.75rem;
+    }
+
+    .salon-modal-icon-button {
+        min-width: 2.75rem;
+        min-height: 2.75rem;
+    }
+
     /* Global Luxury Capsule Toast Container */
     .luxury-toast-capsule {
         @apply !mx-auto !flex !w-fit !max-w-[min(520px,calc(100vw-1.5rem))] !items-center !gap-3 !rounded-full !border !border-zinc-800 !bg-zinc-950/95 !px-5 !py-2.5 !text-sm !font-medium !text-zinc-200 !shadow-[0_10px_30px_rgba(0,0,0,0.7)] !backdrop-blur-md;
@@ -317,6 +326,16 @@
         animation: luxFadeIn 0.5s ease-out;
     }
 
+}
+
+@media (max-width: 360px) {
+    .salon-modal-overlay {
+        padding: 1rem 0.75rem !important;
+    }
+
+    .salon-modal-dialog {
+        max-width: calc(100vw - 1.5rem) !important;
+    }
 }
 
 .no-scrollbar {
@@ -637,4 +656,25 @@ body {
     box-shadow: 0 0 18px rgba(212, 175, 55, 0.08);
     filter: none;
     transform: none;
+}
+
+:where(button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"])):focus-visible {
+    outline: 2px solid #d4af37 !important;
+    outline-offset: 3px !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html:focus-within {
+        scroll-behavior: auto;
+    }
+
+    *,
+    *::before,
+    *::after {
+        scroll-behavior: auto !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        transition-delay: 0ms !important;
+    }
 }

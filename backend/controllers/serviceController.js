@@ -1,8 +1,9 @@
 const mongoose = require('mongoose');
+const Appointment = require('../models/appointmentModel');
 const Service = require('../models/Service');
 const {
   cleanupUploadedCloudinaryFile,
-  destroyCloudinaryAsset,
+  queueCloudinaryAssetDeletion,
   resolveCloudinaryPublicId,
 } = require('../utils/cloudinaryAssets');
 
@@ -15,6 +16,10 @@ const getValidationMessage = (error) => (
 );
 
 const sendServiceError = (res, error, fallbackMessage = 'Server Error') => {
+  if (error?.statusCode) {
+    return res.status(error.statusCode).json({ message: error.message });
+  }
+
   if (error?.name === 'ValidationError') {
     return res.status(400).json({ message: getValidationMessage(error) });
   }
@@ -26,7 +31,7 @@ const sendServiceError = (res, error, fallbackMessage = 'Server Error') => {
 // @route   GET /api/services
 const getServices = async (req, res) => {
   try {
-    const services = await Service.find();
+    const services = await Service.find({ isActive: { $ne: false } });
     res.status(200).json(services);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -61,13 +66,17 @@ const createService = async (req, res) => {
 // @desc    Update a service (Admin only)
 // @route   PUT /api/services/:id
 const updateService = async (req, res) => {
+  let databaseUpdateCommitted = false;
+
   try {
     if (!mongoose.isValidObjectId(req.params.id)) {
+      await cleanupUploadedCloudinaryFile(req.file, 'Invalid service update cleanup');
       return res.status(400).json({ message: 'Invalid service ID' });
     }
 
     const existingService = await Service.findById(req.params.id);
     if (!existingService) {
+      await cleanupUploadedCloudinaryFile(req.file, 'Missing service update cleanup');
       return res.status(404).json({ message: 'Service not found' });
     }
 
@@ -89,23 +98,46 @@ const updateService = async (req, res) => {
     }
 
     if (req.file?.path) {
-      await destroyCloudinaryAsset(existingService.imagePublicId, existingService.image);
       updateData.image = req.file.path;
       updateData.imagePublicId = req.file.filename || '';
-    } else if (
-      updateData.image !== undefined
-      && updateData.image !== existingService.image
-    ) {
-      await destroyCloudinaryAsset(existingService.imagePublicId, existingService.image);
     }
+
+    const oldPublicId = resolveCloudinaryPublicId(existingService.imagePublicId, existingService.image);
+    const nextPublicId = updateData.imagePublicId !== undefined
+      ? resolveCloudinaryPublicId(updateData.imagePublicId, updateData.image)
+      : oldPublicId;
+    const shouldDeleteOldImage = Boolean(oldPublicId)
+      && updateData.image !== undefined
+      && updateData.image !== existingService.image
+      && nextPublicId !== oldPublicId;
 
     const updatedService = await Service.findByIdAndUpdate(
       req.params.id,
       updateData,
-      { new: true, runValidators: true }
+      { returnDocument: 'after', runValidators: true }
     );
+
+    if (!updatedService) {
+      const error = new Error('Service not found');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    databaseUpdateCommitted = true;
+
+    if (shouldDeleteOldImage) {
+      queueCloudinaryAssetDeletion(
+        existingService.imagePublicId,
+        existingService.image,
+        'Old service image cleanup'
+      );
+    }
+
     res.status(200).json(updatedService);
   } catch (error) {
+    if (!databaseUpdateCommitted) {
+      await cleanupUploadedCloudinaryFile(req.file, 'Failed service update cleanup');
+    }
     sendServiceError(res, error, 'Error updating service');
   }
 };
@@ -123,10 +155,28 @@ const deleteService = async (req, res) => {
       return res.status(404).json({ message: 'Service not found' });
     }
 
-    await destroyCloudinaryAsset(service.imagePublicId, service.image);
-    await Service.findByIdAndDelete(req.params.id);
+    if (service.isActive === false) {
+      return res.status(200).json({
+        id: req.params.id,
+        message: 'Service is already inactive',
+      });
+    }
 
-    res.status(200).json({ id: req.params.id, message: 'Service deleted' });
+    const hasActiveAppointments = await Appointment.exists({
+      services: service._id,
+      status: { $in: ['pending', 'confirmed', 'Pending', 'Confirmed', 'approved', 'Approved'] },
+    });
+
+    if (hasActiveAppointments) {
+      return res.status(400).json({
+        message: 'This service cannot be removed while it is used by pending or confirmed appointments.',
+      });
+    }
+
+    service.isActive = false;
+    await service.save();
+
+    res.status(200).json({ id: req.params.id, message: 'Service deactivated' });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

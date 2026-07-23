@@ -1,27 +1,47 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import axios from 'axios';
+import { apiClient as axios } from '../../utils/apiConfig';
 import { CalendarCheck, CalendarPlus, ChevronDown } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import AddAppointmentModal from '../../components/admin/AddAppointmentModal';
 import { DarkSelect, GoldButton, StatusBadge } from '../../components/admin/SystemUI';
 import API_BASE_URL from '../../utils/apiConfig';
+import { useSalonSettings } from '../../hooks/useSalonSettings';
+import { storage } from '../../utils/storage';
+import {
+  getAppointmentServicesLabel,
+  getAppointmentStylistName,
+} from '../../utils/appointmentDisplay';
+import {
+  formatSalonDate,
+  getSalonAppointmentTimestamp,
+  getSalonDateKey,
+} from '../../utils/salonTime';
 
-const finalStatuses = ['Completed', 'Rejected', 'Cancelled', 'No-Show'];
+const finalStatuses = ['Completed', 'Rejected', 'Cancelled', 'Cancelled by Salon', 'No-Show'];
+const CANCELLED_APPOINTMENT_STATUSES = new Set([
+  'cancelled',
+  'canceled',
+  'cancelled_by_salon',
+  'canceled_by_salon',
+  'cancelled by salon',
+  'canceled by salon',
+]);
 const STATUS_API_VALUES = {
   Pending: 'pending',
   Approved: 'confirmed',
   Confirmed: 'confirmed',
-  Rejected: 'rejected',
   Cancelled: 'cancelled',
   Canceled: 'cancelled',
+  'Cancelled by Salon': 'cancelled_by_salon',
   Completed: 'completed',
   'No-Show': 'no-show',
   'No Show': 'no-show'
 };
 const PENDING_APPOINTMENTS_REFRESH_EVENT = 'appointments:pending-count-refresh';
-const CURRENT_DATE = new Date();
-const CURRENT_YEAR = String(CURRENT_DATE.getFullYear());
-const CURRENT_MONTH = String(CURRENT_DATE.getMonth());
+const CURRENT_DATE_KEY = getSalonDateKey();
+const CURRENT_YEAR = CURRENT_DATE_KEY.slice(0, 4);
+const CURRENT_MONTH = String(Number(CURRENT_DATE_KEY.slice(5, 7)) - 1);
 const MONTH_OPTIONS = [
   'January',
   'February',
@@ -43,48 +63,31 @@ const getStatusSortGroup = (status) => {
   if (normalizedStatus === 'in progress') return 0;
   if (['scheduled', 'pending'].includes(normalizedStatus)) return 1;
   if (['confirmed', 'approved'].includes(normalizedStatus)) return 2;
-  if (['completed', 'cancelled', 'canceled', 'rejected', 'no-show'].includes(normalizedStatus)) return 3;
+  if (['completed', 'cancelled', 'canceled', 'cancelled_by_salon', 'cancelled by salon', 'rejected', 'no-show'].includes(normalizedStatus)) return 3;
 
   return 4;
-};
-
-const timeTo24Hour = (timeStr) => {
-  if (!timeStr || typeof timeStr !== 'string') return { hours: 0, minutes: 0 };
-
-  const parts = timeStr.trim().split(' ');
-  if (parts.length < 2) return { hours: 0, minutes: 0 };
-
-  const [time, modifier] = parts;
-  const [rawHours, rawMinutes] = time.split(':').map(Number);
-
-  if (Number.isNaN(rawHours) || Number.isNaN(rawMinutes)) return { hours: 0, minutes: 0 };
-
-  let hours = rawHours;
-  if (hours === 12) hours = 0;
-  if (modifier === 'PM') hours += 12;
-
-  return { hours, minutes: rawMinutes };
 };
 
 const getAppointmentDateTime = (appointmentDate, appointmentTime) => {
   if (!appointmentDate || !appointmentTime) return null;
 
-  const [year, month, day] = String(appointmentDate).split('-').map(Number);
-  if ([year, month, day].some(Number.isNaN)) return null;
+  const appointmentTimestamp = getSalonAppointmentTimestamp(
+    String(appointmentDate).slice(0, 10),
+    appointmentTime
+  );
 
-  const { hours, minutes } = timeTo24Hour(appointmentTime);
-  return new Date(year, month - 1, day, hours, minutes, 0, 0);
+  return appointmentTimestamp === null ? null : new Date(appointmentTimestamp);
 };
 
 const getAppointmentDateValue = (appointment) => appointment?.date || appointment?.bookingDate;
 
 const getAppointmentDateParts = (appointment) => {
-  const parsedDate = new Date(getAppointmentDateValue(appointment));
-  if (Number.isNaN(parsedDate.getTime())) return { year: '', month: '' };
+  const dateKey = String(getAppointmentDateValue(appointment) || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return { year: '', month: '' };
 
   return {
-    year: String(parsedDate.getFullYear()),
-    month: String(parsedDate.getMonth())
+    year: dateKey.slice(0, 4),
+    month: String(Number(dateKey.slice(5, 7)) - 1)
   };
 };
 
@@ -92,11 +95,7 @@ const getAppointmentTimeStamp = (appointment) => {
   if (!appointment?.date) return 0;
 
   const dateKey = String(appointment.date).slice(0, 10);
-  const [year, month, day] = dateKey.split('-').map(Number);
-  if ([year, month, day].some(Number.isNaN)) return 0;
-
-  const { hours, minutes } = timeTo24Hour(appointment.startTime || appointment.time);
-  return new Date(year, month - 1, day, hours, minutes, 0, 0).getTime();
+  return getSalonAppointmentTimestamp(dateKey, appointment.startTime || appointment.time) || 0;
 };
 
 const getAppointmentSortGroup = (appointment) => {
@@ -122,17 +121,31 @@ const sortAppointmentsByPriority = (a, b) => {
   return getAppointmentTimeStamp(b) - getAppointmentTimeStamp(a);
 };
 
+const matchesStatusTab = (appointment, tab) => {
+  if (tab === 'All') return true;
+
+  const normalizedStatus = String(appointment?.status || '').trim().toLowerCase();
+  if (tab === 'Cancelled') return CANCELLED_APPOINTMENT_STATUSES.has(normalizedStatus);
+
+  return normalizedStatus === String(tab || '').trim().toLowerCase();
+};
+
 const toApiStatus = (status) => STATUS_API_VALUES[status] || String(status || '').trim().toLowerCase();
 
 function AppointmentsPage() {
+  const { settings } = useSalonSettings();
+  const [searchParams] = useSearchParams();
+  const linkedAppointmentId = String(searchParams.get('appointmentId') || '').trim();
   const [appointments, setAppointments] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('Pending');
-  const [activeYear, setActiveYear] = useState(CURRENT_YEAR);
-  const [activeMonth, setActiveMonth] = useState(CURRENT_MONTH);
+  const [activeTab, setActiveTab] = useState(() => (linkedAppointmentId ? 'All' : 'Pending'));
+  const [activeYear, setActiveYear] = useState(() => (linkedAppointmentId ? 'all' : CURRENT_YEAR));
+  const [activeMonth, setActiveMonth] = useState(() => (linkedAppointmentId ? 'all' : CURRENT_MONTH));
   const [isYearMenuOpen, setIsYearMenuOpen] = useState(false);
   const [isMonthMenuOpen, setIsMonthMenuOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [activeYearOptionIndex, setActiveYearOptionIndex] = useState(0);
+  const [activeMonthOptionIndex, setActiveMonthOptionIndex] = useState(0);
+  const [searchQuery, setSearchQuery] = useState(linkedAppointmentId);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [updatingAppointmentId, setUpdatingAppointmentId] = useState('');
   const [updatingStatus, setUpdatingStatus] = useState('');
@@ -141,25 +154,30 @@ function AppointmentsPage() {
   const monthMenuRef = useRef(null);
   const mobileYearMenuRef = useRef(null);
   const mobileMonthMenuRef = useRef(null);
-  const userRole = localStorage.getItem('userRole') || 'customer';
+  const userRole = storage.get('userRole') || 'customer';
   const isAdmin = userRole === 'admin';
+  const configuredGracePeriod = Number(settings?.gracePeriod);
+  const gracePeriodMinutes = Number.isInteger(configuredGracePeriod)
+    && configuredGracePeriod >= 0
+    && configuredGracePeriod <= 120
+    ? configuredGracePeriod
+    : 15;
 
-  const isWithinNoShowWindow = (appointment) => {
+  const canMarkNoShow = (appointment) => {
     const scheduledStart = getAppointmentDateTime(appointment.date, appointment.startTime);
     if (!scheduledStart) return false;
 
     const startTime = scheduledStart.getTime();
-    const noShowWindowEnd = startTime + 30 * 60 * 1000;
     const now = currentTime.getTime();
 
-    return now >= startTime && now <= noShowWindowEnd;
+    return now >= startTime + gracePeriodMinutes * 60 * 1000;
   };
 
   const canCompleteAppointment = (appointment) => {
     const scheduledEnd = getAppointmentDateTime(appointment.date, appointment.endTime);
     if (!scheduledEnd) return false;
 
-    return currentTime.getTime() >= scheduledEnd.getTime() - 10 * 60 * 1000;
+    return currentTime.getTime() >= scheduledEnd.getTime() - gracePeriodMinutes * 60 * 1000;
   };
 
   const getAllowedStatuses = (appointment) => {
@@ -168,21 +186,21 @@ function AppointmentsPage() {
     if (finalStatuses.includes(currentStatus)) return [currentStatus];
     if (!isAdmin) {
       if (currentStatus === 'Pending') {
-        return ['Pending', 'Approved', 'Rejected'];
+        return ['Pending', 'Approved', 'Cancelled by Salon'];
       }
       if (currentStatus === 'Approved') {
-        const options = ['Approved'];
-        if (isWithinNoShowWindow(appointment)) options.push('No-Show');
+        const options = ['Approved', 'Cancelled by Salon'];
+        if (canMarkNoShow(appointment)) options.push('No-Show');
         if (canCompleteAppointment(appointment)) options.push('Completed');
         return options;
       }
       return [currentStatus];
     }
 
-    if (currentStatus === 'Pending') return ['Pending', 'Approved', 'Rejected'];
+    if (currentStatus === 'Pending') return ['Pending', 'Approved', 'Cancelled by Salon'];
     if (currentStatus === 'Approved') {
-      const options = ['Approved'];
-      if (isWithinNoShowWindow(appointment)) options.push('No-Show');
+      const options = ['Approved', 'Cancelled by Salon'];
+      if (canMarkNoShow(appointment)) options.push('No-Show');
       if (canCompleteAppointment(appointment)) options.push('Completed');
       return options;
     }
@@ -190,9 +208,9 @@ function AppointmentsPage() {
     return [currentStatus];
   };
 
-  const fetchAppointments = useCallback(async () => {
+  const fetchAppointments = useCallback(async (signal) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = storage.get('token');
       if (!token) {
         toast.error('Please log in again to load appointments.');
         return;
@@ -202,24 +220,40 @@ function AppointmentsPage() {
         ? `${API_BASE_URL}/api/appointments/all`
         : `${API_BASE_URL}/api/appointments/staff-schedule`;
 
-      const response = await axios.get(endpoint, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const response = await axios.get(endpoint, { signal });
+      if (signal?.aborted) return;
+
       setAppointments(response.data);
     } catch (error) {
+      if (signal?.aborted || axios.isCancel(error)) return;
+
       console.error('Error fetching all appointments:', error);
       const message = error.response?.status === 401
         ? 'You are not authorized to view these appointments.'
         : 'Could not load appointments right now.';
       toast.error(message);
     } finally {
-      setIsLoading(false);
+      if (!signal?.aborted) {
+        setIsLoading(false);
+      }
     }
   }, [isAdmin]);
 
   useEffect(() => {
-    fetchAppointments();
+    const controller = new AbortController();
+    fetchAppointments(controller.signal);
+
+    return () => controller.abort();
   }, [fetchAppointments]);
+
+  useEffect(() => {
+    if (!linkedAppointmentId) return;
+
+    setActiveTab('All');
+    setActiveYear('all');
+    setActiveMonth('all');
+    setSearchQuery(linkedAppointmentId);
+  }, [linkedAppointmentId]);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -285,7 +319,7 @@ function AppointmentsPage() {
         return;
       }
 
-      const token = localStorage.getItem('token');
+      const token = storage.get('token');
       if (!token) {
         toast.error('Please log in again to update appointment status.');
         return;
@@ -301,7 +335,7 @@ function AppointmentsPage() {
       const response = await axios.put(
         statusEndpoint,
         { status: toApiStatus(newStatus) },
-        { headers: { Authorization: `Bearer ${token}` } }
+        {}
       );
       const updatedStatus = response.data?.appointment?.status || newStatus;
 
@@ -341,20 +375,62 @@ function AppointmentsPage() {
   const activeYearLabel = yearOptions.find((option) => option.value === activeYear)?.label || CURRENT_YEAR;
   const activeMonthLabel = monthOptions.find((option) => option.value === activeMonth)?.label || MONTH_OPTIONS[Number(CURRENT_MONTH)].label;
 
+  const handleFilterMenuKeyDown = (event, {
+    options,
+    value,
+    activeIndex,
+    setActiveIndex,
+    isOpen,
+    setIsOpen,
+    closeOtherMenu,
+    onChange,
+  }) => {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      const selectedIndex = Math.max(options.findIndex((option) => option.value === value), 0);
+      const startingIndex = isOpen ? activeIndex : selectedIndex;
+      const direction = event.key === 'ArrowDown' ? 1 : -1;
+      setActiveIndex((startingIndex + direction + options.length) % options.length);
+      setIsOpen(true);
+      closeOtherMenu();
+      return;
+    }
+
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      if (isOpen) {
+        onChange(options[activeIndex]?.value ?? value);
+        setIsOpen(false);
+      } else {
+        setActiveIndex(Math.max(options.findIndex((option) => option.value === value), 0));
+        setIsOpen(true);
+        closeOtherMenu();
+      }
+      return;
+    }
+
+    if (event.key === 'Escape' && isOpen) {
+      event.preventDefault();
+      event.stopPropagation();
+      setIsOpen(false);
+    }
+  };
+
   const filteredAppointments = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
 
     return appointments
       .filter((appt) => {
         const appointmentDateParts = getAppointmentDateParts(appt);
-        const statusMatches = activeTab === 'All' ? true : appt.status?.toLowerCase() === activeTab?.toLowerCase();
+        const statusMatches = matchesStatusTab(appt, activeTab);
         const yearMatches = activeYear === 'all' || appointmentDateParts.year === activeYear;
         const monthMatches = activeMonth === 'all' || appointmentDateParts.month === activeMonth;
 
         const customerName = appt.user?.name || '';
         const customerPhone = appt.user?.phone || appt.user?.phoneNumber || '';
-        const services = appt.services?.map((service) => service.name || service).join(', ') || appt.service || '';
-        const searchMatches = !query || [customerName, customerPhone, services, appt.status, appt.startTime, appt.endTime]
+        const services = getAppointmentServicesLabel(appt, '');
+        const stylistName = getAppointmentStylistName(appt, '');
+        const searchMatches = !query || [appt._id, customerName, customerPhone, services, stylistName, appt.status, appt.startTime, appt.endTime]
           .join(' ')
           .toLowerCase()
           .includes(query);
@@ -365,14 +441,8 @@ function AppointmentsPage() {
   }, [appointments, activeTab, activeMonth, activeYear, searchQuery]);
 
   const tabs = isAdmin
-    ? ['Pending', 'Approved', 'Completed', 'Rejected', 'No-Show', 'All']
-    : ['Pending', 'Approved', 'Completed', 'Rejected', 'No-Show', 'All'];
-
-  const getServicesLabel = (appointment) => (
-    appointment.services && appointment.services.length > 0
-      ? appointment.services.map((service) => service.name || service).join(', ')
-      : appointment.service || 'N/A'
-  );
+    ? ['Pending', 'Approved', 'Completed', 'Cancelled', 'Rejected', 'No-Show', 'All']
+    : ['Pending', 'Approved', 'Completed', 'Cancelled', 'Rejected', 'No-Show', 'All'];
 
   const getTimeLabel = (appointment) => (
     appointment.startTime
@@ -404,15 +474,15 @@ function AppointmentsPage() {
             {isUpdating && updatingStatus === 'Approved' ? 'Updating...' : 'Accept'}
           </GoldButton>
         )}
-        {allowedStatuses.includes('Rejected') && (
+        {allowedStatuses.includes('Cancelled by Salon') && (
           <GoldButton
             type="button"
             variant="ghost"
-            onClick={() => handleStatusChange(appointment._id, 'Rejected')}
+            onClick={() => handleStatusChange(appointment._id, 'Cancelled by Salon')}
             disabled={isUpdating}
             className="w-full rounded-lg border border-red-900/50 bg-[#1a1a1a] px-4 py-2 text-sm text-red-400 hover:border-transparent hover:bg-red-900/80 hover:text-white sm:w-auto"
           >
-            {isUpdating && updatingStatus === 'Rejected' ? 'Updating...' : 'Reject'}
+            {isUpdating && updatingStatus === 'Cancelled by Salon' ? 'Updating...' : 'Cancel by Salon'}
           </GoldButton>
         )}
         {allowedStatuses.includes('Completed') && (
@@ -487,12 +557,25 @@ function AppointmentsPage() {
               <button
                 type="button"
                 onClick={() => {
+                  setActiveYearOptionIndex(Math.max(yearOptions.findIndex((option) => option.value === activeYear), 0));
                   setIsYearMenuOpen((current) => !current);
                   setIsMonthMenuOpen(false);
                 }}
+                onKeyDown={(event) => handleFilterMenuKeyDown(event, {
+                  options: yearOptions,
+                  value: activeYear,
+                  activeIndex: activeYearOptionIndex,
+                  setActiveIndex: setActiveYearOptionIndex,
+                  isOpen: isYearMenuOpen,
+                  setIsOpen: setIsYearMenuOpen,
+                  closeOtherMenu: () => setIsMonthMenuOpen(false),
+                  onChange: setActiveYear,
+                })}
                 className="relative flex h-11 w-full items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 pr-8 text-sm font-semibold text-neutral-300 transition hover:border-[#d4af37]/30 hover:bg-white/[0.07] hover:text-white focus:border-[#d4af37]/30 focus:outline-none focus:ring-2 focus:ring-[#d4af37]/15"
                 aria-haspopup="listbox"
                 aria-expanded={isYearMenuOpen}
+                aria-controls="mobile-appointment-year-listbox"
+                aria-activedescendant={isYearMenuOpen ? `mobile-appointment-year-option-${activeYearOptionIndex}` : undefined}
                 aria-label="Filter appointments by year"
               >
                 <CalendarCheck size={15} className="shrink-0 text-[#d4af37]" />
@@ -502,16 +585,19 @@ function AppointmentsPage() {
 
               {isYearMenuOpen && (
                 <div
+                  id="mobile-appointment-year-listbox"
                   className="absolute left-0 top-full z-30 mt-2 max-h-52 w-full overflow-y-auto rounded-xl border border-white/10 bg-[#111]/95 p-1.5 shadow-2xl backdrop-blur-xl"
                   role="listbox"
                   aria-label="Filter appointments by year"
+                  aria-activedescendant={`mobile-appointment-year-option-${activeYearOptionIndex}`}
                 >
-                  {yearOptions.map((option) => {
+                  {yearOptions.map((option, index) => {
                     const isSelected = option.value === activeYear;
 
                     return (
                       <button
                         key={option.value}
+                        id={`mobile-appointment-year-option-${index}`}
                         type="button"
                         onClick={() => {
                           setActiveYear(option.value);
@@ -524,6 +610,7 @@ function AppointmentsPage() {
                         }`}
                         role="option"
                         aria-selected={isSelected}
+                        tabIndex={-1}
                       >
                         {option.label}
                       </button>
@@ -537,12 +624,25 @@ function AppointmentsPage() {
               <button
                 type="button"
                 onClick={() => {
+                  setActiveMonthOptionIndex(Math.max(monthOptions.findIndex((option) => option.value === activeMonth), 0));
                   setIsMonthMenuOpen((current) => !current);
                   setIsYearMenuOpen(false);
                 }}
+                onKeyDown={(event) => handleFilterMenuKeyDown(event, {
+                  options: monthOptions,
+                  value: activeMonth,
+                  activeIndex: activeMonthOptionIndex,
+                  setActiveIndex: setActiveMonthOptionIndex,
+                  isOpen: isMonthMenuOpen,
+                  setIsOpen: setIsMonthMenuOpen,
+                  closeOtherMenu: () => setIsYearMenuOpen(false),
+                  onChange: setActiveMonth,
+                })}
                 className="relative flex h-11 w-full items-center justify-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 pr-8 text-sm font-semibold text-neutral-300 transition hover:border-[#d4af37]/30 hover:bg-white/[0.07] hover:text-white focus:border-[#d4af37]/30 focus:outline-none focus:ring-2 focus:ring-[#d4af37]/15"
                 aria-haspopup="listbox"
                 aria-expanded={isMonthMenuOpen}
+                aria-controls="mobile-appointment-month-listbox"
+                aria-activedescendant={isMonthMenuOpen ? `mobile-appointment-month-option-${activeMonthOptionIndex}` : undefined}
                 aria-label="Filter appointments by month"
               >
                 <CalendarCheck size={15} className="shrink-0 text-[#d4af37]" />
@@ -552,16 +652,19 @@ function AppointmentsPage() {
 
               {isMonthMenuOpen && (
                 <div
+                  id="mobile-appointment-month-listbox"
                   className="absolute left-0 top-full z-30 mt-2 max-h-60 w-full overflow-y-auto rounded-xl border border-white/10 bg-[#111]/95 p-1.5 shadow-2xl backdrop-blur-xl"
                   role="listbox"
                   aria-label="Filter appointments by month"
+                  aria-activedescendant={`mobile-appointment-month-option-${activeMonthOptionIndex}`}
                 >
-                  {monthOptions.map((option) => {
+                  {monthOptions.map((option, index) => {
                     const isSelected = option.value === activeMonth;
 
                     return (
                       <button
                         key={option.value}
+                        id={`mobile-appointment-month-option-${index}`}
                         type="button"
                         onClick={() => {
                           setActiveMonth(option.value);
@@ -574,6 +677,7 @@ function AppointmentsPage() {
                         }`}
                         role="option"
                         aria-selected={isSelected}
+                        tabIndex={-1}
                       >
                         {option.label}
                       </button>
@@ -597,10 +701,10 @@ function AppointmentsPage() {
                 }`}
               >
                 <span>{tab}</span>
-                <span className={`rounded-full px-2 py-0.5 text-[11px] ${
+                <span className={`rounded-full px-2 py-0.5 text-xs ${
                   activeTab === tab ? 'bg-black/10 text-black' : 'bg-white/10 text-gray-300'
                 }`}>
-                  {tab === 'All' ? appointments.length : appointments.filter((appt) => appt.status?.toLowerCase() === tab?.toLowerCase()).length}
+                  {appointments.filter((appt) => matchesStatusTab(appt, tab)).length}
                 </span>
               </button>
             ))}
@@ -615,7 +719,7 @@ function AppointmentsPage() {
               </span>
               <input
                 type="text"
-                aria-label="Search appointments by customer, phone, service, status, or time"
+                aria-label="Search appointments by ID, customer, phone, service, status, or time"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search appointments"
@@ -627,12 +731,25 @@ function AppointmentsPage() {
               <button
                 type="button"
                 onClick={() => {
+                  setActiveYearOptionIndex(Math.max(yearOptions.findIndex((option) => option.value === activeYear), 0));
                   setIsYearMenuOpen((current) => !current);
                   setIsMonthMenuOpen(false);
                 }}
+                onKeyDown={(event) => handleFilterMenuKeyDown(event, {
+                  options: yearOptions,
+                  value: activeYear,
+                  activeIndex: activeYearOptionIndex,
+                  setActiveIndex: setActiveYearOptionIndex,
+                  isOpen: isYearMenuOpen,
+                  setIsOpen: setIsYearMenuOpen,
+                  closeOtherMenu: () => setIsMonthMenuOpen(false),
+                  onChange: setActiveYear,
+                })}
                 className="relative flex h-11 w-full items-center justify-center gap-2.5 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 pr-10 text-sm font-semibold text-neutral-300 transition hover:border-[#d4af37]/30 hover:bg-white/[0.07] hover:text-white focus:border-[#d4af37]/30 focus:outline-none focus:ring-2 focus:ring-[#d4af37]/15 sm:w-40"
                 aria-haspopup="listbox"
                 aria-expanded={isYearMenuOpen}
+                aria-controls="desktop-appointment-year-listbox"
+                aria-activedescendant={isYearMenuOpen ? `desktop-appointment-year-option-${activeYearOptionIndex}` : undefined}
                 aria-label="Filter appointments by year"
               >
                 <CalendarCheck size={16} className="shrink-0 text-[#d4af37]" />
@@ -642,16 +759,19 @@ function AppointmentsPage() {
 
               {isYearMenuOpen && (
                 <div
+                  id="desktop-appointment-year-listbox"
                   className="absolute left-0 top-full z-30 mt-2 max-h-52 w-full overflow-y-auto rounded-xl border border-white/10 bg-[#111]/95 p-1.5 shadow-2xl backdrop-blur-xl sm:w-40"
                   role="listbox"
                   aria-label="Filter appointments by year"
+                  aria-activedescendant={`desktop-appointment-year-option-${activeYearOptionIndex}`}
                 >
-                  {yearOptions.map((option) => {
+                  {yearOptions.map((option, index) => {
                     const isSelected = option.value === activeYear;
 
                     return (
                       <button
                         key={option.value}
+                        id={`desktop-appointment-year-option-${index}`}
                         type="button"
                         onClick={() => {
                           setActiveYear(option.value);
@@ -664,6 +784,7 @@ function AppointmentsPage() {
                         }`}
                         role="option"
                         aria-selected={isSelected}
+                        tabIndex={-1}
                       >
                         {option.label}
                       </button>
@@ -677,12 +798,25 @@ function AppointmentsPage() {
               <button
                 type="button"
                 onClick={() => {
+                  setActiveMonthOptionIndex(Math.max(monthOptions.findIndex((option) => option.value === activeMonth), 0));
                   setIsMonthMenuOpen((current) => !current);
                   setIsYearMenuOpen(false);
                 }}
+                onKeyDown={(event) => handleFilterMenuKeyDown(event, {
+                  options: monthOptions,
+                  value: activeMonth,
+                  activeIndex: activeMonthOptionIndex,
+                  setActiveIndex: setActiveMonthOptionIndex,
+                  isOpen: isMonthMenuOpen,
+                  setIsOpen: setIsMonthMenuOpen,
+                  closeOtherMenu: () => setIsYearMenuOpen(false),
+                  onChange: setActiveMonth,
+                })}
                 className="relative flex h-11 w-full items-center justify-center gap-2.5 rounded-full border border-white/10 bg-white/[0.04] px-4 py-2 pr-10 text-sm font-semibold text-neutral-300 transition hover:border-[#d4af37]/30 hover:bg-white/[0.07] hover:text-white focus:border-[#d4af37]/30 focus:outline-none focus:ring-2 focus:ring-[#d4af37]/15 sm:w-44"
                 aria-haspopup="listbox"
                 aria-expanded={isMonthMenuOpen}
+                aria-controls="desktop-appointment-month-listbox"
+                aria-activedescendant={isMonthMenuOpen ? `desktop-appointment-month-option-${activeMonthOptionIndex}` : undefined}
                 aria-label="Filter appointments by month"
               >
                 <CalendarCheck size={16} className="shrink-0 text-[#d4af37]" />
@@ -692,16 +826,19 @@ function AppointmentsPage() {
 
               {isMonthMenuOpen && (
                 <div
+                  id="desktop-appointment-month-listbox"
                   className="absolute left-0 top-full z-30 mt-2 max-h-60 w-full overflow-y-auto rounded-xl border border-white/10 bg-[#111]/95 p-1.5 shadow-2xl backdrop-blur-xl sm:w-44"
                   role="listbox"
                   aria-label="Filter appointments by month"
+                  aria-activedescendant={`desktop-appointment-month-option-${activeMonthOptionIndex}`}
                 >
-                  {monthOptions.map((option) => {
+                  {monthOptions.map((option, index) => {
                     const isSelected = option.value === activeMonth;
 
                     return (
                       <button
                         key={option.value}
+                        id={`desktop-appointment-month-option-${index}`}
                         type="button"
                         onClick={() => {
                           setActiveMonth(option.value);
@@ -714,6 +851,7 @@ function AppointmentsPage() {
                         }`}
                         role="option"
                         aria-selected={isSelected}
+                        tabIndex={-1}
                       >
                         {option.label}
                       </button>
@@ -749,7 +887,7 @@ function AppointmentsPage() {
           </div>
         ) : (
           <div className="salon-scrollbar max-h-none overflow-visible pt-5 sm:pt-6 md:max-h-[520px] md:overflow-y-auto">
-            <div className="space-y-3 md:hidden">
+            <div className="space-y-3 lg:hidden">
               {filteredAppointments.map((appt) => {
                 const customerPhone = appt.user?.phone || appt.user?.phoneNumber;
                 const customerName = appt.user?.name || 'Unknown User';
@@ -762,7 +900,7 @@ function AppointmentsPage() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="break-words text-base font-semibold text-white">{customerName}</p>
-                        <p className="mt-1 text-sm text-gray-400">{new Date(appt.date).toLocaleDateString()}</p>
+                        <p className="mt-1 text-sm text-gray-400">{formatSalonDate(appt.date)}</p>
                       </div>
                       <div className="shrink-0">
                         <StatusBadge status={appt.status} />
@@ -776,7 +914,11 @@ function AppointmentsPage() {
                       </p>
                       <p className="text-sm">
                         <span className="text-gray-400">Service:</span>{' '}
-                        <span className="break-words text-white">{getServicesLabel(appt)}</span>
+                        <span className="break-words text-white">{getAppointmentServicesLabel(appt, 'N/A')}</span>
+                      </p>
+                      <p className="text-sm">
+                        <span className="text-gray-400">Stylist:</span>{' '}
+                        <span className="break-words text-white">{getAppointmentStylistName(appt)}</span>
                       </p>
                       <p className="text-sm">
                         <span className="text-gray-400">Time:</span>{' '}
@@ -797,7 +939,7 @@ function AppointmentsPage() {
               })}
             </div>
 
-            <div className="hidden overflow-x-auto md:block">
+            <div className="hidden overflow-x-auto lg:block">
               <table className="salon-table">
                 <thead className="sticky top-0 bg-[#0a0a0a]/90">
                   <tr>
@@ -829,10 +971,13 @@ function AppointmentsPage() {
                           )}
                         </td>
                         <td className="salon-table-td text-sm text-gray-300">
-                          {getServicesLabel(appt)}
+                          <div>{getAppointmentServicesLabel(appt, 'N/A')}</div>
+                          <div className="mt-1 text-xs text-gray-500">
+                            Stylist: {getAppointmentStylistName(appt)}
+                          </div>
                         </td>
                         <td className="salon-table-td">
-                          <div className="text-sm font-semibold text-gray-200">{new Date(appt.date).toLocaleDateString()}</div>
+                          <div className="text-sm font-semibold text-gray-200">{formatSalonDate(appt.date)}</div>
                           <div className="mt-1 text-xs text-gray-400">
                             {getTimeLabel(appt)}
                           </div>

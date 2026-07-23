@@ -4,6 +4,13 @@ const Appointment = require('../models/appointmentModel');
 const SalonSettings = require('../models/SalonSettings');
 const LeaveRequest = require('../models/LeaveRequest');
 const Holiday = require('../models/Holiday');
+const {
+  getSalonAppointmentDateTime,
+  getSalonDateTimeParts,
+} = require('./salonTime');
+
+const SLOT_INTERVAL_MINUTES = 15;
+const SAME_DAY_LEAD_TIME_MINUTES = 30;
 
 const DAY_NAMES = [
   'Sunday',
@@ -87,6 +94,11 @@ const timeToMinutes = (value) => {
   return hours * 60 + minutes;
 };
 
+const getEffectiveAppointmentEndMinutes = (appointment, fallbackEnd) => {
+  const effectiveEndTime = appointment.adjustedEndTime || appointment.endTime;
+  return effectiveEndTime ? timeToMinutes(effectiveEndTime) : fallbackEnd;
+};
+
 /**
  * Formats minutes after midnight as a zero-padded 24-hour time.
  *
@@ -97,20 +109,6 @@ const minutesToTime = (minutes) => {
   const hours = Math.floor(minutes / 60);
   const remainingMinutes = minutes % 60;
   return `${String(hours).padStart(2, '0')}:${String(remainingMinutes).padStart(2, '0')}`;
-};
-
-/**
- * Returns today's date in the server's local timezone as YYYY-MM-DD.
- *
- * @returns {string}
- */
-const getLocalDateString = () => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-
-  return `${year}-${month}-${day}`;
 };
 
 /**
@@ -139,13 +137,58 @@ const parseTimeSlot = (timeSlot) => {
   return { start, end };
 };
 
-const getDefaultBufferTime = async () => {
+const getSchedulingSettings = async () => {
   const settings = await SalonSettings.findOne()
-    .select('defaultBufferTime')
+    .select('defaultBufferTime openingHours')
     .lean();
 
   const bufferTime = Number(settings?.defaultBufferTime);
-  return Number.isFinite(bufferTime) && bufferTime >= 0 ? bufferTime : 15;
+  return {
+    defaultBufferTime: Number.isFinite(bufferTime) && bufferTime >= 0 ? bufferTime : 15,
+    openingHours: settings?.openingHours || {},
+  };
+};
+
+const roundUpToSlotInterval = (minutes) => (
+  Math.ceil(minutes / SLOT_INTERVAL_MINUTES) * SLOT_INTERVAL_MINUTES
+);
+
+const getAvailabilityWindow = (staffHours = {}, salonHours = {}) => {
+  if (salonHours.isOpen === false) return null;
+
+  const staffStart = timeToMinutes(staffHours.start || '09:00');
+  const staffEnd = timeToMinutes(staffHours.end || '17:00');
+  if (staffEnd <= staffStart) {
+    throw createSlotError('The staff member has invalid working hours.');
+  }
+
+  const salonStart = timeToMinutes(salonHours.start || '09:00');
+  const salonEnd = timeToMinutes(salonHours.end || '22:00');
+  if (salonEnd <= salonStart) {
+    throw createSlotError('The salon has invalid opening hours for this date.');
+  }
+
+  const start = Math.max(staffStart, salonStart);
+  const end = Math.min(staffEnd, salonEnd);
+  return end > start ? { start, end } : null;
+};
+
+const getStableSlotStart = ({
+  availabilityStart,
+  isToday,
+  currentMinutes,
+  leadTimeGraceMinutes = 0,
+}) => {
+  const normalizedGrace = Number.isInteger(leadTimeGraceMinutes)
+    ? Math.min(Math.max(leadTimeGraceMinutes, 0), SAME_DAY_LEAD_TIME_MINUTES)
+    : 0;
+  const earliestSameDayStart = roundUpToSlotInterval(
+    currentMinutes + SAME_DAY_LEAD_TIME_MINUTES - normalizedGrace
+  );
+
+  return roundUpToSlotInterval(
+    isToday ? Math.max(availabilityStart, earliestSameDayStart) : availabilityStart
+  );
 };
 
 const findFirstConflict = (bookedRanges, windowStart, windowEnd) => (
@@ -166,16 +209,35 @@ const getHolidayClosureRange = (holiday) => {
   }
 };
 
-const isStaffOnApprovedLeave = async (staff, requestedDate, nextDate) => {
+const getSalonDayBoundaries = (requestedDate) => {
+  const dateKey = requestedDate instanceof Date
+    ? requestedDate.toISOString().slice(0, 10)
+    : String(requestedDate || '').slice(0, 10);
+  const salonDayStart = getSalonAppointmentDateTime(dateKey, '00:00');
+
+  return {
+    start: salonDayStart.toUTC().toJSDate(),
+    end: salonDayStart.plus({ days: 1 }).toUTC().toJSDate(),
+  };
+};
+
+const isStaffOnApprovedLeave = async (staff, requestedDate, _nextDate, { session } = {}) => {
   const leaveStaffIds = [staff?.userId, staff?._id].filter(Boolean);
   if (leaveStaffIds.length === 0) return false;
 
-  const approvedLeave = await LeaveRequest.exists({
+  const salonDayBoundaries = getSalonDayBoundaries(requestedDate);
+  let approvedLeaveQuery = LeaveRequest.exists({
     staffId: { $in: leaveStaffIds },
     status: { $in: ['Approved', 'approved'] },
-    startDate: { $lt: nextDate },
-    endDate: { $gte: requestedDate },
+    startDate: { $lt: salonDayBoundaries.end },
+    endDate: { $gte: salonDayBoundaries.start },
   });
+
+  if (session && typeof approvedLeaveQuery?.session === 'function') {
+    approvedLeaveQuery = approvedLeaveQuery.session(session);
+  }
+
+  const approvedLeave = await approvedLeaveQuery;
 
   return Boolean(approvedLeave);
 };
@@ -208,8 +270,28 @@ const generateAvailableSlots = async (
         date: dateInput,
         serviceDuration: requestedDuration,
       };
-  const { staffId, bookingDate, date, serviceDuration } = options;
+  const {
+    staffId,
+    bookingDate,
+    date,
+    serviceDuration,
+    now,
+    leadTimeGraceMinutes = 0,
+    ignoreBuffer = false,
+    ignoreStaffLeave = false,
+    ignoreWorkingHours = false,
+  } = options;
   const requestedDateValue = bookingDate || date;
+
+  const normalizedStaffId = staffId == null ? '' : String(staffId).trim().toLowerCase();
+  if (
+    !normalizedStaffId
+    || normalizedStaffId === 'any'
+    || normalizedStaffId === 'any available stylist'
+    || normalizedStaffId === 'any stylist'
+  ) {
+    throw createSlotError('A specific stylist must be selected for every booking.');
+  }
 
   if (!mongoose.isValidObjectId(staffId)) {
     throw createSlotError('Please provide a valid staff ID.');
@@ -227,11 +309,11 @@ const generateAvailableSlots = async (
   if (holiday && holiday.isFullDay !== false) return [];
   const holidayClosureRange = getHolidayClosureRange(holiday);
 
-  const [staff, defaultBufferTime] = await Promise.all([
-    Staff.findById(staffId)
+  const [staff, schedulingSettings] = await Promise.all([
+    Staff.findOne({ _id: staffId, isActive: { $ne: false } })
       .select('workingHours offDays userId')
       .lean(),
-    getDefaultBufferTime(),
+    getSchedulingSettings(),
   ]);
 
   if (!staff) {
@@ -244,20 +326,27 @@ const generateAvailableSlots = async (
     (offDay) => String(offDay).trim().toLowerCase() === requestedDay.toLowerCase()
   );
 
-  if (isOffDay) return [];
+  if (isOffDay && !ignoreWorkingHours) return [];
 
   // A half-open UTC range matches the full requested day without timezone drift.
   const nextDate = new Date(requestedDate);
   nextDate.setUTCDate(nextDate.getUTCDate() + 1);
 
-  if (await isStaffOnApprovedLeave(staff, requestedDate, nextDate)) return [];
+  if (!ignoreStaffLeave && await isStaffOnApprovedLeave(staff, requestedDate, nextDate)) return [];
 
-  const workingStart = timeToMinutes(staff.workingHours?.start || '09:00');
-  const workingEnd = timeToMinutes(staff.workingHours?.end || '17:00');
+  const dayKey = requestedDay.toLowerCase();
+  const salonHours = schedulingSettings.openingHours?.[dayKey] || {
+    isOpen: true,
+    start: '09:00',
+    end: '22:00',
+  };
+  const availabilityWindow = ignoreWorkingHours
+    ? { start: 0, end: 1440 }
+    : getAvailabilityWindow(staff.workingHours, salonHours);
+  if (!availabilityWindow) return [];
+  const { start: availabilityStart, end: availabilityEnd } = availabilityWindow;
 
-  if (workingEnd <= workingStart) {
-    throw createSlotError('The staff member has invalid working hours.');
-  }
+  const defaultBufferTime = ignoreBuffer ? 0 : schedulingSettings.defaultBufferTime;
 
   const appointments = await Appointment.find({
     staffId,
@@ -265,38 +354,41 @@ const generateAvailableSlots = async (
       $gte: requestedDate,
       $lt: nextDate,
     },
-    status: { $nin: ['cancelled', 'rejected', 'completed', 'no-show'] },
+    status: { $nin: ['cancelled', 'canceled', 'CANCELLED_BY_SALON', 'Cancelled by Salon', 'rejected', 'completed', 'no-show'] },
   })
-    .select('timeSlot')
+    .select('timeSlot startTime endTime adjustedEndTime')
     .lean();
 
   const bookedRanges = appointments
-    .map(({ timeSlot }) => {
-      const booking = parseTimeSlot(timeSlot);
+    .map((appointment) => {
+      const booking = parseTimeSlot(appointment.timeSlot);
+      const effectiveEnd = getEffectiveAppointmentEndMinutes(appointment, booking.end);
 
       return {
         ...booking,
-        end: booking.end + defaultBufferTime,
+        end: effectiveEnd + defaultBufferTime,
       };
     })
     .sort((left, right) => left.start - right.start);
   const availableSlots = [];
-  const isToday = requestedDateValue === getLocalDateString();
-  const now = new Date();
-  const currentRealTimeInMinutes = now.getHours() * 60 + now.getMinutes();
-  let currentTime = isToday
-    ? Math.max(workingStart, currentRealTimeInMinutes + 5)
-    : workingStart;
+  const salonNow = getSalonDateTimeParts(now);
+  const isToday = requestedDateValue === salonNow.dateKey;
+  let currentTime = getStableSlotStart({
+    availabilityStart,
+    isToday,
+    currentMinutes: salonNow.minutes,
+    leadTimeGraceMinutes,
+  });
 
-  while (currentTime + serviceDuration <= workingEnd) {
+  while (currentTime + serviceDuration <= availabilityEnd) {
     const slotEnd = currentTime + serviceDuration;
-    const validationEnd = Math.min(slotEnd + defaultBufferTime, workingEnd);
+    const validationEnd = Math.min(slotEnd + defaultBufferTime, availabilityEnd);
 
     // Validate the full service plus trailing buffer against existing bookings.
     const conflict = findFirstConflict(bookedRanges, currentTime, validationEnd);
 
     if (conflict) {
-      currentTime = Math.max(conflict.end, currentTime + 1);
+      currentTime = roundUpToSlotInterval(Math.max(conflict.end, currentTime + 1));
       continue;
     }
 
@@ -305,7 +397,9 @@ const generateAvailableSlots = async (
       && currentTime < holidayClosureRange.end
       && slotEnd > holidayClosureRange.start
     ) {
-      currentTime = Math.max(holidayClosureRange.end, currentTime + 1);
+      currentTime = roundUpToSlotInterval(
+        Math.max(holidayClosureRange.end, currentTime + 1)
+      );
       continue;
     }
 
@@ -313,7 +407,7 @@ const generateAvailableSlots = async (
       slot: `${minutesToTime(currentTime)} - ${minutesToTime(slotEnd)}`,
     });
 
-    currentTime = slotEnd;
+    currentTime = roundUpToSlotInterval(slotEnd);
   }
 
   return availableSlots;
@@ -322,3 +416,7 @@ const generateAvailableSlots = async (
 module.exports = generateAvailableSlots;
 module.exports.generateAvailableSlots = generateAvailableSlots;
 module.exports.isStaffOnApprovedLeave = isStaffOnApprovedLeave;
+module.exports.getSalonDayBoundaries = getSalonDayBoundaries;
+module.exports.getAvailabilityWindow = getAvailabilityWindow;
+module.exports.getEffectiveAppointmentEndMinutes = getEffectiveAppointmentEndMinutes;
+module.exports.getStableSlotStart = getStableSlotStart;
